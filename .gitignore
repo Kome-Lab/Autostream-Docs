@@ -1,0 +1,12 @@
+node_modules/
+docs/.vitepress/dist/
+.local-runtime/
+docs/evidence/
+.env
+*.log
+docs/security/codex-security-scan-*.md
+docs/security/security-follow-up-*.md
+docs/security/security-regression-*.md
+docs/security/security-scan-*-external-e2e-follow-up.md
+docs/security/encoder-relay-closure-*.md
+docs/security/threat-model.md

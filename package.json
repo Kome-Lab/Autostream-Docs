@@ -1,0 +1,15 @@
+{
+    "name":  "autostream-docs",
+    "private":  true,
+    "description":  "AutoStream public user and operator documentation.",
+    "scripts":  {
+                    "docs:dev":  "vitepress dev docs",
+                    "docs:build":  "vitepress build docs",
+                    "docs:preview":  "vitepress preview docs",
+                    "docs:check-secrets":  "node scripts/check-secrets.mjs",
+                    "docs:check":  "npm run docs:check-secrets"
+                },
+    "devDependencies":  {
+                            "vitepress":  "latest"
+                        }
+}

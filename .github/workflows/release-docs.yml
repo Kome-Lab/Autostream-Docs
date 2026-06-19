@@ -1,0 +1,84 @@
+name: Docs Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example v1.2.3"
+        required: true
+        type: string
+      push_release:
+        description: "Attach artifacts to a GitHub Release"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release-docs:
+    name: Build static docs archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME}"
+            push_release="true"
+          else
+            version="${{ inputs.version }}"
+            push_release="${{ inputs.push_release }}"
+          fi
+          if [[ ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Version must look like v1.2.3; got ${version}" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "push_release=${push_release}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build docs
+        run: |
+          npm ci
+          npm run docs:check
+          npm run docs:build
+
+      - name: Package static docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.meta.outputs.version }}"
+          artifact="autostream-docs_${version}_static"
+          rm -rf staging artifacts
+          mkdir -p "staging/${artifact}" artifacts
+          cp -R docs/.vitepress/dist/. "staging/${artifact}/"
+          (cd "staging/${artifact}" && find . -type f -print0 | sort -z | xargs -0 sha256sum > checksums.txt)
+          tar -C staging -czf "artifacts/${artifact}.tar.gz" "${artifact}"
+          sha256sum "artifacts/${artifact}.tar.gz" > "artifacts/${artifact}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-release-dry-run
+          path: artifacts/*
+
+      - name: Publish GitHub Release
+        if: steps.meta.outputs.push_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.version }}
+          files: artifacts/*
+
