@@ -5,6 +5,24 @@
   --vp-c-bg-soft: #f6f8fa;
   --vp-c-border: #d8dee4;
   --vp-home-hero-name-color: #1f2328;
+  --doc-surface: #ffffff;
+  --doc-surface-soft: #f6f8fa;
+  --doc-border: #d8dee4;
+  --doc-card-text: #57606a;
+  --doc-hero-start: #f6f8fa;
+  --doc-hero-end: #ffffff;
+}
+
+.dark {
+  --vp-c-brand-1: #79c0ff;
+  --vp-c-brand-2: #58a6ff;
+  --vp-c-brand-3: #388bfd;
+  --doc-surface: #161b22;
+  --doc-surface-soft: #0d1117;
+  --doc-border: #30363d;
+  --doc-card-text: #c9d1d9;
+  --doc-hero-start: #161b22;
+  --doc-hero-end: #0d1117;
 }
 
 .VPDoc .content-container {
@@ -14,9 +32,9 @@
 .doc-hero {
   margin: 8px 0 28px;
   padding: 28px;
-  border: 1px solid var(--vp-c-border);
+  border: 1px solid var(--doc-border);
   border-radius: 8px;
-  background: linear-gradient(180deg, #f6f8fa 0%, #ffffff 100%);
+  background: linear-gradient(180deg, var(--doc-hero-start) 0%, var(--doc-hero-end) 100%);
 }
 
 .doc-hero p {
@@ -36,9 +54,9 @@
   display: block;
   min-height: 132px;
   padding: 18px;
-  border: 1px solid var(--vp-c-border);
+  border: 1px solid var(--doc-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--doc-surface);
   color: inherit;
   text-decoration: none;
 }
@@ -57,7 +75,7 @@
 
 .doc-card span {
   display: block;
-  color: var(--vp-c-text-2);
+  color: var(--doc-card-text);
   line-height: 1.65;
 }
 
@@ -66,7 +84,7 @@
   padding: 16px 18px;
   border-left: 4px solid var(--vp-c-brand-1);
   border-radius: 8px;
-  background: var(--vp-c-bg-soft);
+  background: var(--doc-surface-soft);
 }
 
 .vp-doc table {
