@@ -14,6 +14,17 @@
 - 初回管理者を作るための設定
 - 保存先ディレクトリや一時ファイル置き場
 
+## 設定場所の目安
+
+| 種類 | 置く場所 |
+| --- | --- |
+| 起動に必要な database URL | env ファイル |
+| サービス間の内部 URL | env ファイル |
+| Discord Bot token | Control Panel または secret store |
+| 配信先の stream key | Control Panel |
+| 通知用 Webhook URL | Control Panel |
+| 録画保存先 | env ファイルまたは Control Panel |
+
 ## Control Panel で管理する値
 
 - Discord Bot の token
@@ -31,6 +42,10 @@
 3. サービス一覧で online になっているか確認します。
 4. 配信先や通知先のテストを実行します。
 5. ログに token や stream key が表示されていないか確認します。
+
+## 変更したあと
+
+env ファイルを変更した場合は、対象サービスの再起動が必要です。Control Panel の設定だけを変えた場合は、画面上の保存結果とテスト機能で確認してください。
 
 ## 書いてはいけないもの
 

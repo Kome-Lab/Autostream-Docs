@@ -1,6 +1,7 @@
 export default {
   title: 'AutoStream Docs',
   description: 'AutoStreamを初めて使う人向けの分かりやすい公開ドキュメントです。',
+  head: [ ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }] ],
   vite: { server: { host: '127.0.0.1', fs: { strict: true } }, preview: { host: '127.0.0.1' } },
   themeConfig: {
     nav: [ { text: 'はじめに', link: '/' }, { text: 'インストール', link: '/runbooks/first-install' }, { text: '困ったとき', link: '/troubleshooting/' } ],

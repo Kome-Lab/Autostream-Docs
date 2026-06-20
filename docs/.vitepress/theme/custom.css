@@ -1,0 +1,79 @@
+:root {
+  --vp-c-brand-1: #1f6feb;
+  --vp-c-brand-2: #2f81f7;
+  --vp-c-brand-3: #58a6ff;
+  --vp-c-bg-soft: #f6f8fa;
+  --vp-c-border: #d8dee4;
+  --vp-home-hero-name-color: #1f2328;
+}
+
+.VPDoc .content-container {
+  max-width: 860px;
+}
+
+.doc-hero {
+  margin: 8px 0 28px;
+  padding: 28px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f6f8fa 0%, #ffffff 100%);
+}
+
+.doc-hero p {
+  max-width: 720px;
+  font-size: 17px;
+  line-height: 1.8;
+}
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 20px 0 28px;
+}
+
+.doc-card {
+  display: block;
+  min-height: 132px;
+  padding: 18px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: inherit;
+  text-decoration: none;
+}
+
+.doc-card:hover {
+  border-color: var(--vp-c-brand-2);
+  text-decoration: none;
+}
+
+.doc-card strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--vp-c-brand-1);
+  font-size: 16px;
+}
+
+.doc-card span {
+  display: block;
+  color: var(--vp-c-text-2);
+  line-height: 1.65;
+}
+
+.tip-box {
+  margin: 20px 0;
+  padding: 16px 18px;
+  border-left: 4px solid var(--vp-c-brand-1);
+  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
+}
+
+.vp-doc table {
+  display: table;
+  width: 100%;
+}
+
+.vp-doc li + li {
+  margin-top: 4px;
+}
