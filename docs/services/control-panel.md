@@ -1,17 +1,23 @@
 # Control Panel
 
-Control Panel は AutoStream の中心です。管理画面、認証、ユーザー、権限、配信設定、provider 連携、サービス状態を扱います。
+Control Panel は AutoStream の中心です。管理画面、認証、ユーザー、権限、配信設定、外部連携、サービス状態、監視通知を扱います。
+
+細かい画面操作は [Control Panel画面の全体像](/control-panel/) から順番に確認してください。このページでは、Control Panel service 自体の役割と、初期構築で必要な設定を整理します。
+
+Linuxサーバーへの配置、systemd、Docker、初回起動、公開URL、database、web assets の手順は [Control Panelを導入する](/services/control-panel-install) にまとめています。
 
 ## Control Panelで管理するもの
 
-- 管理者とユーザー
-- ロールと権限
-- Discord Bot の設定
-- YouTube など配信先
-- Google Drive など保存先
-- 通知先
-- サービス登録と heartbeat
-- 配信ジョブの開始、停止、再試行
+| 領域 | 代表画面 | 管理するもの |
+| --- | --- | --- |
+| 配信運用 | Streams | stream、start / stop、readiness、service assignment |
+| 配信先 | YouTube Outputs | RTMPS URL、stream key、Live API 設定 |
+| Discord | Discord Settings | Bot token、guild、voice channel、audio forward |
+| 録画保存 | Archive Settings、Integrations | archive profile、Drive destination、upload dry-run |
+| サービス | Service Health、API Tokens | service token、heartbeat、capability、runtime config |
+| ユーザー | Users、Roles、Security Settings | user、role、MFA、Passkey、secret 更新 |
+| 監視 | Monitoring、Incidents、Diagnostics | metric、incident、通知、対応候補 |
+| 監査 | Audit Logs | 操作履歴、CSV export |
 
 ## envで設定するもの
 
@@ -25,15 +31,49 @@ Control Panel は AutoStream の中心です。管理画面、認証、ユーザ
 | `SERVICE_CALL_TOKEN` | Control Panel から各サービスへ送る token |
 | `OBSERVABILITY_URL` | Observability の URL |
 
-## 初回セットアップ
+`AUTOSTREAM_PUBLIC_URL` は OAuth callback、cookie、他サービスからの参照に関係します。本番では HTTPS の外部 URL を入れます。
+
+## 初回セットアップの順番
 
 1. database を用意します。
 2. env ファイルを作成します。
-3. Control Panel を起動します。
+3. migration が走る状態で Control Panel を起動します。
 4. 初回管理者を作成します。
 5. HTTPS の公開 URL からログインできることを確認します。
-6. Discord、配信先、保存先、通知先を順番に登録します。
-7. 各サービスが登録され、online になることを確認します。
+6. API Tokens で各サービス用 token を作ります。
+7. Discord Bot、Worker、Encoder Recorder、Observability を起動します。
+8. Service Health で online を確認します。
+9. Integrations、Discord Settings、YouTube Outputs、Archive Settings を登録します。
+10. Streams で配信を作成し、Check Readiness を通してから Start します。
+
+## Control Panelでの入力ルール
+
+| 値 | 入力先 | 表示のされ方 |
+| --- | --- | --- |
+| Discord Bot token | Discord Settings | 保存後は configured / fingerprint |
+| YouTube stream key | YouTube Outputs | 保存後は configured / fingerprint |
+| OAuth client secret | Integrations | 保存後は configured / fingerprint |
+| OAuth refresh token | OAuth callback で保存 | 画面で手入力しません |
+| Google Drive folder ID | Drive destination | 保存後は masked / configured |
+| 通知 webhook URL | Notification Channels | 保存後は masked target |
+| SMTP password | Notification Channels | 保存後は configured |
+| TOTP secret / recovery codes | Current User MFA | 一度だけ表示 |
+
+raw secret は再表示できません。値を忘れた場合は、元 provider で再発行し、Control Panel で更新します。
+
+## 日常運用で見る画面
+
+| やりたいこと | 見る画面 |
+| --- | --- |
+| 今日の配信が始められるか確認 | Dashboard、Streams |
+| サービスが落ちていないか確認 | Service Health |
+| Discord channel を変える | Streams の override、または Discord Settings |
+| 配信先を変える | YouTube Outputs、Streams |
+| 録画保存先を変える | Integrations、Archive Settings |
+| 通知先を追加する | Notification Channels |
+| ユーザーを追加する | Users、Roles |
+| token を入れ替える | API Tokens |
+| 誰が変更したか見る | Audit Logs |
 
 ## 運用中の見方
 
@@ -42,4 +82,13 @@ Control Panel は AutoStream の中心です。管理画面、認証、ユーザ
 - 録画や保存の失敗がないか確認します。
 - 設定画面に raw secret が表示されていないことを確認します。
 
-Control Panel が動いていても、Discord 接続や FFmpeg 実行は別サービスの責務です。問題の場所は [サービス構成](/overview/service-roles) で切り分けてください。
+Control Panel が動いていても、Discord 接続や FFmpeg 実行は別サービスの責務です。問題の場所は [サービス構成](/overview/service-roles) と [サービス割り当て](/control-panel/services-workers) で切り分けてください。
+
+## 次に読むページ
+
+- [Control Panelを導入する](/services/control-panel-install)
+- [Control Panel画面の全体像](/control-panel/)
+- [配信画面](/control-panel/streams)
+- [DiscordとYouTube](/control-panel/discord-youtube)
+- [OAuthとDrive保存先](/control-panel/integrations-drive)
+- [監視と通知](/control-panel/observability)

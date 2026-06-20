@@ -2,6 +2,8 @@
 
 Docker は、複数の AutoStream サービスをまとめて起動したい場合に向いています。最初に試すときも、本番サーバーに置くときも、同じ考え方で進められます。
 
+各サービスで必要なenv、Control Panelで登録する項目、起動後の確認は [サービス共通の導入と運用](/services/host-operations) と各サービス導入ページも確認してください。
+
 ## 手順
 
 1. Docker と Docker Compose をサーバーに入れます。

@@ -10,6 +10,8 @@ export default {
     nav: [
       { text: 'はじめに', link: '/' },
       { text: 'インストール', link: '/runbooks/first-install' },
+      { text: 'Control Panel', link: '/control-panel/' },
+      { text: 'サービス導入', link: '/services/host-operations' },
       { text: 'サービス構成', link: '/overview/service-roles' },
       { text: '困ったとき', link: '/troubleshooting/' },
     ],
@@ -22,6 +24,21 @@ export default {
           { text: '最初のインストール', link: '/runbooks/first-install' },
           { text: '初回管理者を作る', link: '/runbooks/create-first-admin' },
           { text: '最初の配信を始める', link: '/runbooks/start-first-stream' },
+        ],
+      },
+      {
+        text: 'Control Panel利用方法',
+        items: [
+          { text: '画面の全体像', link: '/control-panel/' },
+          { text: 'ダッシュボード', link: '/control-panel/dashboard' },
+          { text: '配信画面', link: '/control-panel/streams' },
+          { text: 'プロファイル設定', link: '/control-panel/profiles' },
+          { text: 'DiscordとYouTube', link: '/control-panel/discord-youtube' },
+          { text: 'OAuthとDrive保存先', link: '/control-panel/integrations-drive' },
+          { text: 'サービス割り当て', link: '/control-panel/services-workers' },
+          { text: 'ユーザーとセキュリティ', link: '/control-panel/users-roles-security' },
+          { text: '監視と通知', link: '/control-panel/observability' },
+          { text: '監査ログとAPIトークン', link: '/control-panel/audit-tokens' },
         ],
       },
       {
@@ -48,6 +65,17 @@ export default {
           { text: 'Worker', link: '/services/worker' },
           { text: 'Encoder Recorder', link: '/services/encoder-recorder' },
           { text: 'Observability', link: '/services/observability' },
+        ],
+      },
+      {
+        text: 'サービス導入・運用',
+        items: [
+          { text: '共通の導入と運用', link: '/services/host-operations' },
+          { text: 'Control Panelを導入する', link: '/services/control-panel-install' },
+          { text: 'Discord Botを導入する', link: '/services/discord-bot-install' },
+          { text: 'Workerを導入する', link: '/services/worker-install' },
+          { text: 'Encoder Recorderを導入する', link: '/services/encoder-recorder-install' },
+          { text: 'Observabilityを導入する', link: '/services/observability-install' },
         ],
       },
       {

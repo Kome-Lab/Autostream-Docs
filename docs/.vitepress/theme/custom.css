@@ -11,18 +11,53 @@
   --doc-card-text: #57606a;
   --doc-hero-start: #f6f8fa;
   --doc-hero-end: #ffffff;
+  --doc-table-head: #f6f8fa;
+  --doc-table-row: #fbfcfd;
+  --doc-inline-code-bg: #eff3f6;
+  --doc-callout-info-bg: #eef6ff;
+  --doc-callout-info-border: #8cc7ff;
+  --doc-callout-warning-bg: #fff8c5;
+  --doc-callout-warning-border: #d4a72c;
+  --doc-callout-danger-bg: #ffebe9;
+  --doc-callout-danger-border: #ff8182;
+  --doc-shadow: 0 8px 22px rgb(31 35 40 / 0.06);
 }
 
 .dark {
-  --vp-c-brand-1: #79c0ff;
-  --vp-c-brand-2: #58a6ff;
-  --vp-c-brand-3: #388bfd;
-  --doc-surface: #161b22;
-  --doc-surface-soft: #0d1117;
-  --doc-border: #30363d;
-  --doc-card-text: #c9d1d9;
-  --doc-hero-start: #161b22;
-  --doc-hero-end: #0d1117;
+  --vp-c-bg: #101114;
+  --vp-c-bg-alt: #0b0c0f;
+  --vp-c-bg-soft: #191b20;
+  --vp-c-bg-elv: #1f2228;
+  --vp-c-text-1: #f4f4f5;
+  --vp-c-text-2: #d4d4d8;
+  --vp-c-text-3: #a1a1aa;
+  --vp-c-divider: #30333a;
+  --vp-c-border: #343842;
+  --vp-c-gutter: #30333a;
+  --vp-c-default-soft: #24272f;
+  --vp-c-brand-1: #8ec5ff;
+  --vp-c-brand-2: #5aa7ff;
+  --vp-c-brand-3: #2f81f7;
+  --vp-c-brand-soft: rgb(47 129 247 / 0.18);
+  --vp-c-tip-soft: rgb(65 132 228 / 0.16);
+  --vp-c-warning-soft: rgb(210 153 34 / 0.17);
+  --vp-c-danger-soft: rgb(248 81 73 / 0.17);
+  --doc-surface: #191b20;
+  --doc-surface-soft: #20232a;
+  --doc-border: #343842;
+  --doc-card-text: #d4d4d8;
+  --doc-hero-start: #20232a;
+  --doc-hero-end: #15171c;
+  --doc-table-head: #23262d;
+  --doc-table-row: #181a1f;
+  --doc-inline-code-bg: #282c34;
+  --doc-callout-info-bg: #172338;
+  --doc-callout-info-border: #5aa7ff;
+  --doc-callout-warning-bg: #302715;
+  --doc-callout-warning-border: #d29922;
+  --doc-callout-danger-bg: #321d1f;
+  --doc-callout-danger-border: #ff7b72;
+  --doc-shadow: 0 10px 28px rgb(0 0 0 / 0.22);
 }
 
 .VPDoc .content-container {
@@ -59,10 +94,12 @@
   background: var(--doc-surface);
   color: inherit;
   text-decoration: none;
+  box-shadow: var(--doc-shadow);
 }
 
 .doc-card:hover {
   border-color: var(--vp-c-brand-2);
+  background: var(--doc-surface-soft);
   text-decoration: none;
 }
 
@@ -88,8 +125,107 @@
 }
 
 .vp-doc table {
-  display: table;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
   width: 100%;
+}
+
+.vp-doc th {
+  background: var(--doc-table-head);
+  color: var(--vp-c-text-1);
+}
+
+.vp-doc td,
+.vp-doc th {
+  border-color: var(--doc-border);
+  overflow-wrap: anywhere;
+}
+
+.vp-doc td code,
+.vp-doc th code {
+  white-space: normal;
+}
+
+.vp-doc tr:nth-child(2n) {
+  background: var(--doc-table-row);
+}
+
+.vp-doc tr {
+  border-top-color: var(--doc-border);
+}
+
+.vp-doc :not(pre) > code {
+  background: var(--doc-inline-code-bg);
+  color: var(--vp-c-text-1);
+}
+
+.vp-doc blockquote {
+  border-color: var(--doc-border);
+  color: var(--vp-c-text-2);
+}
+
+.vp-doc .custom-block {
+  border-color: var(--doc-border);
+}
+
+.vp-doc .custom-block.info,
+.vp-doc .custom-block.tip {
+  background: var(--doc-callout-info-bg);
+  border-color: var(--doc-callout-info-border);
+}
+
+.vp-doc .custom-block.warning {
+  background: var(--doc-callout-warning-bg);
+  border-color: var(--doc-callout-warning-border);
+}
+
+.vp-doc .custom-block.danger {
+  background: var(--doc-callout-danger-bg);
+  border-color: var(--doc-callout-danger-border);
+}
+
+.dark .VPNav,
+.dark .VPSidebar,
+.dark .VPDocAsideOutline,
+.dark .VPDocFooter {
+  border-color: var(--doc-border);
+}
+
+.dark .VPNavBar,
+.dark .VPNavBar.has-sidebar .content,
+.dark .VPSidebar {
+  background: var(--vp-c-bg);
+}
+
+.dark .VPNavBarMenuLink,
+.dark .VPSidebarItem .text,
+.dark .VPDocAsideOutline .outline-link {
+  color: var(--vp-c-text-2);
+}
+
+.dark .VPSidebarItem.is-active > .item .text,
+.dark .VPNavBarMenuLink.active {
+  color: var(--vp-c-brand-1);
+}
+
+.dark .vp-doc div[class*='language-'] {
+  background: #171a20;
+  border: 1px solid var(--doc-border);
+}
+
+.dark .vp-doc div[class*='language-'] > button.copy {
+  border-color: var(--doc-border);
+  background-color: #24272f;
+}
+
+.dark .vp-doc h2 {
+  border-top-color: var(--doc-border);
+}
+
+.dark .VPDocAsideOutline .outline-link:hover,
+.dark .VPDocAsideOutline .outline-link.active {
+  color: var(--vp-c-brand-1);
 }
 
 .vp-doc li + li {

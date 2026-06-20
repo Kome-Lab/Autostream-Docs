@@ -1,0 +1,100 @@
+# Workerを導入する
+
+Worker は、配信中に必要な overlay、caption、participant、active speaker、current time などのイベントを作り、Encoder Recorder へ送るサービスです。映像をエンコードするサービスではなく、配信の制御イベントを担当します。
+
+## 導入前に用意するもの
+
+| 用意するもの | どこで使うか |
+| --- | --- |
+| Worker用service token | `CONTROL_PANEL_TOKEN` |
+| inbound control token hash | `SERVICE_CONTROL_TOKEN_SHA256` |
+| Observability ingest token | `OBSERVABILITY_TOKEN` |
+| Worker service ID | Control Panel の Service Health / assignment |
+| Worker service URL | Control Panel から到達するURL |
+
+Encoder Recorder のURLやstream ingest tokenは、通常 Control Panel の stream job から渡されます。本番envに固定の `ENCODER_RECORDER_URL` や固定tokenを置かない運用にします。
+
+## host直接起動
+
+```bash
+sudo install -o root -g root -m 0755 bin/worker /usr/local/bin/worker
+sudo install -d -o autostream -g autostream /var/lib/autostream/worker
+sudo install -o root -g root -m 0644 systemd/autostream-worker.service.example /etc/systemd/system/autostream-worker.service
+sudo install -o root -g root -m 0640 .env.example /etc/autostream/worker.env
+```
+
+`/etc/autostream/worker.env` を編集します。
+
+```text
+SERVICE_ID=worker-01
+SERVICE_NAME=Worker 01
+SERVICE_PUBLIC_URL=https://<WORKER_SERVICE_HOST>
+CONTROL_PANEL_URL=https://<CONTROL_PANEL_HOST>
+CONTROL_PANEL_TOKEN=<WORKER_SERVICE_TOKEN>
+SERVICE_CONTROL_TOKEN_SHA256=<SHA256_OF_SERVICE_CALL_TOKEN>
+AUTOSTREAM_ENV=production
+AUTOSTREAM_REQUIRE_CONTROL_PANEL_RUNTIME_CONFIG=true
+OBSERVABILITY_URL=https://<OBSERVABILITY_HOST>
+OBSERVABILITY_TOKEN=<OBSERVABILITY_INGEST_TOKEN>
+TZ=Asia/Tokyo
+```
+
+起動します。
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now autostream-worker
+sudo systemctl status autostream-worker
+```
+
+## Control Panelで登録する
+
+1. API Tokens で `worker` 用 token を作ります。
+2. service ID を `SERVICE_ID` と合わせます。
+3. Worker を起動します。
+4. Service Health で online になることを確認します。
+5. Worker Management または Stream assignment planner で stream に primary として割り当てます。
+6. Streams の Worker event test を実行します。
+
+## 配信中の動き
+
+1. Control Panel が Worker へ job を送ります。
+2. Worker が runtime config を取り直します。
+3. 自分が primary に割り当てられたstreamだけを処理します。
+4. overlayやcaptionなどのeventを作ります。
+5. stream job に含まれる Encoder Recorder へeventを送ります。
+6. Observability へ状態や失敗を送ります。
+
+standby Worker は予備です。通常はstart対象にならず、primaryへ切り替えた後に使います。
+
+## 確認ポイント
+
+| 確認 | 正常な状態 |
+| --- | --- |
+| Service Health | `worker` が online |
+| Assignment | 対象streamで primary |
+| Worker event test | current time やcaption testが成功 |
+| Encoder Recorder | Worker event sidecar が更新される |
+| Observability | worker event failures が増えない |
+
+## Dockerで起動する場合
+
+compose の env に `SERVICE_ID`、`SERVICE_PUBLIC_URL`、`CONTROL_PANEL_URL`、`CONTROL_PANEL_TOKEN`、`SERVICE_CONTROL_TOKEN_SHA256`、`OBSERVABILITY_URL`、`OBSERVABILITY_TOKEN` を入れます。
+
+Docker network 上で Control Panel、Encoder Recorder、Observability に到達できることを確認してください。
+
+## よくあるトラブル
+
+| 症状 | 確認する場所 |
+| --- | --- |
+| event test が失敗する | Worker assignment、Encoder Recorder URL、stream ingest token |
+| standbyのまま処理されない | primary assignment に切り替える |
+| Service Health が stale | heartbeat interval、Control Panel URL、token |
+| event送信が失敗する | Encoder Recorder のService Health、network、inbound token |
+| Productionで起動しない | runtime config必須設定とservice registrationの失敗理由 |
+
+## 次に読むページ
+
+- [サービス割り当て](/control-panel/services-workers)
+- [配信画面](/control-panel/streams)
+- [状態を確認する](/operations/monitoring)
