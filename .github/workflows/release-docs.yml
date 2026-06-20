@@ -1,4 +1,4 @@
-name: Docs Release
+﻿name: Docs Release
 
 on:
   push:
@@ -24,9 +24,9 @@ jobs:
     name: Build static docs archive
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -70,14 +70,14 @@ jobs:
           tar -C staging -czf "artifacts/${artifact}.tar.gz" "${artifact}"
           sha256sum "artifacts/${artifact}.tar.gz" > "artifacts/${artifact}.tar.gz.sha256"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: docs-release-dry-run
           path: artifacts/*
 
       - name: Publish GitHub Release
         if: steps.meta.outputs.push_release == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.meta.outputs.version }}
           files: artifacts/*

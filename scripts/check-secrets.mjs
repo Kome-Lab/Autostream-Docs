@@ -1,16 +1,23 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 
 const root = join(process.cwd(), '..');
-const repos = [
+const optionalSiblingRepos = [
   'autostream-contracts',
   'autostream-control-panel',
   'autostream-discord-bot',
   'autostream-encoder-recorder',
   'autostream-worker',
   'autostream-observability',
-  'autostream-docs',
 ];
+const scanRoots = [{ name: basename(process.cwd()), path: process.cwd() }];
+
+for (const repo of optionalSiblingRepos) {
+  const repoPath = join(root, repo);
+  if (existsSync(repoPath) && statSync(repoPath).isDirectory()) {
+    scanRoots.push({ name: repo, path: repoPath });
+  }
+}
 
 const extensions = new Set(['.md', '.txt', '.yaml', '.yml', '.json']);
 const includeNames = new Set(['.env.example']);
@@ -130,8 +137,8 @@ function walk(dir) {
   }
 }
 
-for (const repo of repos) {
-  walk(join(root, repo));
+for (const scanRoot of scanRoots) {
+  walk(scanRoot.path);
 }
 
 if (findings.length > 0) {

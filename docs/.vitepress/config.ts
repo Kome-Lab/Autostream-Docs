@@ -1,6 +1,17 @@
 export default {
   title: 'AutoStream Docs',
   description: 'AutoStream production operations, Control Panel runtime config, secret boundaries, and external verification record.',
+  vite: {
+    server: {
+      host: '127.0.0.1',
+      fs: {
+        strict: true,
+      },
+    },
+    preview: {
+      host: '127.0.0.1',
+    },
+  },
   themeConfig: {
     nav: [{ text: 'Overview', link: '/' }],
     sidebar: [
