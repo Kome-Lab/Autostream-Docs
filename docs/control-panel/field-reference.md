@@ -1,0 +1,315 @@
+# Control Panel項目リファレンス
+
+このページは、Control Panel の画面で「この項目は何を入れるのか」「保存後にどこで確認するのか」を調べるための一覧です。初めて運用する人は、[画面の全体像](/control-panel/)と[画面別操作ガイド](/control-panel/page-usage)を読んだ後に、このページを手元に置いて作業してください。
+
+実際の token、stream key、OAuth secret、webhook URL、SMTP password は保存できますが、保存後に raw value は表示されません。表示されるのは `configured`、`fingerprint`、`masked target`、`updated_at` のような確認用の値だけです。
+
+## 読み方
+
+| 列 | 意味 |
+| --- | --- |
+| 項目 | 画面に出る入力欄または表示欄 |
+| 入れるもの | 管理者が入れる値、または選ぶ値 |
+| いつ使うか | その項目が必要になる作業 |
+| 保存後の確認 | 入力後に見る画面や状態 |
+
+## Dashboard
+
+Dashboard は入力画面ではなく、最初に状況を判断する画面です。
+
+| 項目 | 見るもの | いつ使うか | 次に見る場所 |
+| --- | --- | --- | --- |
+| Active Stream | 配信中、開始中、停止中の stream | 今どの配信が動いているかを見る | Streams |
+| Services | online の service 数 | 配信前に必要サービスが起動しているか見る | Service Health |
+| Workers | 登録済み Worker 数 | overlay / caption 用の Worker があるか見る | Worker Management |
+| Open Incidents | 未解決 incident 数 | 配信前と配信中に異常有無を見る | Incidents |
+| Pending Remediation | 承認待ち対応数 | restart や reconnect の承認が必要か見る | Remediation Actions |
+| Metric summary | Encoder、Audio、Worker、Archive の要約 | 配信中に落ち込みを早く見つける | Metrics |
+
+Dashboard だけで設定変更はしません。異常を見つけたら、必ず専用画面で原因を確認します。
+
+## Streams
+
+Streams は、配信を作り、設定を紐づけ、開始・停止する画面です。
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| New Stream Name | 配信名 | 新しい配信を作るとき | Stream 一覧に追加される |
+| Stream | 操作対象の配信 | 設定変更、開始、停止、再試行 | 画面上部の選択名 |
+| Discord Config | Discord Settings で作った設定 | Discord 音声を使う配信 | Check Readiness |
+| Discord Guild ID Override | この配信だけ別 guild を使う場合の ID | テスト guild、本番 guild を分けるとき | Runtime config preview |
+| Discord Voice Channel ID Override | この配信だけ別 voice channel を使う場合の ID | 配信ごとに入るVCを変えるとき | Discord audio |
+| Discord Text Channel ID Override | 通知や補助投稿先の text channel ID | 告知先を配信ごとに変えるとき | Notification / audit |
+| Encoder Profile | 画質、fps、bitrate の profile | 配信品質を選ぶとき | Encoder host preflight |
+| Caption Profile | 字幕/STT profile | 字幕を使う配信 | Worker events |
+| Overlay Profile | overlay profile | 表示イベントを使う配信 | Worker events |
+| Archive Profile | 録画と保存先の profile | 録画、Drive upload を使う配信 | Archive / upload |
+| YouTube Output | YouTube Outputs で作った配信先 | 外部配信するとき | YouTube readiness |
+| Encoder Input URL | SRT、RTSP、relay などの入力URL | Discord以外の映像入力を使うとき | Encoder input URL check |
+| RTMP URL | 直接渡す RTMP/RTMPS URL | YouTube Output ではなく直接指定したいとき | Start preflight |
+
+### Streamsの操作ボタン
+
+| ボタン | 何をするか | 使うタイミング |
+| --- | --- | --- |
+| Create Stream With Current Settings | 現在選んだ設定で新しい stream を作る | 初回作成時 |
+| Save Settings | 選択中 stream の設定を保存 | Start 前、設定だけ変えるとき |
+| Check Readiness | 不足設定、service、外部連携を確認 | Start の直前 |
+| Start | 必要サービスへ配信開始を指示 | readiness が通った後 |
+| Stop | 必要サービスへ配信停止を指示 | 配信終了時 |
+| Retry Upload | 録画ファイルの upload を再試行 | Drive upload だけ失敗したとき |
+| Retry YouTube Complete | YouTube Live API の終了処理を再試行 | Stop 後の complete だけ失敗したとき |
+| View Stream Audit | 選択 stream の操作履歴を見る | 誰が変更したか確認するとき |
+
+## Encoder Profiles
+
+Encoder Profile は、Encoder Recorder が FFmpeg に渡す配信品質の設定です。
+
+| 項目 | 入れるもの | 目安 |
+| --- | --- | --- |
+| Name | profile 名 | `1080p60 main`、`720p test` など |
+| Config JSON | JSON object | 画質、fps、bitrate、preset |
+| `width` / `height` | 出力解像度 | 1920x1080、1280x720 |
+| `fps` | フレームレート | 30 または 60 |
+| `video_bitrate_kbps` | 映像 bitrate | 1080p60 なら 6000 から 9000 程度 |
+| `audio_bitrate_kbps` | 音声 bitrate | 128 から 192 程度 |
+| `preset` | encoder preset | `veryfast` など host 負荷に合わせる |
+
+設定後は Streams で選び、Encoder host preflight と Metrics の `Output FPS`、`Output Bitrate`、`Dropped Frames` を見ます。
+
+## Caption/STT Settings
+
+Caption/STT Settings は、字幕や文字起こしを使う場合だけ作ります。
+
+| 項目 | 入れるもの | 確認先 |
+| --- | --- | --- |
+| Name | profile 名 | Streams |
+| `enabled` | true / false | Worker events |
+| `language` | 主な音声言語 | 字幕の内容 |
+| `display_mode` | overlay / log など | Overlay 出力 |
+| `max_line_chars` | 1行文字数 | 文字切れ |
+| `speaker_label` | 話者表示の有無 | 配信画面 |
+
+字幕は視聴者に見えるため、最初は test stream で文字量と表示位置を確認します。
+
+## Overlay Settings
+
+Overlay Settings は、Worker が作るイベントや Encoder Recorder の表示に渡す設定です。
+
+| 項目 | 入れるもの | 確認先 |
+| --- | --- | --- |
+| Name | profile 名 | Streams |
+| `layout` | overlay layout 名 | test stream |
+| `show_clock` | 時刻表示の有無 | 出力映像 |
+| `show_participants` | 参加者表示の有無 | Worker events |
+| `theme` | overlay theme | 出力映像 |
+| `safe_area` | 余白設定 | 文字切れ |
+
+背景に対して文字が読みにくい場合は、overlay 側の theme と safe area を調整します。
+
+## Archive Settings
+
+Archive Settings は、録画、保存先、upload、保持期間を管理します。
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| Name | archive profile 名 | Streams で選ぶ | Archive Settings一覧 |
+| Drive destination | Integrations で作った保存先 | Google Drive upload | Destination が selected |
+| Base path | 保存先内のフォルダ名 | 配信ごとに整理したいとき | Runtime config preview |
+| Service Account credential secret | service account 方式の secret 名 | OAuth 方式を使わない場合 | configured |
+| Upload retry max | retry 回数 | 一時的な upload 失敗に備える | upload retry metric |
+| Retention days | ローカル録画保持日数 | disk 容量管理 | disk free metric |
+| Upload final archive | upload 有効化 | Drive へ保存する場合 | Archive / upload |
+| Dry-run upload | 本番 upload を抑えて検証 | 初回検証、外部確認前 | dry-run 表示 |
+| Advanced JSON | 追加設定 | 通常項目にない設定 | JSON保存結果 |
+
+本番前は `Dry-run upload` を on にして、録画ファイル作成と保存先の準備だけ確認します。実際に保存してよい状態になったら off にします。
+
+## Discord Settings
+
+Discord Settings は、Discord Bot が入る server / channel と token を管理します。
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| Name | 設定名 | Streams で選ぶ | Discord Config一覧 |
+| Bot service ID | Discord Bot の `SERVICE_ID` | runtime config を対象Botへ渡す | Service Health |
+| Guild ID | Discord server ID | Bot が入る server | Check Readiness |
+| Voice channel ID | Bot が入る voice channel ID | 音声取得 | Discord audio |
+| Text channel ID | 通知や補助投稿先 | 任意 | 通知・投稿結果 |
+| Bot token | Discord Bot token | Bot がDiscordに接続 | configured / fingerprint |
+| Enable audio forward | 音声を Encoder Recorder へ送る | 配信音声を使う場合 | Encoder audio bridge |
+| Reconnect voice automatically | 切断時の自動再接続 | 本番運用 | Incident / metrics |
+| Reconnect attempts | 再接続回数 | Discord瞬断対策 | reconnect metric |
+| Enable captions/STT forwarding | 字幕/STTへ音声を流す | 字幕を使う場合 | Caption events |
+
+Guild ID や channel ID は、Discord の開発者モードを有効にして対象を右クリックし、IDをコピーします。
+
+## YouTube Outputs
+
+YouTube Outputs は、配信先を管理します。
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| Name | 出力名 | Streams で選ぶ | YouTube Output一覧 |
+| Mode | stream key / Live API dry-run / Live API | 配信方式を選ぶ | Check Readiness |
+| RTMPS URL | YouTube ingest URL | stream key方式 | configured |
+| Stream key | YouTube stream key | stream key方式 | configured / fingerprint |
+| OAuth connected account | Google接続アカウント | Live API方式 | Integrations |
+| Privacy | private / unlisted / public | Live API broadcast作成 | YouTube側 |
+| Latency | normal / low / ultra_low | 安定性と遅延の調整 | YouTube側 |
+| Broadcast title template | 配信タイトル雛形 | Live API方式 | 作成される配信枠 |
+| Broadcast description | 配信説明文 | Live API方式 | 公開される可能性あり |
+| Enable auto start | YouTube側も自動開始 | Live API方式 | Start結果 |
+| Enable auto stop | YouTube側も自動停止 | Live API方式 | Stop結果 |
+| Complete broadcast on stream stop | Stop後に完了処理 | Live API方式 | Retry YouTube Complete |
+
+初回は `private` と `Live API dry-run`、または既存 stream key を使う方式で確認すると切り分けやすくなります。
+
+## Integrations
+
+Integrations は、OAuth provider、接続アカウント、Google Drive 保存先を管理します。
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| Provider type | google / github / discord など | login、Drive、YouTube連携 | Provider一覧 |
+| Client ID | provider発行の client ID | OAuth開始 | OAuth URL生成 |
+| Client secret | provider発行の secret | OAuth token交換 | configured |
+| Redirect URI | Control Panel callback URL | provider側にも同じ値を登録 | callback成功 |
+| Scopes | 必要な権限 | Drive、YouTube、login | 同意画面 |
+| Allowed domains | login許可ドメイン | 組織内だけ許可したい場合 | login結果 |
+| Auto-provision first login | 初回loginでuser作成 | OAuthログイン運用 | Users |
+| Default roles | 自動作成userのrole | auto-provision時 | Roles |
+
+Google Drive や YouTube Live API を使う場合は、OAuth Provider を作るだけでなく、Connected Account まで作る必要があります。
+
+## Google Drive Destination
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| Name | 保存先名 | Archive Settingsで選ぶ | Destination一覧 |
+| Auth mode | OAuth connected account / Service Account | 認証方式を選ぶ | runtime config |
+| OAuth account | 保存に使う接続アカウント | OAuth方式 | Connected Account |
+| Folder ID | Google Drive folder ID | 保存先folder | configured / fingerprint |
+| Base path | folder配下の基準パス | 配信ファイル整理 | upload result |
+| Shared drive folder | 共有ドライブかどうか | 共有ドライブ保存 | Drive permission |
+
+Folder ID は Google Drive のURLから取得します。保存先folderの権限は、接続アカウントまたはservice accountが書き込める状態にしておきます。
+
+## Service Health
+
+Service Health は、各サービスが Control Panel に登録できているか、配信へ割り当てられているかを見る画面です。
+
+| 項目 | 見るもの | 正常の目安 | 異常時 |
+| --- | --- | --- | --- |
+| Service ID | サービスの識別子 | envの `SERVICE_ID` と一致 | envを確認 |
+| Service Type | `discord_bot`、`worker`、`encoder_recorder` など | 想定type | token scopeを確認 |
+| Status | registered / online / offline | online | systemd/Docker確認 |
+| Health status | healthy / stale / no heartbeat | healthy | heartbeat確認 |
+| Public URL | Control Panelから見えるURL | 到達できるURL | firewall / reverse proxy確認 |
+| Capabilities | 対応機能 | runtime_configなど必要機能がtrue | service version確認 |
+| Heartbeat Metrics | サービスが送る代表metric | 更新されている | service log確認 |
+| Assignment role | primary / standby | 配信に必要なprimaryがある | assign操作 |
+
+Start できない時は、Streams の readiness と Service Health を行き来して確認します。
+
+## Worker Management
+
+Worker Management は、Workerだけを素早く割り当てる画面です。
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| Worker | 割り当てるWorker | overlay / caption担当を決める | Service Health |
+| Stream | 対象配信 | 配信ごとに担当を変える | Selected stream assignments |
+| Assignment role | primary / standby | 本番担当か予備か決める | planner |
+| Assign Worker | Workerを割り当て | 配信前 | Check Readiness |
+| Unassign Worker | 割り当て解除 | 廃止・入替 | missing表示 |
+| Restart Worker | restart要求 | Workerだけ不調な時 | heartbeat |
+
+配信中に primary Worker を変える場合は、overlay や caption が一時的に止まる可能性があります。
+
+## Users
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| Username | login名 | ユーザー作成 | Users一覧 |
+| Temporary password | 初回またはreset用の一時password | Create / Reset | Force Password Change |
+| Role checkboxes | 付与するrole | 権限を決める | Roles |
+| Lock / Unlock | login可否 | 一時停止、lockout解除 | status |
+| Disable | ユーザー無効化 | 退職、担当解除 | login不可 |
+
+日常配信担当には、配信操作に必要なroleだけを付けます。secret更新やrole変更は管理者だけにします。
+
+## Roles
+
+| 項目 | 入れるもの | 使い方 |
+| --- | --- | --- |
+| Name | role名 | `operator`、`viewer` など |
+| Permissions | 許可する操作 | streams.start、streams.stop、service.assignment など |
+
+権限はAPI側でも確認されます。画面で操作が見えても、権限が不足するとAPIで失敗します。
+
+## Security Settings
+
+| 項目 | 入れるもの | 推奨 |
+| --- | --- | --- |
+| Password min length | 最低文字数 | 12以上 |
+| Login lockout threshold | 失敗回数 | 5前後 |
+| Session idle timeout minutes | 無操作timeout | 30分前後 |
+| Session absolute lifetime hours | 最大session時間 | 12時間前後 |
+| MFA mode | disabled / totp / passkey | 本番はtotpまたはpasskey |
+| MFA required roles | MFA必須role | admin以上など |
+
+MFAを有効にした後は、管理者が自分のTOTPまたはPasskeyを登録できることを先に確認してください。
+
+## API Tokens
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| Service type | tokenを使うサービス種別 | service bootstrap | token scope |
+| Service ID | 登録予定の `SERVICE_ID` | pre-createする場合 | Service Health |
+| Scopes | 許可するAPI | 最小権限にする | token一覧 |
+| Expiration | 有効期限 | 短めにする | revoked / expired |
+| Rotate | token入替 | 漏えい疑い、定期更新 | 新token一度だけ表示 |
+| Revoke | token無効化 | サービス廃止、漏えい疑い | token無効 |
+
+tokenは作成時またはrotate時に一度だけ表示されます。表示後は各サービスのenvやsecret storeに入れ、画面やGitHubには残しません。
+
+## Audit Logs
+
+| 項目 | 入れるもの・見るもの | 使い方 |
+| --- | --- | --- |
+| Actor | 操作したユーザーまたはサービス | 誰が変更したか確認 |
+| Action group | streams、service_assignment、securityなど | 種類で絞り込み |
+| Resource | stream、service、userなど | 対象で絞り込み |
+| Result | success / failed | 失敗操作の確認 |
+| CSV export | 絞り込み結果 | 外部提出や内部確認 |
+
+Audit Logs は原因確認の入口です。秘密情報のraw valueは出ません。
+
+## Notification Channels
+
+| 項目 | 入れるもの | いつ使うか | 保存後の確認 |
+| --- | --- | --- | --- |
+| Name | 通知先名 | 一覧で判断しやすくする | channel一覧 |
+| Type | discord / slack / generic / email | 通知方式 | channel type |
+| Enabled | 有効/無効 | 一時停止 | delivery結果 |
+| Severity filter | 通知する重要度 | 通知量調整 | Test Channel |
+| Event type filter | 通知するevent | incidentだけ通知など | Notification Deliveries |
+| Webhook URL | Discord/Slack/generic URL | webhook方式 | masked target |
+| Recipients | email宛先 | email方式 | delivery結果 |
+| SMTP Host / Port | SMTP情報 | email方式 | Test Channel |
+| SMTP Username / Password | SMTP認証 | email方式 | configured |
+
+通知先を作ったら、必ず `Test Channel` で実際に届くことを確認します。
+
+## どこから直すか迷った時
+
+| 起きていること | 最初に見る画面 | 次に見る画面 |
+| --- | --- | --- |
+| Startできない | Streams -> Check Readiness | Service Health |
+| 音声が出ない | Streams -> Discord audio | Discord Settings、Metrics |
+| 映像が止まる | Streams -> Encoder host preflight | Encoder Recorder、Metrics |
+| uploadできない | Archive / upload | Archive Settings、Drive Destination |
+| 通知が来ない | Notification Channels -> Test Channel | Notification Deliveries |
+| 誰が変えたか知りたい | Audit Logs | Users / Roles |
+| serviceが見えない | Service Health | API Tokens、service env |

@@ -228,6 +228,119 @@
   color: var(--vp-c-brand-1);
 }
 
+.dark .VPContent,
+.dark .VPDoc,
+.dark .vp-doc {
+  background: var(--vp-c-bg);
+}
+
+.dark .doc-hero,
+.dark .doc-card,
+.dark .tip-box,
+.dark .vp-doc .custom-block {
+  box-shadow: none;
+}
+
+.dark .doc-card {
+  background: #1b1e25;
+}
+
+.dark .doc-card:hover {
+  background: #222833;
+}
+
+.dark .vp-doc a {
+  color: #9ed0ff;
+}
+
+.dark .vp-doc a:hover {
+  color: #c6e2ff;
+}
+
+.dark .vp-doc table {
+  border-color: var(--doc-border);
+}
+
+.dark .vp-doc tr {
+  background: #15171c;
+}
+
+.dark .vp-doc tr:nth-child(2n) {
+  background: #1b1e25;
+}
+
+.dark .vp-doc td,
+.dark .vp-doc th {
+  color: var(--vp-c-text-2);
+}
+
+.dark .vp-doc th {
+  background: #252a33;
+  color: #f4f4f5;
+}
+
+.dark .vp-doc strong {
+  color: var(--vp-c-text-1);
+}
+
+.dark .vp-doc :not(pre) > code {
+  border: 1px solid #3a404c;
+  color: #f4f4f5;
+}
+
+.dark .VPLocalSearchBox .shell {
+  background: #171a20;
+  border-color: var(--doc-border);
+}
+
+.dark .VPLocalSearchBox input {
+  color: var(--vp-c-text-1);
+}
+
+.dark .VPNavBarSearch .DocSearch-Button {
+  background: #1b1e25;
+  border: 1px solid var(--doc-border);
+}
+
+.dark .VPMenu,
+.dark .VPNavScreen,
+.dark .VPNavBarExtra,
+.dark .VPNavBarAppearance {
+  background: #171a20;
+  border-color: var(--doc-border);
+}
+
+.dark .VPNavBarTitle .title,
+.dark .VPNavBarMenuLink:hover,
+.dark .VPSidebarItem .text:hover {
+  color: var(--vp-c-text-1);
+}
+
+.dark .VPNavBarHamburger span,
+.dark .VPSwitch {
+  background: #3a404c;
+}
+
+.dark .VPNavBarSearch .DocSearch-Button-Placeholder,
+.dark .VPLocalSearchBox .result .titles,
+.dark .VPLocalSearchBox .result .excerpt {
+  color: var(--vp-c-text-2);
+}
+
+.dark .VPLocalSearchBox .result {
+  background: #1b1e25;
+  border-color: var(--doc-border);
+}
+
+.dark .VPLocalSearchBox .result[aria-selected='true'],
+.dark .VPLocalSearchBox .result:hover {
+  background: #222833;
+}
+
+.dark .vp-doc tr:hover {
+  background: #20242c;
+}
+
 .vp-doc li + li {
   margin-top: 4px;
 }

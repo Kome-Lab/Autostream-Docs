@@ -1,49 +1,449 @@
-# Dockerで動かす
+# Dockerでインストールする
 
-Docker は、複数の AutoStream サービスをまとめて起動したい場合に向いています。最初に試すときも、本番サーバーに置くときも、同じ考え方で進められます。
+このページは、AutoStream を Docker / Docker Compose で起動する手順です。host に直接入れる場合は [最初のインストール](../runbooks/first-install.md) を使ってください。
 
-各サービスで必要なenv、Control Panelで登録する項目、起動後の確認は [サービス共通の導入と運用](/services/host-operations) と各サービス導入ページも確認してください。
+Docker でも、実 secret を compose file や Git 管理ファイルに書かない方針は同じです。compose file には placeholder と構成だけを置き、実値は `.env`、Docker secret、または本番の secret manager から渡します。
 
-## 手順
+## 1. Docker を入れる
 
-1. Docker と Docker Compose をサーバーに入れます。
-2. release に含まれる compose ファイル、または公開されている compose 例を配置します。
-3. `.env.example` を参考に env ファイルを作ります。
-4. token、URL、保存先など、自分の環境で必要な値だけを入れます。
-5. `docker compose config` で設定の書式を確認します。
-6. `docker compose up -d` で起動します。
-7. Control Panel を開き、サービス状態を確認します。
+Ubuntu / Debian 系の例です。
 
-## ファイル配置の例
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-- compose ファイル: `/opt/autostream/compose.yml`
-- env ファイル: `/opt/autostream/.env`
-- 録画保存先: `/var/lib/autostream/recordings`
-- 一時ファイル: `/var/lib/autostream/tmp`
-- reverse proxy 設定: サーバーの標準設定場所
+. /etc/os-release
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
 
-配置場所は自由ですが、compose ファイル、env、録画保存先を分けておくとバックアップや権限管理がしやすくなります。
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+docker compose version
+```
 
-## よく確認する場所
+Debian で使う場合は Docker 公式手順に合わせて repository URL を Debian 用に変えてください。
 
-- `docker compose ps`: コンテナが起動しているか
-- `docker compose logs`: 起動時のエラーが出ていないか
-- Control Panel: Worker や Encoder Recorder が見えているか
-- 保存先ディレクトリ: 録画ファイルが作られるか
+## 2. 配置場所を作る
 
-## 更新するとき
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream
+sudo install -d -o root -g root -m 0750 /opt/autostream/secrets
+sudo install -d -o 1000 -g 1000 -m 0750 /var/lib/autostream
+sudo install -d -o 1000 -g 1000 -m 0750 /var/lib/autostream/archives
+cd /opt/autostream
+```
 
-1. 現在の compose ファイルと env をバックアップします。
-2. 新しい image tag に変更します。
-3. `docker compose pull` を実行します。
-4. `docker compose up -d` で反映します。
-5. Control Panel と短いテスト配信で動作確認します。
+source checkout から build する場合は、各 repo を `/opt/autostream/src` に置きます。
 
-## 本番で気をつけること
+```bash
+sudo install -d -o "$USER" -g "$USER" /opt/autostream/src
+cd /opt/autostream/src
 
-- Control Panel は HTTPS の reverse proxy の後ろに置きます。
-- env ファイルは公開リポジトリに置かないでください。
-- サーバーの firewall で不要なポートを閉じます。
-- token を変更したら、関連するコンテナを再起動します。
+# URL は実際の repository URL に置き換えてください。
+git clone <AUTOSTREAM_CONTROL_PANEL_GIT_URL> autostream-control-panel
+git clone <AUTOSTREAM_DISCORD_BOT_GIT_URL> autostream-discord-bot
+git clone <AUTOSTREAM_WORKER_GIT_URL> autostream-worker
+git clone <AUTOSTREAM_ENCODER_RECORDER_GIT_URL> autostream-encoder-recorder
+git clone <AUTOSTREAM_OBSERVABILITY_GIT_URL> autostream-observability
+```
 
-Docker で起動できたら、[最初の配信を始める](/runbooks/start-first-stream) に進んでください。
+image registry から pull する場合は clone は不要です。compose の `build:` を `image:` に置き換えてください。
+
+## 3. secret を生成する
+
+```bash
+openssl rand -hex 32   # AUTOSTREAM_SESSION_SECRET
+openssl rand -hex 32   # AUTOSTREAM_SECRET_ENCRYPTION_KEY
+openssl rand -hex 32   # AUTOSTREAM_SETUP_TOKEN
+openssl rand -hex 32   # SERVICE_CALL_TOKEN
+openssl rand -hex 32   # AUTOSTREAM_STREAM_INGEST_SIGNING_KEY
+openssl rand -hex 32   # OBSERVABILITY_TOKEN
+```
+
+`SERVICE_CALL_TOKEN` の SHA-256 を作ります。
+
+```bash
+printf '%s' '<SERVICE_CALL_TOKEN>' | sha256sum | awk '{print $1}'
+```
+
+## 4. `.env` を作る
+
+```bash
+cd /opt/autostream
+sudo install -o root -g root -m 0640 /dev/null .env
+sudoedit .env
+```
+
+例:
+
+```dotenv
+TZ=Asia/Tokyo
+
+MARIADB_PASSWORD=<DB_PASSWORD>
+MARIADB_ROOT_PASSWORD=<DB_ROOT_PASSWORD>
+CONTROL_PANEL_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_control_panel?parseTime=true
+OBSERVABILITY_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_observability?parseTime=true
+ENCODER_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_encoder_recorder?parseTime=true
+WORKER_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_worker?parseTime=true
+DISCORD_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_discord_bot?parseTime=true
+
+AUTOSTREAM_PUBLIC_URL=https://control.example.com
+AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
+AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
+AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
+SERVICE_CALL_TOKEN=<SERVICE_CALL_TOKEN>
+SERVICE_CONTROL_TOKEN_SHA256=<SHA256_OF_SERVICE_CALL_TOKEN>
+AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
+
+OBSERVABILITY_TOKEN=<OBSERVABILITY_TOKEN>
+
+ENCODER_SERVICE_TOKEN=<ENCODER_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+WORKER_SERVICE_TOKEN=<WORKER_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+DISCORD_SERVICE_TOKEN=<DISCORD_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+OBSERVABILITY_SERVICE_TOKEN=<OBSERVABILITY_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+```
+
+初回は service token がまだないため、Control Panel 起動後に token を作って `.env` を更新し、各 service container を起動します。
+
+## 5. compose file を作る
+
+`/opt/autostream/compose.yml` を作ります。
+
+```bash
+sudoedit /opt/autostream/compose.yml
+```
+
+source checkout から build する例:
+
+```yaml
+services:
+  mariadb:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: autostream_control_panel
+      MARIADB_USER: autostream
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+    volumes:
+      - mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  control-panel:
+    build: ./src/autostream-control-panel
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
+      AUTOSTREAM_PUBLIC_URL: ${AUTOSTREAM_PUBLIC_URL}
+      AUTOSTREAM_DATA_DIR: /var/lib/autostream/control-panel
+      AUTOSTREAM_SESSION_SECRET: ${AUTOSTREAM_SESSION_SECRET}
+      AUTOSTREAM_SECRET_ENCRYPTION_KEY: ${AUTOSTREAM_SECRET_ENCRYPTION_KEY}
+      AUTOSTREAM_SETUP_TOKEN: ${AUTOSTREAM_SETUP_TOKEN}
+      DATABASE_URL: ${CONTROL_PANEL_DATABASE_URL}
+      SERVICE_CALL_TOKEN: ${SERVICE_CALL_TOKEN}
+      AUTOSTREAM_STREAM_INGEST_SIGNING_KEY: ${AUTOSTREAM_STREAM_INGEST_SIGNING_KEY}
+      AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS: encoder-recorder,worker,discord-bot,observability
+      AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS: "true"
+      OBSERVABILITY_URL: http://observability:8080
+      OBSERVABILITY_TOKEN: ${OBSERVABILITY_TOKEN}
+      TZ: ${TZ}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - control-panel-data:/var/lib/autostream/control-panel
+
+  observability:
+    build: ./src/autostream-observability
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      control-panel:
+        condition: service_started
+    environment:
+      SERVICE_ID: observability-01
+      SERVICE_NAME: Observability
+      SERVICE_PUBLIC_URL: http://observability:8080
+      CONTROL_PANEL_URL: http://control-panel:8080
+      CONTROL_PANEL_TOKEN: ${OBSERVABILITY_SERVICE_TOKEN}
+      OBSERVABILITY_INGEST_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
+      OBSERVABILITY_ADMIN_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
+      AUTOSTREAM_SECRET_ENCRYPTION_KEY: ${AUTOSTREAM_SECRET_ENCRYPTION_KEY}
+      DATABASE_URL: ${OBSERVABILITY_DATABASE_URL}
+      AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
+      TZ: ${TZ}
+    ports:
+      - "127.0.0.1:8082:8080"
+
+  encoder-recorder:
+    build: ./src/autostream-encoder-recorder
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      control-panel:
+        condition: service_started
+    environment:
+      SERVICE_ID: encoder-recorder-01
+      SERVICE_NAME: Encoder Recorder
+      SERVICE_PUBLIC_URL: http://encoder-recorder:8080
+      CONTROL_PANEL_URL: http://control-panel:8080
+      CONTROL_PANEL_TOKEN: ${ENCODER_SERVICE_TOKEN}
+      SERVICE_CONTROL_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
+      AUTOSTREAM_STREAM_INGEST_SIGNING_KEY: ${AUTOSTREAM_STREAM_INGEST_SIGNING_KEY}
+      AUTOSTREAM_REQUIRE_SIGNED_INGEST_TOKENS: "true"
+      AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
+      AUTOSTREAM_DATA_DIR: /var/lib/autostream/encoder-recorder
+      AUTOSTREAM_ARCHIVE_DIR: /var/lib/autostream/archives
+      DATABASE_URL: ${ENCODER_DATABASE_URL}
+      FFMPEG_BIN: ffmpeg
+      OBSERVABILITY_URL: http://observability:8080
+      OBSERVABILITY_TOKEN: ${OBSERVABILITY_TOKEN}
+      TZ: ${TZ}
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - encoder-data:/var/lib/autostream/encoder-recorder
+      - archives:/var/lib/autostream/archives
+
+  worker:
+    build: ./src/autostream-worker
+    restart: unless-stopped
+    depends_on:
+      control-panel:
+        condition: service_started
+      encoder-recorder:
+        condition: service_started
+    environment:
+      SERVICE_ID: worker-01
+      SERVICE_NAME: Worker
+      SERVICE_PUBLIC_URL: http://worker:8080
+      CONTROL_PANEL_URL: http://control-panel:8080
+      CONTROL_PANEL_TOKEN: ${WORKER_SERVICE_TOKEN}
+      SERVICE_CONTROL_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
+      ENCODER_RECORDER_URL: http://encoder-recorder:8080
+      DATABASE_URL: ${WORKER_DATABASE_URL}
+      OBSERVABILITY_URL: http://observability:8080
+      OBSERVABILITY_TOKEN: ${OBSERVABILITY_TOKEN}
+      AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
+      TZ: ${TZ}
+    ports:
+      - "127.0.0.1:8084:8080"
+
+  discord-bot:
+    build: ./src/autostream-discord-bot
+    restart: unless-stopped
+    depends_on:
+      control-panel:
+        condition: service_started
+      encoder-recorder:
+        condition: service_started
+      worker:
+        condition: service_started
+    environment:
+      SERVICE_ID: discord-bot-01
+      SERVICE_NAME: Discord Bot
+      SERVICE_PUBLIC_URL: http://discord-bot:8080
+      CONTROL_PANEL_URL: http://control-panel:8080
+      CONTROL_PANEL_TOKEN: ${DISCORD_SERVICE_TOKEN}
+      SERVICE_CONTROL_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
+      WORKER_URL: http://worker:8080
+      DATABASE_URL: ${DISCORD_DATABASE_URL}
+      ENCODER_AUDIO_TOKEN: ""
+      AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
+      TZ: ${TZ}
+    ports:
+      - "127.0.0.1:8083:8080"
+
+volumes:
+  mariadb:
+  control-panel-data:
+  encoder-data:
+  archives:
+```
+
+production で registry image を使う場合は、各 `build:` を次のような `image:` に置き換えます。
+
+```yaml
+image: ghcr.io/<ORG>/autostream-control-panel:<VERSION>
+```
+
+## 6. Control Panel だけ先に起動する
+
+service token を Control Panel で作るため、最初は MariaDB と Control Panel だけ起動します。
+
+```bash
+cd /opt/autostream
+docker compose --env-file .env -f compose.yml up -d mariadb control-panel
+docker compose --env-file .env -f compose.yml ps
+docker compose --env-file .env -f compose.yml logs -f control-panel
+```
+
+health を確認します。
+
+```bash
+curl -fsS http://127.0.0.1:8080/health
+```
+
+初回管理者を作ります。
+
+```bash
+curl -fsS -X POST http://127.0.0.1:8080/setup/first-admin \
+  -H 'Content-Type: application/json' \
+  -d '{"setup_token":"<SETUP_TOKEN>","username":"admin","password":"<ADMIN_PASSWORD>"}'
+```
+
+## 7. service token を作って `.env` に入れる
+
+Control Panel にログインし、Encoder/Recorder、Worker、Discord Bot、Observability 用の service token を作ります。
+
+作成した token を `/opt/autostream/.env` に入れます。
+
+```dotenv
+ENCODER_SERVICE_TOKEN=<ENCODER_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+WORKER_SERVICE_TOKEN=<WORKER_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+DISCORD_SERVICE_TOKEN=<DISCORD_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+OBSERVABILITY_SERVICE_TOKEN=<OBSERVABILITY_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+```
+
+token は作成時だけ表示されます。紛失した場合は再発行してください。
+
+## 8. 全サービスを起動する
+
+```bash
+cd /opt/autostream
+docker compose --env-file .env -f compose.yml config
+docker compose --env-file .env -f compose.yml up -d --build
+docker compose --env-file .env -f compose.yml ps
+```
+
+ログを確認します。
+
+```bash
+docker compose --env-file .env -f compose.yml logs -f control-panel
+docker compose --env-file .env -f compose.yml logs -f encoder-recorder
+docker compose --env-file .env -f compose.yml logs -f worker
+docker compose --env-file .env -f compose.yml logs -f discord-bot
+docker compose --env-file .env -f compose.yml logs -f observability
+```
+
+health を確認します。
+
+```bash
+curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8081/health
+curl -fsS http://127.0.0.1:8082/health
+curl -fsS http://127.0.0.1:8083/health
+curl -fsS http://127.0.0.1:8084/health
+```
+
+## 9. reverse proxy を置く
+
+本番では Control Panel を HTTPS で公開します。Go service を直接 internet に公開しないでください。
+
+nginx 例:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name control.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/control.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/control.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+`AUTOSTREAM_PUBLIC_URL` はブラウザで開く URL と一致させます。
+
+## 10. 外部 provider を登録する
+
+Control Panel UI で登録します。compose `.env` に直接入れないでください。
+
+| 項目 | 登録先 |
+| --- | --- |
+| Discord bot token | Discord Bot config |
+| YouTube OAuth / stream key | YouTube output |
+| Google OAuth / Drive destination | Integration / Drive destination |
+| webhook URL | Notification channel |
+| SMTP password | Email notification channel |
+
+Service Account fallback を使う場合だけ、credential JSON を host に置き、container に read-only mount します。
+
+```yaml
+services:
+  encoder-recorder:
+    volumes:
+      - /opt/autostream/secrets/google-service-account.json:/etc/autostream/google-service-account.json:ro
+    environment:
+      GOOGLE_DRIVE_AUTH_MODE: service_account
+      GOOGLE_APPLICATION_CREDENTIALS: /etc/autostream/google-service-account.json
+      GOOGLE_DRIVE_FOLDER_ID: <DRIVE_FOLDER_ID>
+```
+
+この fallback を使う場合も、JSON の中身と Drive folder ID を evidence、logs、docs に残さないでください。
+
+## 11. 起動後の確認
+
+Control Panel で次を確認します。
+
+1. admin でログインできる。
+2. Service Health に全 service が表示される。
+3. heartbeat が fresh である。
+4. Encoder/Recorder、Worker、Discord Bot を stream に primary assignment できる。
+5. Start readiness が secret を表示せず、missing 設定だけを出す。
+6. dry-run stream start が実行できる。
+
+CLI では次を確認します。
+
+```bash
+docker compose --env-file .env -f compose.yml ps
+docker compose --env-file .env -f compose.yml logs --tail=200
+docker volume ls | grep autostream
+```
+
+## 12. 更新する
+
+```bash
+cd /opt/autostream
+cp compose.yml compose.yml.bak.$(date +%Y%m%d%H%M%S)
+cp .env .env.bak.$(date +%Y%m%d%H%M%S)
+
+docker compose --env-file .env -f compose.yml pull
+docker compose --env-file .env -f compose.yml up -d --build
+docker compose --env-file .env -f compose.yml ps
+```
+
+更新後は Control Panel の Service Health と短い dry-run stream を確認します。
+
+## 13. 停止する
+
+```bash
+cd /opt/autostream
+docker compose --env-file .env -f compose.yml stop
+```
+
+データを消す場合だけ volume を削除します。通常の再起動や更新では実行しません。
+
+```bash
+docker compose --env-file .env -f compose.yml down --volumes
+```
+
+インストールできたら、[最初の配信を始める](../runbooks/start-first-stream.md) に進みます。

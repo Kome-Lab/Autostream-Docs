@@ -30,6 +30,8 @@ export default {
         text: 'Control Panel利用方法',
         items: [
           { text: '画面の全体像', link: '/control-panel/' },
+          { text: '画面別操作ガイド', link: '/control-panel/page-usage' },
+          { text: '項目リファレンス', link: '/control-panel/field-reference' },
           { text: 'ダッシュボード', link: '/control-panel/dashboard' },
           { text: '配信画面', link: '/control-panel/streams' },
           { text: 'プロファイル設定', link: '/control-panel/profiles' },
@@ -61,6 +63,7 @@ export default {
         text: 'サービス別',
         items: [
           { text: 'Control Panel', link: '/services/control-panel' },
+          { text: '各サービスの使い方', link: '/services/runtime-usage' },
           { text: 'Discord Bot', link: '/services/discord-bot' },
           { text: 'Worker', link: '/services/worker' },
           { text: 'Encoder Recorder', link: '/services/encoder-recorder' },
