@@ -109,6 +109,16 @@ OBSERVABILITY_SERVICE_TOKEN=<OBSERVABILITY_SERVICE_TOKEN_FROM_CONTROL_PANEL>
 
 初回は service token がまだないため、Control Panel 起動後に token を作って `.env` を更新し、各 service container を起動します。
 
+各サービスの env 項目、token の意味、起動後の確認はサービス別導入ページに分けています。Docker で動かす場合も、確認する値と責務は同じです。
+
+| service | 詳細手順 |
+| --- | --- |
+| Control Panel | [Control Panelを導入する](../services/control-panel-install.md) |
+| Encoder/Recorder | [Encoder Recorderを導入する](../services/encoder-recorder-install.md) |
+| Worker | [Workerを導入する](../services/worker-install.md) |
+| Discord Bot | [Discord Botを導入する](../services/discord-bot-install.md) |
+| Observability | [Observabilityを導入する](../services/observability-install.md) |
+
 ## 5. compose file を作る
 
 `/opt/autostream/compose.yml` を作ります。

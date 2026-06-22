@@ -224,6 +224,16 @@ Control Panel の API Tokens / Services 画面で、次の service 用 token を
 
 Control Panel から service へ送る token は `SERVICE_CALL_TOKEN` です。service 側では raw token ではなく、SHA-256 を `SERVICE_CONTROL_TOKEN_SHA256` に入れます。
 
+サービスごとの詳しい env、systemd、起動確認は次のページも参照してください。
+
+| service | 詳細手順 |
+| --- | --- |
+| Control Panel | [Control Panelを導入する](../services/control-panel-install.md) |
+| Encoder/Recorder | [Encoder Recorderを導入する](../services/encoder-recorder-install.md) |
+| Worker | [Workerを導入する](../services/worker-install.md) |
+| Discord Bot | [Discord Botを導入する](../services/discord-bot-install.md) |
+| Observability | [Observabilityを導入する](../services/observability-install.md) |
+
 ## 9. 各 service を入れる
 
 各 repo または release artifact の directory で実行します。
