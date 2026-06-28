@@ -45,14 +45,47 @@ sudo install -d -o root -g root /etc/autostream
 
 ## release artifact の使い方
 
-1. GitHub Release から対象サービスとCPUに合う archive を取得します。
-2. `checksums.txt` がある場合は SHA256 を確認します。
-3. archive を展開します。
-4. `bin/` の実行ファイルを `/usr/local/bin/` に配置します。
-5. `.env.example` を `/etc/autostream/<service>.env` にコピーします。
-6. `systemd/*.service.example` を `/etc/systemd/system/` にコピーし、必要ならパスを調整します。
-7. env の placeholder を実運用値に置き換えます。
-8. `systemctl daemon-reload` 後に起動します。
+GitHub Release の host artifact は、archive の中に `bin/` が直接入るのではなく、archive 名と同じ top-level directory を 1 つ含みます。たとえば Control Panel の amd64 版は次の形です。
+
+```text
+autostream-control-panel_v1.0.0_linux_amd64/
+  bin/control-panel
+  systemd/autostream-control-panel.service.example
+  .env.example
+  checksums.txt
+  README.install.md
+  share/autostream-control-panel/
+```
+
+GitHub Release に添付されている `.sha256` は `artifacts/<asset>.tar.gz` というパスを含むため、download した archive と checksum file は `artifacts/` directory に置いてから確認してください。private repo の release asset は生の URL では `Not Found` になりやすいので、`gh auth login` 済みの GitHub CLI で取得します。
+
+```bash
+AUTOSTREAM_VERSION=v1.0.0
+AUTOSTREAM_ARCH=amd64   # arm64 server では arm64 に変更
+SERVICE_ARTIFACT=autostream-control-panel_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}.tar.gz
+
+sudo install -d -o "$USER" -g "$USER" -m 0755 /opt/autostream/releases/artifacts
+cd /opt/autostream/releases
+gh release download "${AUTOSTREAM_VERSION}" \
+  --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern "${SERVICE_ARTIFACT}" \
+  --pattern "${SERVICE_ARTIFACT}.sha256" \
+  --dir artifacts \
+  --clobber
+sha256sum -c "artifacts/${SERVICE_ARTIFACT}.sha256"
+tar -xzf "artifacts/${SERVICE_ARTIFACT}" -C /opt/autostream/releases
+cd "/opt/autostream/releases/${SERVICE_ARTIFACT%.tar.gz}"
+```
+
+その後、展開後 directory の中で次を実行します。
+
+1. `bin/` の実行ファイルを `/usr/local/bin/` に配置します。
+2. `.env.example` を `/etc/autostream/<service>.env` にコピーします。
+3. `systemd/*.service.example` を `/etc/systemd/system/` にコピーし、必要ならパスを調整します。
+4. env の placeholder を実運用値に置き換えます。
+5. `systemctl daemon-reload` 後に起動します。
+
+2026-06-29 時点では `Kome-Lab/Autostream-Worker` の GitHub Release asset は未公開です。Worker は source checkout から `go build -o bin/worker ./cmd/worker` で build するか、Worker repo の Host Release workflow で artifact を作成してから同じ配置手順を使ってください。
 
 ```bash
 sudo systemctl daemon-reload

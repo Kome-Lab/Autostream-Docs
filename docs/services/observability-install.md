@@ -18,6 +18,9 @@ Webhook URL やSMTP passwordはControl Panelから登録し、API responseやロ
 ## host直接起動
 
 ```bash
+AUTOSTREAM_VERSION=v1.0.0
+AUTOSTREAM_ARCH=amd64   # arm64 server では arm64 に変更
+cd "/opt/autostream/releases/autostream-observability_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}"
 sudo install -o root -g root -m 0755 bin/observability /usr/local/bin/observability
 sudo install -d -o autostream -g autostream /var/lib/autostream/observability
 sudo install -o root -g root -m 0644 systemd/autostream-observability.service.example /etc/systemd/system/autostream-observability.service

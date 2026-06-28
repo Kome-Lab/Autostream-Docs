@@ -16,7 +16,12 @@ Encoder Recorder のURLやstream ingest tokenは、通常 Control Panel の stre
 
 ## host直接起動
 
+2026-06-29 時点では `Kome-Lab/Autostream-Worker` の GitHub Release asset は公開されていません。release artifact だけで入れる場合は、先に Worker repo の Host Release workflow で `autostream-worker_<version>_linux_<arch>.tar.gz` を作る必要があります。ここでは source checkout から build する手順を示します。
+
 ```bash
+cd /opt/autostream/src/autostream-worker
+go build -o bin/worker ./cmd/worker
+
 sudo install -o root -g root -m 0755 bin/worker /usr/local/bin/worker
 sudo install -d -o autostream -g autostream /var/lib/autostream/worker
 sudo install -o root -g root -m 0644 systemd/autostream-worker.service.example /etc/systemd/system/autostream-worker.service

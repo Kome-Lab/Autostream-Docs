@@ -47,6 +47,21 @@ sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/archives
 ```
 
+GitHub Release から private repo の artifact を取得するため、GitHub CLI を使います。すでに `gh` が入っていてログイン済みなら、この block は `gh auth status` だけ確認してください。
+
+```bash
+if ! command -v gh >/dev/null 2>&1; then
+  sudo install -d -m 0755 /etc/apt/keyrings
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+  sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+  sudo apt-get update
+  sudo apt-get install -y gh
+fi
+
+gh auth status || gh auth login
+```
+
 同じサーバーに MariaDB も置く場合:
 
 ```bash
@@ -106,20 +121,52 @@ printf '%s' '<SERVICE_CALL_TOKEN>' | sha256sum | awk '{print $1}'
 
 release artifact を使う場合は、各サービスの archive を `/opt/autostream/releases` に展開してから配置します。
 
+2026-06-29 時点の GitHub Release `v1.0.0` は、次の名前で配布されています。
+
+| service | release repo | asset |
+| --- | --- | --- |
+| Control Panel | `Kome-Lab/Autostream-ControlPanel` | `autostream-control-panel_v1.0.0_linux_amd64.tar.gz` / `autostream-control-panel_v1.0.0_linux_arm64.tar.gz` |
+| Discord Bot | `Kome-Lab/Autostream-DiscordBot` | `autostream-discord-bot_v1.0.0_linux_amd64.tar.gz` / `autostream-discord-bot_v1.0.0_linux_arm64.tar.gz` |
+| Encoder/Recorder | `Kome-Lab/Autostream-Encoder-Recorder` | `autostream-encoder-recorder_v1.0.0_linux_amd64.tar.gz` / `autostream-encoder-recorder_v1.0.0_linux_arm64.tar.gz` |
+| Observability | `Kome-Lab/Autostream-Observability` | `autostream-observability_v1.0.0_linux_amd64.tar.gz` / `autostream-observability_v1.0.0_linux_arm64.tar.gz` |
+
+Worker は同じ `release-host.yml` を持っていますが、2026-06-29 時点では `Kome-Lab/Autostream-Worker` に GitHub Release asset が公開されていません。Worker はこのページの source checkout 手順で build するか、Worker repo の Host Release workflow を実行して同じ形式の artifact を作ってください。
+
 ```bash
-sudo install -d -o root -g root -m 0755 /opt/autostream/releases
+AUTOSTREAM_VERSION=v1.0.0
+AUTOSTREAM_ARCH=amd64   # arm64 server では arm64 に変更
+
+sudo install -d -o "$USER" -g "$USER" -m 0755 /opt/autostream/releases
+sudo install -d -o "$USER" -g "$USER" -m 0755 /opt/autostream/releases/artifacts
 cd /opt/autostream/releases
 
-# 例。実際の release URL に置き換えてください。
-curl -fL -o autostream-control-panel.tar.gz '<CONTROL_PANEL_RELEASE_TARBALL_URL>'
-curl -fL -o autostream-discord-bot.tar.gz '<DISCORD_BOT_RELEASE_TARBALL_URL>'
-curl -fL -o autostream-worker.tar.gz '<WORKER_RELEASE_TARBALL_URL>'
-curl -fL -o autostream-encoder-recorder.tar.gz '<ENCODER_RECORDER_RELEASE_TARBALL_URL>'
-curl -fL -o autostream-observability.tar.gz '<OBSERVABILITY_RELEASE_TARBALL_URL>'
-
-for f in autostream-*.tar.gz; do
-  sudo tar -xzf "$f" -C /opt/autostream/releases
+for service in \
+  autostream-control-panel \
+  autostream-discord-bot \
+  autostream-encoder-recorder \
+  autostream-observability
+do
+  case "$service" in
+    autostream-control-panel) repo=Autostream-ControlPanel ;;
+    autostream-discord-bot) repo=Autostream-DiscordBot ;;
+    autostream-encoder-recorder) repo=Autostream-Encoder-Recorder ;;
+    autostream-observability) repo=Autostream-Observability ;;
+  esac
+  asset="${service}_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}.tar.gz"
+  gh release download "${AUTOSTREAM_VERSION}" \
+    --repo "Kome-Lab/${repo}" \
+    --pattern "${asset}" \
+    --pattern "${asset}.sha256" \
+    --dir artifacts \
+    --clobber
+  sha256sum -c "artifacts/${asset}.sha256"
+  tar -xzf "artifacts/${asset}" -C /opt/autostream/releases
 done
+
+export CONTROL_PANEL_RELEASE_DIR="/opt/autostream/releases/autostream-control-panel_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}"
+export DISCORD_BOT_RELEASE_DIR="/opt/autostream/releases/autostream-discord-bot_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}"
+export ENCODER_RECORDER_RELEASE_DIR="/opt/autostream/releases/autostream-encoder-recorder_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}"
+export OBSERVABILITY_RELEASE_DIR="/opt/autostream/releases/autostream-observability_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}"
 ```
 
 source checkout から build する場合は、各 repo で次を実行します。
@@ -148,10 +195,11 @@ go build -o bin/observability ./cmd/observability
 ## 6. Control Panel を入れる
 
 ```bash
+cd "$CONTROL_PANEL_RELEASE_DIR"
 sudo install -o root -g root -m 0755 bin/control-panel /usr/local/bin/control-panel
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/control-panel
 sudo install -d -o root -g root -m 0755 /usr/share/autostream-control-panel
-sudo cp -a web/dist/. /usr/share/autostream-control-panel/
+sudo cp -a share/autostream-control-panel/. /usr/share/autostream-control-panel/
 sudo install -o root -g root -m 0644 systemd/autostream-control-panel.service.example /etc/systemd/system/autostream-control-panel.service
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/control-panel.env
 ```
@@ -240,24 +288,28 @@ Control Panel から service へ送る token は `SERVICE_CALL_TOKEN` です。s
 
 ```bash
 # Discord Bot
+cd "$DISCORD_BOT_RELEASE_DIR"
 sudo install -o root -g root -m 0755 bin/discord-bot /usr/local/bin/discord-bot
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/discord-bot
 sudo install -o root -g root -m 0644 systemd/autostream-discord-bot.service.example /etc/systemd/system/autostream-discord-bot.service
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/discord-bot.env
 
 # Worker
+cd /opt/autostream/src/autostream-worker
 sudo install -o root -g root -m 0755 bin/worker /usr/local/bin/worker
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/worker
 sudo install -o root -g root -m 0644 systemd/autostream-worker.service.example /etc/systemd/system/autostream-worker.service
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/worker.env
 
 # Encoder/Recorder
+cd "$ENCODER_RECORDER_RELEASE_DIR"
 sudo install -o root -g root -m 0755 bin/encoder-recorder /usr/local/bin/encoder-recorder
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/encoder-recorder /var/lib/autostream/archives
 sudo install -o root -g root -m 0644 systemd/autostream-encoder-recorder.service.example /etc/systemd/system/autostream-encoder-recorder.service
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/encoder-recorder.env
 
 # Observability
+cd "$OBSERVABILITY_RELEASE_DIR"
 sudo install -o root -g root -m 0755 bin/observability /usr/local/bin/observability
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/observability
 sudo install -o root -g root -m 0644 systemd/autostream-observability.service.example /etc/systemd/system/autostream-observability.service
