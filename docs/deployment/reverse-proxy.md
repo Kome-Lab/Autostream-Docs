@@ -14,7 +14,7 @@
 | 値 | 例 | 用途 |
 | --- | --- | --- |
 | `AUTOSTREAM_PUBLIC_URL` | `https://control.example.com` | Control Panel の公開 URL |
-| `SERVICE_PUBLIC_URL` | `https://worker.example.com` | 各 service の公開 URL |
+| Node登録の Host / Port / SSL | `worker.example.com` / `443` / ON | Panel から各 Node Agent API へ到達する URL |
 | trusted proxies | `127.0.0.1,10.0.0.0/8` | proxy 経由の client 情報 |
 | allowed hosts | service host 名 | SSRF や誤接続の抑制 |
 

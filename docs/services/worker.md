@@ -2,7 +2,7 @@
 
 Worker は配信ジョブの進行に必要なイベントを作り、Encoder Recorder へ渡します。重い media 処理ではなく、配信の制御と状態イベントを担当します。
 
-Linuxサーバーへの導入、service token、primary assignment、Worker event test の確認は [Workerを導入する](/services/worker-install) にまとめています。
+Linuxサーバーへの導入、Node Agent config、primary assignment、Worker event test の確認は [Workerを導入する](/services/worker-install) にまとめています。
 
 ## 役割
 
@@ -16,13 +16,10 @@ Linuxサーバーへの導入、service token、primary assignment、Worker even
 
 | 項目 | 目的 |
 | --- | --- |
-| `SERVICE_ID` | Worker を識別する ID |
-| `SERVICE_PUBLIC_URL` | Control Panel から見える URL |
-| `CONTROL_PANEL_URL` | Control Panel の URL |
-| `CONTROL_PANEL_TOKEN` | service registration 用 token |
-| `SERVICE_CONTROL_TOKEN_SHA256` | inbound dispatch の検証 |
+| `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Worker 用 `config.yml` |
 | `OBSERVABILITY_URL` | Observability の URL |
-| `DATABASE_URL` | Worker 用 database |
+
+Worker は DB に直接接続しません。永続状態は Control Panel と Observability 側で扱います。
 
 ## 通常運用のポイント
 
@@ -34,8 +31,8 @@ Linuxサーバーへの導入、service token、primary assignment、Worker even
 
 | 画面 | 使い方 |
 | --- | --- |
-| API Tokens | Worker 用 token を作成します |
-| Service Health | Worker の heartbeat、capability、runtime config preview を確認します |
+| Node登録 | Worker Node を作成し、Host、Port、SSL、説明を設定します |
+| Service Health | Worker の heartbeat、自動報告された version / capability / OS / arch を確認します |
 | Worker Management | Worker を stream に primary / standby として割り当てます |
 | Streams | Worker event test、Worker Event Sidecar、Start readiness を確認します |
 | Metrics | scene updates、overlay events、caption events、send failures を確認します |
@@ -80,7 +77,7 @@ Worker だけを入れ替えるなら Worker Management、Discord Bot や Encode
 5. Encoder Recorder 側にイベントが届いているか確認します。
 6. Observability に heartbeat や metric が届いているか確認します。
 
-イベントが届かない場合は、Worker、Encoder Recorder、Control Panel の service ID と token の組み合わせを確認してください。
+イベントが届かない場合は、Worker、Encoder Recorder、Control Panel の Node ID、Node Runtime Token、primary assignment の組み合わせを確認してください。
 
 ## 次に読むページ
 

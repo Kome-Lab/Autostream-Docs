@@ -56,8 +56,8 @@ AutoStream では、値の置き場所を分けると運用しやすくなりま
 | 値の種類 | 置き場所 | 理由 |
 | --- | --- | --- |
 | Control Panel の公開 URL、database URL、session secret | サーバー env | 起動前に必要 |
-| サービスの `SERVICE_ID`、`SERVICE_PUBLIC_URL`、`CONTROL_PANEL_URL` | 各サービスの env | サービス登録前に必要 |
-| サービス登録用の one-time token | API Tokens で作成し、各サービス env に一度だけ投入 | 登録後は rotate / revoke しやすくする |
+| サービスの Node ID、Host、Port、SSL | Node登録画面 | Node Agent config作成前に必要 |
+| Node Agent config | Node登録の Configuration | 各サービスの `AUTOSTREAM_NODE_CONFIG` で読み込む |
 | Discord Bot token | Discord Settings | Discord Bot だけが runtime config として読む |
 | YouTube stream key | YouTube Outputs | Encoder Recorder へ配信開始時だけ渡す |
 | Google Drive folder ID、OAuth refresh token | Integrations / Drive destination | 保存先変更を Control Panel から管理する |

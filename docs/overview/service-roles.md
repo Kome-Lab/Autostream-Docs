@@ -22,7 +22,7 @@ AutoStream は 1 つの大きなアプリではなく、役割ごとに分かれ
 
 ## 設定の考え方
 
-- 起動に必要な URL、database、service token は env に置きます。
+- 起動に必要な Node ID、Control Panel URL、Node Runtime Token は Panel が生成する Node Agent config に置きます。database を直接使うのは Control Panel と Observability だけです。
 - 運用中に変える provider 値は Control Panel で管理します。
 - Discord token、YouTube stream key、Google Drive 認証、Webhook URL は raw のまま公開しません。
 - サービス間 token は、送信用と受信用を混同しないでください。

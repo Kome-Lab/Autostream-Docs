@@ -59,15 +59,16 @@ image registry から pull する場合は clone は不要です。compose の `
 openssl rand -hex 32   # AUTOSTREAM_SESSION_SECRET
 openssl rand -hex 32   # AUTOSTREAM_SECRET_ENCRYPTION_KEY
 openssl rand -hex 32   # AUTOSTREAM_SETUP_TOKEN
-openssl rand -hex 32   # SERVICE_CALL_TOKEN
 openssl rand -hex 32   # AUTOSTREAM_STREAM_INGEST_SIGNING_KEY
 openssl rand -hex 32   # OBSERVABILITY_TOKEN
+openssl rand -hex 32   # OBSERVABILITY_ADMIN_TOKEN
 ```
 
-`SERVICE_CALL_TOKEN` の SHA-256 を作ります。
+Observability の ingest / admin token は Observability 側では SHA-256 で持ちます。
 
 ```bash
-printf '%s' '<SERVICE_CALL_TOKEN>' | sha256sum | awk '{print $1}'
+printf '%s' '<OBSERVABILITY_TOKEN>' | sha256sum | awk '{print $1}'
+printf '%s' '<OBSERVABILITY_ADMIN_TOKEN>' | sha256sum | awk '{print $1}'
 ```
 
 ## 4. `.env` を作る
@@ -87,27 +88,23 @@ MARIADB_PASSWORD=<DB_PASSWORD>
 MARIADB_ROOT_PASSWORD=<DB_ROOT_PASSWORD>
 CONTROL_PANEL_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_control_panel?parseTime=true
 OBSERVABILITY_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_observability?parseTime=true
-ENCODER_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_encoder_recorder?parseTime=true
-WORKER_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_worker?parseTime=true
-DISCORD_DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(mariadb:3306)/autostream_discord_bot?parseTime=true
 
 AUTOSTREAM_PUBLIC_URL=https://control.example.com
 AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
 AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
-SERVICE_CALL_TOKEN=<SERVICE_CALL_TOKEN>
-SERVICE_CONTROL_TOKEN_SHA256=<SHA256_OF_SERVICE_CALL_TOKEN>
+SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
+NODE_CONFIG_ROOT=/opt/autostream/node-config
 
 OBSERVABILITY_TOKEN=<OBSERVABILITY_TOKEN>
-
-ENCODER_SERVICE_TOKEN=<ENCODER_SERVICE_TOKEN_FROM_CONTROL_PANEL>
-WORKER_SERVICE_TOKEN=<WORKER_SERVICE_TOKEN_FROM_CONTROL_PANEL>
-DISCORD_SERVICE_TOKEN=<DISCORD_SERVICE_TOKEN_FROM_CONTROL_PANEL>
-OBSERVABILITY_SERVICE_TOKEN=<OBSERVABILITY_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+OBSERVABILITY_TOKEN_SHA256=<SHA256_OF_OBSERVABILITY_TOKEN>
+OBSERVABILITY_ADMIN_TOKEN_SHA256=<SHA256_OF_OBSERVABILITY_ADMIN_TOKEN>
 ```
 
-初回は service token がまだないため、Control Panel 起動後に token を作って `.env` を更新し、各 service container を起動します。
+初回は Node Agent 用 `config.yml` がまだないため、Control Panel 起動後に Node登録で各Nodeを作り、Configuration から `config.yml` を `NODE_CONFIG_ROOT` 配下に保存してから各 service container を起動します。`CONTROL_PANEL_TOKEN` を `.env` に手入力しません。
+
+DB URL は Control Panel と Observability だけに必要です。Encoder/Recorder、Worker、Discord Bot は個別 database を持たず、Control Panel から runtime config を取得します。
 
 各サービスの env 項目、token の意味、起動後の確認はサービス別導入ページに分けています。Docker で動かす場合も、確認する値と責務は同じです。
 
@@ -119,9 +116,21 @@ OBSERVABILITY_SERVICE_TOKEN=<OBSERVABILITY_SERVICE_TOKEN_FROM_CONTROL_PANEL>
 | Discord Bot | [Discord Botを導入する](../services/discord-bot-install.md) |
 | Observability | [Observabilityを導入する](../services/observability-install.md) |
 
-## 5. compose file を作る
+## 5. MariaDB 初期化 SQL と compose file を作る
 
-`/opt/autostream/compose.yml` を作ります。
+Control Panel と Observability 用の database を初回起動時に作る SQL を置きます。
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/mariadb-init
+sudo tee /opt/autostream/mariadb-init/01-databases.sql >/dev/null <<'SQL'
+CREATE DATABASE IF NOT EXISTS autostream_control_panel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS autostream_observability CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON autostream_control_panel.* TO 'autostream'@'%';
+GRANT ALL PRIVILEGES ON autostream_observability.* TO 'autostream'@'%';
+SQL
+```
+
+続いて `/opt/autostream/compose.yml` を作ります。
 
 ```bash
 sudoedit /opt/autostream/compose.yml
@@ -141,6 +150,7 @@ services:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
     volumes:
       - mariadb:/var/lib/mysql
+      - ./mariadb-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -182,41 +192,31 @@ services:
       control-panel:
         condition: service_started
     environment:
-      SERVICE_ID: observability-01
-      SERVICE_NAME: Observability
-      SERVICE_PUBLIC_URL: http://observability:8080
-      CONTROL_PANEL_URL: http://control-panel:8080
-      CONTROL_PANEL_TOKEN: ${OBSERVABILITY_SERVICE_TOKEN}
-      OBSERVABILITY_INGEST_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
-      OBSERVABILITY_ADMIN_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
+      AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
+      OBSERVABILITY_INGEST_TOKEN_SHA256: ${OBSERVABILITY_TOKEN_SHA256}
+      OBSERVABILITY_ADMIN_TOKEN_SHA256: ${OBSERVABILITY_ADMIN_TOKEN_SHA256}
       AUTOSTREAM_SECRET_ENCRYPTION_KEY: ${AUTOSTREAM_SECRET_ENCRYPTION_KEY}
       DATABASE_URL: ${OBSERVABILITY_DATABASE_URL}
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8082:8080"
+    volumes:
+      - ${NODE_CONFIG_ROOT}/observability.yml:/etc/autostream-node/config.yml:ro
 
   encoder-recorder:
     build: ./src/autostream-encoder-recorder
     restart: unless-stopped
     depends_on:
-      mariadb:
-        condition: service_healthy
       control-panel:
         condition: service_started
     environment:
-      SERVICE_ID: encoder-recorder-01
-      SERVICE_NAME: Encoder Recorder
-      SERVICE_PUBLIC_URL: http://encoder-recorder:8080
-      CONTROL_PANEL_URL: http://control-panel:8080
-      CONTROL_PANEL_TOKEN: ${ENCODER_SERVICE_TOKEN}
-      SERVICE_CONTROL_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
+      AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
       AUTOSTREAM_STREAM_INGEST_SIGNING_KEY: ${AUTOSTREAM_STREAM_INGEST_SIGNING_KEY}
       AUTOSTREAM_REQUIRE_SIGNED_INGEST_TOKENS: "true"
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       AUTOSTREAM_DATA_DIR: /var/lib/autostream/encoder-recorder
       AUTOSTREAM_ARCHIVE_DIR: /var/lib/autostream/archives
-      DATABASE_URL: ${ENCODER_DATABASE_URL}
       FFMPEG_BIN: ffmpeg
       OBSERVABILITY_URL: http://observability:8080
       OBSERVABILITY_TOKEN: ${OBSERVABILITY_TOKEN}
@@ -224,6 +224,7 @@ services:
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
+      - ${NODE_CONFIG_ROOT}/encoder-recorder.yml:/etc/autostream-node/config.yml:ro
       - encoder-data:/var/lib/autostream/encoder-recorder
       - archives:/var/lib/autostream/archives
 
@@ -236,20 +237,16 @@ services:
       encoder-recorder:
         condition: service_started
     environment:
-      SERVICE_ID: worker-01
-      SERVICE_NAME: Worker
-      SERVICE_PUBLIC_URL: http://worker:8080
-      CONTROL_PANEL_URL: http://control-panel:8080
-      CONTROL_PANEL_TOKEN: ${WORKER_SERVICE_TOKEN}
-      SERVICE_CONTROL_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
+      AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
       ENCODER_RECORDER_URL: http://encoder-recorder:8080
-      DATABASE_URL: ${WORKER_DATABASE_URL}
       OBSERVABILITY_URL: http://observability:8080
       OBSERVABILITY_TOKEN: ${OBSERVABILITY_TOKEN}
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8084:8080"
+    volumes:
+      - ${NODE_CONFIG_ROOT}/worker.yml:/etc/autostream-node/config.yml:ro
 
   discord-bot:
     build: ./src/autostream-discord-bot
@@ -262,19 +259,15 @@ services:
       worker:
         condition: service_started
     environment:
-      SERVICE_ID: discord-bot-01
-      SERVICE_NAME: Discord Bot
-      SERVICE_PUBLIC_URL: http://discord-bot:8080
-      CONTROL_PANEL_URL: http://control-panel:8080
-      CONTROL_PANEL_TOKEN: ${DISCORD_SERVICE_TOKEN}
-      SERVICE_CONTROL_TOKEN_SHA256: ${SERVICE_CONTROL_TOKEN_SHA256}
+      AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
       WORKER_URL: http://worker:8080
-      DATABASE_URL: ${DISCORD_DATABASE_URL}
       ENCODER_AUDIO_TOKEN: ""
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8083:8080"
+    volumes:
+      - ${NODE_CONFIG_ROOT}/discord-bot.yml:/etc/autostream-node/config.yml:ro
 
 volumes:
   mariadb:
@@ -291,7 +284,7 @@ image: ghcr.io/<ORG>/autostream-control-panel:<VERSION>
 
 ## 6. Control Panel だけ先に起動する
 
-service token を Control Panel で作るため、最初は MariaDB と Control Panel だけ起動します。
+Node Agent 用 `config.yml` を Control Panel で作るため、最初は MariaDB と Control Panel だけ起動します。
 
 ```bash
 cd /opt/autostream
@@ -314,20 +307,21 @@ curl -fsS -X POST http://127.0.0.1:8080/setup/first-admin \
   -d '{"setup_token":"<SETUP_TOKEN>","username":"admin","password":"<ADMIN_PASSWORD>"}'
 ```
 
-## 7. service token を作って `.env` に入れる
+## 7. Nodeを作って `config.yml` を保存する
 
-Control Panel にログインし、Encoder/Recorder、Worker、Discord Bot、Observability 用の service token を作ります。
+Control Panel にログインし、Node登録で Encoder/Recorder、Worker、Discord Bot、Observability を作ります。入力するのは Node名、Host、Port、SSL、説明です。バージョンやCapabilityは入力しません。
 
-作成した token を `/opt/autostream/.env` に入れます。
+各Nodeの Configuration から `config.yml` を取得し、次のように保存します。
 
-```dotenv
-ENCODER_SERVICE_TOKEN=<ENCODER_SERVICE_TOKEN_FROM_CONTROL_PANEL>
-WORKER_SERVICE_TOKEN=<WORKER_SERVICE_TOKEN_FROM_CONTROL_PANEL>
-DISCORD_SERVICE_TOKEN=<DISCORD_SERVICE_TOKEN_FROM_CONTROL_PANEL>
-OBSERVABILITY_SERVICE_TOKEN=<OBSERVABILITY_SERVICE_TOKEN_FROM_CONTROL_PANEL>
+```bash
+sudo install -d -o root -g root -m 0750 /opt/autostream/node-config
+sudo install -o root -g root -m 0640 encoder-recorder.yml /opt/autostream/node-config/encoder-recorder.yml
+sudo install -o root -g root -m 0640 worker.yml /opt/autostream/node-config/worker.yml
+sudo install -o root -g root -m 0640 discord-bot.yml /opt/autostream/node-config/discord-bot.yml
+sudo install -o root -g root -m 0640 observability.yml /opt/autostream/node-config/observability.yml
 ```
 
-token は作成時だけ表示されます。紛失した場合は再発行してください。
+Configure Token と Node Runtime Token は生成直後だけ表示されます。紛失した場合は Configuration で再生成します。
 
 ## 8. 全サービスを起動する
 

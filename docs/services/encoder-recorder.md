@@ -26,9 +26,7 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 
 | 項目 | 目的 |
 | --- | --- |
-| `SERVICE_ID` | Encoder Recorder を識別する ID |
-| `CONTROL_PANEL_URL` | Control Panel の URL |
-| `CONTROL_PANEL_TOKEN` | service registration 用 token |
+| `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Encoder Recorder 用 `config.yml` |
 | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | stream scoped token の署名 |
 | `AUTOSTREAM_DATA_DIR` | 作業データ保存先 |
 | `AUTOSTREAM_ARCHIVE_DIR` | 録画保存先 |
@@ -39,8 +37,8 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 
 | 画面 | 管理するもの |
 | --- | --- |
-| API Tokens | Encoder Recorder 用 token と scope |
-| Service Health | heartbeat、capability、runtime config preview |
+| Node登録 | Encoder Recorder Node を作成し、Host、Port、SSL、説明を設定します |
+| Service Health | heartbeat、自動報告された version / capability / OS / arch |
 | Encoder Profiles | 解像度、fps、bitrate、FFmpeg profile |
 | YouTube Outputs | RTMPS URL、stream key、Live API 設定 |
 | Integrations | Google OAuth connected account、Drive destination |

@@ -12,7 +12,7 @@ Discord Settings は、Discord Bot がどの server / channel に入るか、ど
 | --- | --- | --- |
 | Existing config | 編集対象 | 新規作成 |
 | Name | 設定名 | 保存できません |
-| Bot service ID | この設定を読む Discord Bot の service ID | Bot 側で一致しないと runtime config を受けられません |
+| Bot service ID | この設定を読む Discord Bot の Node ID | Bot 側で一致しないと runtime config を受けられません |
 | Guild ID | Discord server の ID | Streams 側で override しない限り不足 |
 | Voice channel ID | Bot が参加する voice channel の ID | Streams 側で override しない限り不足 |
 | Text channel ID | 通知や補助投稿に使う channel ID | 任意 |
@@ -33,7 +33,7 @@ Discord Settings は、Discord Bot がどの server / channel に入るか、ど
 4. Control Panel の API Tokens で Discord Bot 用 token を作り、Discord Bot service を起動します。
 5. Service Health で Discord Bot が online になったことを確認します。
 6. Discord Settings を開きます。
-7. `Bot service ID` に online になっている Discord Bot の `SERVICE_ID` を入れます。
+7. `Bot service ID` に online になっている Discord Bot の Node ID を入れます。
 8. guild、voice channel、必要なら text channel を入れます。
 9. Bot token を保存します。
 10. Streams でこの Discord Config を選び、Check Readiness を実行します。

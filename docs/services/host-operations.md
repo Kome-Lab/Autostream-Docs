@@ -11,12 +11,12 @@
 | 実行ファイル | release artifact に入っている `bin/<service>` を配置します |
 | env ファイル | `.env.example` を元に `/etc/autostream/<service>.env` を作ります |
 | systemd unit | `systemd/*.service.example` を元に `/etc/systemd/system/` へ置きます |
-| service ID | Control Panel と各サービスを対応させる固定 ID です |
-| service token | サービスが Control Panel へ登録、heartbeat、runtime config 取得を行うための token です |
-| inbound control token | Control Panel からサービスへ start / stop などを送るときの検証用 token です |
-| public URL | Control Panel からそのサービスへ届く URL です |
+| Node ID | Control Panel と各サービスを対応させる固定 ID です |
+| Node Agent config | Panel が生成する `/etc/autostream-node/config.yml` またはサービス別の yml です |
+| Node Runtime Token | `config.yml` に入る token です。登録、heartbeat、runtime config、Panel から Node への操作に使います |
+| Node Agent API | Host、Port、SSL から Panel が組み立てる API URL です |
 
-`CONTROL_PANEL_TOKEN` は、サービスから Control Panel へ出ていく通信に使います。Control Panel からサービスへ入ってくる操作には `SERVICE_CONTROL_TOKEN` または `SERVICE_CONTROL_TOKEN_SHA256` を使います。この2つは役割が違うため、同じものとして扱わないでください。
+新規構成では `SERVICE_ID`、`SERVICE_PUBLIC_URL`、`CONTROL_PANEL_TOKEN` を env に手入力しません。Control Panel の Node登録で `config.yml` を生成し、各サービスは `AUTOSTREAM_NODE_CONFIG` でそのファイルを読みます。古い `SERVICE_CALL_TOKEN` / `SERVICE_CONTROL_TOKEN_SHA256` は移行中の fallback としてだけ使います。
 
 ## 推奨ディレクトリ
 
@@ -24,6 +24,7 @@
 | --- | --- |
 | 実行ファイル | `/usr/local/bin/<service>` |
 | env | `/etc/autostream/<service>.env` |
+| Node config | `/etc/autostream-node/<service>.yml` |
 | service作業領域 | `/var/lib/autostream/<service>` |
 | 録画保存先 | `/var/lib/autostream/archives` |
 | Control Panel web assets | `/usr/share/autostream-control-panel` |
@@ -99,11 +100,11 @@ sudo systemctl status autostream-<service>
 | --- | --- |
 | `systemctl status` | process が起動しているか |
 | `journalctl -u <unit>` | env不足、DB接続、token不一致、port競合がないか |
-| Control Panel の Service Health | online、heartbeat、capability、runtime config preview |
+| Control Panel の Service Health | online、heartbeat、Node報告の version / capability / OS / arch |
 | Control Panel の Audit Logs | token作成、設定変更、start / stop の履歴 |
 | Observability | metric、incident、通知結果 |
 
-systemd が active でも、Control Panel 側で heartbeat が stale なら、URL、token、firewall、reverse proxy を確認します。
+systemd が active でも、Control Panel 側で heartbeat が warning / offline なら、`AUTOSTREAM_NODE_CONFIG`、Node ID、Host / Port / SSL、firewall、reverse proxy を確認します。
 
 ## 更新方法
 
@@ -122,16 +123,16 @@ sudo systemctl start autostream-<service>
 sudo systemctl status autostream-<service>
 ```
 
-Control Panel、Encoder Recorder、Observability のように database を使うサービスは、更新前にバックアップを取ってください。
+Control Panel、Observability のように database を使うサービスは、更新前にバックアップを取ってください。
 
 ## よくある失敗
 
 | 症状 | まず確認すること |
 | --- | --- |
-| 起動直後に終了する | 必須 env、DB接続、`CONTROL_PANEL_URL`、`CONTROL_PANEL_TOKEN` |
-| Service Health に出ない | service token の scope、Control Panel URL、名前解決、firewall |
-| start / stop が拒否される | `SERVICE_CONTROL_TOKEN_SHA256` と Control Panel 側の outbound token |
-| runtime config が取れない | service ID、service type、primary assignment、token scope |
+| 起動直後に終了する | 必須 env、DB接続、`AUTOSTREAM_NODE_CONFIG`、config の `node.type` |
+| Service Health に出ない | Node Runtime Token、Control Panel URL、Node ID、名前解決、firewall |
+| start / stop が拒否される | Node Runtime Token の rotation 後に `config.yml` を更新したか |
+| runtime config が取れない | Node ID、Node type、primary assignment、token scope |
 | 本番だけ動かない | `AUTOSTREAM_ENV=production` と必須設定の不足 |
 | ログが読みにくい | 文字化けならまず端末やPowerShellの表示エンコードを疑います |
 

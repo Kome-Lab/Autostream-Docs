@@ -2,7 +2,7 @@
 
 Observability は AutoStream の監視、通知、診断を担当します。配信そのものを処理するサービスではなく、異常に気づいて対応しやすくするためのサービスです。
 
-Linuxサーバーへの導入、database、token binding、通知先登録、閾値調整は [Observabilityを導入する](/services/observability-install) にまとめています。
+Linuxサーバーへの導入、database、Node Agent config、通知先登録、閾値調整は [Observabilityを導入する](/services/observability-install) にまとめています。
 
 ## 役割
 
@@ -17,9 +17,7 @@ Linuxサーバーへの導入、database、token binding、通知先登録、閾
 
 | 項目 | 目的 |
 | --- | --- |
-| `SERVICE_ID` | Observability を識別する ID |
-| `CONTROL_PANEL_URL` | Control Panel の URL |
-| `CONTROL_PANEL_TOKEN` | service registration 用 token |
+| `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Observability 用 `config.yml` |
 | `DATABASE_URL` | Observability 用 database |
 | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | 通知 secret の暗号化 |
 | `OBSERVABILITY_INGEST_TOKEN_SHA256` | signal ingest token |

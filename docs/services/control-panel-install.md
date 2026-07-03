@@ -10,7 +10,7 @@ Control Panel は最初に起動するサービスです。ユーザー、権限
 | database | MariaDB | `DATABASE_URL` に入れます |
 | session secret | `<SESSION_SECRET>` | 長くランダムな値にします |
 | secret encryption key | `<SECRET_ENCRYPTION_KEY>` | 保存 secret の暗号化に使います |
-| service call token | `<SERVICE_CALL_TOKEN>` | Control Panel から各サービスへ送る操作の検証に使います |
+| Node Runtime Token暗号化 | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Node登録で生成した runtime token の暗号化保存に使います |
 | allowed service hosts | `<SERVICE_HOSTS>` | 各サービスの公開URLを許可します |
 
 Discord token、YouTube stream key、Google OAuth secret、通知Webhook URLは、Control Panel起動用envではなく、画面から登録する運用値です。
@@ -28,6 +28,7 @@ sudo install -d -o autostream -g autostream /var/lib/autostream/control-panel
 sudo install -d -o root -g root /usr/share/autostream-control-panel
 sudo cp -a share/autostream-control-panel/. /usr/share/autostream-control-panel/
 sudo install -o root -g root -m 0644 systemd/autostream-control-panel.service.example /etc/systemd/system/autostream-control-panel.service
+sudo install -d -o root -g root -m 0750 /etc/autostream
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/control-panel.env
 ```
 
@@ -40,7 +41,8 @@ AUTOSTREAM_WEB_DIR=/usr/share/autostream-control-panel
 DATABASE_URL=mysql://<DB_USER>:<DB_PASSWORD>@tcp(<DB_HOST>:3306)/autostream_control_panel?parseTime=true
 AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
-SERVICE_CALL_TOKEN=<SERVICE_CALL_TOKEN>
+# 既存構成からの移行中だけ使う fallback。新規 Node は config.yml の Node Runtime Token を使います。
+SERVICE_CALL_TOKEN=
 AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS=<SERVICE_HOSTS>
 AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS=true
 TZ=Asia/Tokyo
@@ -73,20 +75,20 @@ compose を使う場合も、考え方は同じです。
 3. [初回管理者を作る](/runbooks/create-first-admin) の手順で管理者を作ります。
 4. Security Settings で password policy、session、MFA方針を確認します。
 5. Users / Roles で運用担当者の権限を分けます。
-6. API Tokens で各サービス用 token を作ります。
+6. Node登録で各サービス用 Node を作り、Configuration から `config.yml` を取得します。
 
-## サービス用tokenを作る
+## Nodeを作る
 
-Control Panel の [API Tokens](/control-panel/audit-tokens) で、サービスごとに token を分けて作ります。
+Control Panel の [Node Agent登録](/control-panel/node-agent-registration) で、サービスごとに Node を分けて作ります。
 
-| サービス | service type | よく使うscope |
+| サービス | Node type | Configurationで取得するもの |
 | --- | --- | --- |
-| Discord Bot | `discord_bot` | registration、heartbeat、config read、runtime secret resolve |
-| Worker | `worker` | registration、heartbeat、config read |
-| Encoder Recorder | `encoder_recorder` | registration、heartbeat、config read、runtime secret resolve、artifact report |
-| Observability | `observability` | registration、heartbeat、notification / incident連携 |
+| Discord Bot | `discord_bot` | `config.yml`、Configure Token、Node Runtime Token |
+| Worker | `worker` | `config.yml`、Configure Token、Node Runtime Token |
+| Encoder Recorder | `encoder_recorder` | `config.yml`、Configure Token、Node Runtime Token |
+| Observability | `observability` | `config.yml`、Configure Token、Node Runtime Token |
 
-token は作成時だけ表示されます。あとから見直せるように、安全なsecret storeへ保存してください。
+Configure Token と Node Runtime Token は作成時だけ表示されます。紛失した場合は Configuration から再生成し、対象サービスの `config.yml` を更新してください。
 
 ## 他サービスを許可する
 
@@ -105,7 +107,7 @@ AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS=<ENCODER_HOST>,<WORKER_HOST>,<BOT_HOST>,
 | `/` を開く | login画面またはdashboardが表示される |
 | `journalctl` | database接続、migration、static file のエラーがない |
 | Security Settings | 本番向けのsession、MFA方針が設定できる |
-| API Tokens | サービス用tokenを作成できる |
+| Node登録 | サービス用Nodeを作成し、`config.yml` を取得できる |
 | Service Health | 後続サービスが起動後にonlineになる |
 
 ## よくあるトラブル

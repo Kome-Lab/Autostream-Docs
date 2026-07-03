@@ -10,7 +10,7 @@ AutoStream は Discord、YouTube、Google Drive、通知先など複数の外部
 | YouTube | RTMPS URL、stream key | Control Panel |
 | Google Drive | folder、service account、OAuth | Control Panel |
 | 通知 | Webhook URL、SMTP password | Control Panel / Observability |
-| サービス間通信 | service token、allowed hosts | env / secret store |
+| サービス間通信 | Node Runtime Token、allowed hosts | Node Agent config / secret store |
 
 ## Discord
 

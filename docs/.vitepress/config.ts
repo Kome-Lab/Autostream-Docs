@@ -37,6 +37,7 @@ export default {
           { text: 'プロファイル設定', link: '/control-panel/profiles' },
           { text: 'DiscordとYouTube', link: '/control-panel/discord-youtube' },
           { text: 'OAuthとDrive保存先', link: '/control-panel/integrations-drive' },
+          { text: 'Node Agent登録', link: '/control-panel/node-agent-registration' },
           { text: 'サービス割り当て', link: '/control-panel/services-workers' },
           { text: 'ユーザーとセキュリティ', link: '/control-panel/users-roles-security' },
           { text: '監視と通知', link: '/control-panel/observability' },

@@ -32,7 +32,7 @@ MVP の最小構成は 1 台でも動かせます。
   Encoder/Recorder
 ```
 
-各サービスは同じサーバー上に置いても、別プロセス、別 systemd unit、別 env、別 `SERVICE_ID`、別 token、別 data directory として扱います。
+各サービスは同じサーバー上に置いても、別プロセス、別 systemd unit、別 env、別 Node ID、別 `config.yml`、別 data directory として扱います。
 
 ## 2. OS と共通パッケージを入れる
 
@@ -72,22 +72,18 @@ sudo systemctl status mariadb
 
 ## 3. MariaDB に database を作る
 
+現時点で DB に直接接続するサービスは Control Panel と Observability です。Encoder/Recorder、Worker、Discord Bot は Control Panel から runtime config を受け取り、個別 database は作りません。
+
 DB password は実値に置き換えてください。ここに書いた password は例です。
 
 ```bash
 sudo mariadb <<'SQL'
 CREATE DATABASE IF NOT EXISTS autostream_control_panel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS autostream_observability CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE DATABASE IF NOT EXISTS autostream_encoder_recorder CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE DATABASE IF NOT EXISTS autostream_worker CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE DATABASE IF NOT EXISTS autostream_discord_bot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE USER IF NOT EXISTS 'autostream'@'%' IDENTIFIED BY '<DB_PASSWORD>';
 GRANT ALL PRIVILEGES ON autostream_control_panel.* TO 'autostream'@'%';
 GRANT ALL PRIVILEGES ON autostream_observability.* TO 'autostream'@'%';
-GRANT ALL PRIVILEGES ON autostream_encoder_recorder.* TO 'autostream'@'%';
-GRANT ALL PRIVILEGES ON autostream_worker.* TO 'autostream'@'%';
-GRANT ALL PRIVILEGES ON autostream_discord_bot.* TO 'autostream'@'%';
 FLUSH PRIVILEGES;
 SQL
 ```
@@ -106,16 +102,11 @@ mariadb -h 127.0.0.1 -u autostream -p autostream_control_panel -e "SELECT 1;"
 openssl rand -hex 32   # AUTOSTREAM_SESSION_SECRET
 openssl rand -hex 32   # AUTOSTREAM_SECRET_ENCRYPTION_KEY
 openssl rand -hex 32   # AUTOSTREAM_SETUP_TOKEN
-openssl rand -hex 32   # SERVICE_CALL_TOKEN
 openssl rand -hex 32   # AUTOSTREAM_STREAM_INGEST_SIGNING_KEY
 openssl rand -hex 32   # OBSERVABILITY_TOKEN
 ```
 
-`SERVICE_CALL_TOKEN` の SHA-256 を、各 service の `SERVICE_CONTROL_TOKEN_SHA256` に入れます。
-
-```bash
-printf '%s' '<SERVICE_CALL_TOKEN>' | sha256sum | awk '{print $1}'
-```
+新方式では、各サービスの登録、heartbeat、Panel から Node への操作に使う token は Node登録後の `config.yml` で配布します。`SERVICE_CALL_TOKEN` は古い構成からの移行用 fallback としてだけ使います。
 
 ## 5. release artifact を配置する
 
@@ -201,6 +192,7 @@ sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/control-
 sudo install -d -o root -g root -m 0755 /usr/share/autostream-control-panel
 sudo cp -a share/autostream-control-panel/. /usr/share/autostream-control-panel/
 sudo install -o root -g root -m 0644 systemd/autostream-control-panel.service.example /etc/systemd/system/autostream-control-panel.service
+sudo install -d -o root -g root -m 0750 /etc/autostream
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/control-panel.env
 ```
 
@@ -220,7 +212,8 @@ AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
 AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
 DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(127.0.0.1:3306)/autostream_control_panel?parseTime=true
-SERVICE_CALL_TOKEN=<SERVICE_CALL_TOKEN>
+# 既存構成からの移行中だけ使う fallback。新規 Node は config.yml の Node Runtime Token を使います。
+SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS=encoder.example.com,worker.example.com,discord-bot.example.com,observability.example.com
 AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS=true
@@ -259,18 +252,30 @@ sudoedit /etc/autostream/control-panel.env
 sudo systemctl restart autostream-control-panel
 ```
 
-## 8. service token を作る
+## 8. Nodeを作って `config.yml` を保存する
 
-Control Panel の API Tokens / Services 画面で、次の service 用 token を作ります。token は作成時だけ表示されます。
+Control Panel の Node登録画面で、Encoder/Recorder、Worker、Discord Bot、Observability を Node として作ります。入力するのは Node名、Host、Port、SSL、説明です。version、capability、public URL 全体は入力しません。
 
-| service | service type | env に入れる場所 |
+| service | Node type | 保存する config |
 | --- | --- | --- |
-| Encoder/Recorder | `encoder_recorder` | `/etc/autostream/encoder-recorder.env` の `CONTROL_PANEL_TOKEN` |
-| Worker | `worker` | `/etc/autostream/worker.env` の `CONTROL_PANEL_TOKEN` |
-| Discord Bot | `discord_bot` | `/etc/autostream/discord-bot.env` の `CONTROL_PANEL_TOKEN` |
-| Observability | `observability` | `/etc/autostream/observability.env` の `CONTROL_PANEL_TOKEN` |
+| Encoder/Recorder | `encoder_recorder` | `/etc/autostream-node/encoder-recorder.yml` |
+| Worker | `worker` | `/etc/autostream-node/worker.yml` |
+| Discord Bot | `discord_bot` | `/etc/autostream-node/discord-bot.yml` |
+| Observability | `observability` | `/etc/autostream-node/observability.yml` |
 
-Control Panel から service へ送る token は `SERVICE_CALL_TOKEN` です。service 側では raw token ではなく、SHA-256 を `SERVICE_CONTROL_TOKEN_SHA256` に入れます。
+各 Node の Configuration から `config.yml` を保存します。
+
+```bash
+sudo install -d -o root -g root -m 0750 /etc/autostream-node
+sudo install -o root -g root -m 0640 encoder-recorder.yml /etc/autostream-node/encoder-recorder.yml
+sudo install -o root -g root -m 0640 worker.yml /etc/autostream-node/worker.yml
+sudo install -o root -g root -m 0640 discord-bot.yml /etc/autostream-node/discord-bot.yml
+sudo install -o root -g root -m 0640 observability.yml /etc/autostream-node/observability.yml
+```
+
+1サービスだけを単独ホストで動かす場合は `/etc/autostream-node/config.yml` を使えます。複数サービスを同じホストで動かす場合は、上のようにファイルを分け、各 env の `AUTOSTREAM_NODE_CONFIG` で参照先を指定します。
+
+Configure Token と Node Runtime Token は作成直後だけ表示されます。紛失した場合は Configuration から再生成してください。
 
 サービスごとの詳しい env、systemd、起動確認は次のページも参照してください。
 
@@ -292,6 +297,7 @@ cd "$DISCORD_BOT_RELEASE_DIR"
 sudo install -o root -g root -m 0755 bin/discord-bot /usr/local/bin/discord-bot
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/discord-bot
 sudo install -o root -g root -m 0644 systemd/autostream-discord-bot.service.example /etc/systemd/system/autostream-discord-bot.service
+sudo install -d -o root -g root -m 0750 /etc/autostream
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/discord-bot.env
 
 # Worker
@@ -299,6 +305,7 @@ cd /opt/autostream/src/autostream-worker
 sudo install -o root -g root -m 0755 bin/worker /usr/local/bin/worker
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/worker
 sudo install -o root -g root -m 0644 systemd/autostream-worker.service.example /etc/systemd/system/autostream-worker.service
+sudo install -d -o root -g root -m 0750 /etc/autostream
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/worker.env
 
 # Encoder/Recorder
@@ -306,6 +313,7 @@ cd "$ENCODER_RECORDER_RELEASE_DIR"
 sudo install -o root -g root -m 0755 bin/encoder-recorder /usr/local/bin/encoder-recorder
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/encoder-recorder /var/lib/autostream/archives
 sudo install -o root -g root -m 0644 systemd/autostream-encoder-recorder.service.example /etc/systemd/system/autostream-encoder-recorder.service
+sudo install -d -o root -g root -m 0750 /etc/autostream
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/encoder-recorder.env
 
 # Observability
@@ -313,6 +321,7 @@ cd "$OBSERVABILITY_RELEASE_DIR"
 sudo install -o root -g root -m 0755 bin/observability /usr/local/bin/observability
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/observability
 sudo install -o root -g root -m 0644 systemd/autostream-observability.service.example /etc/systemd/system/autostream-observability.service
+sudo install -d -o root -g root -m 0750 /etc/autostream
 sudo install -o root -g root -m 0640 .env.example /etc/autostream/observability.env
 ```
 
@@ -328,12 +337,16 @@ sudoedit /etc/autostream/observability.env
 最低限そろえる値:
 
 ```text
-SERVICE_ID=<SERVICE_ID>
-SERVICE_PUBLIC_URL=https://<SERVICE_HOST>
-CONTROL_PANEL_URL=https://control.example.com
-CONTROL_PANEL_TOKEN=<SERVICE_TOKEN_FROM_CONTROL_PANEL>
-SERVICE_CONTROL_TOKEN_SHA256=<SHA256_OF_SERVICE_CALL_TOKEN>
-DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(127.0.0.1:3306)/<SERVICE_DATABASE>?parseTime=true
+AUTOSTREAM_NODE_CONFIG=/etc/autostream-node/<SERVICE>.yml
+```
+
+`config.yml` の中に Node ID、Node API URL、Control Panel URL、Node Runtime Token が入ります。`CONTROL_PANEL_TOKEN`、`SERVICE_ID`、`SERVICE_PUBLIC_URL` を手でそろえる運用にはしません。
+
+Observability だけは DB を直接使うため、追加で次を設定します。Control Panel の `DATABASE_URL` は手順 6 で設定済みです。
+
+```text
+DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(127.0.0.1:3306)/autostream_observability?parseTime=true
+AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
 ```
 
 Encoder/Recorder では archive path と FFmpeg も確認します。
@@ -374,7 +387,7 @@ curl -fsS http://127.0.0.1:8084/health  # Worker の local port 例
 ## 11. Control Panel で確認する
 
 1. Control Panel に admin でログインします。
-2. Service Health で Encoder/Recorder、Worker、Discord Bot、Observability が online になっていることを確認します。
+2. Service Health で Encoder/Recorder、Worker、Discord Bot、Observability が online になり、version、OS、arch、capability が Node から自動報告されていることを確認します。
 3. Services / Assignments で stream 用の primary service を割り当てます。
 4. Integrations で Discord、YouTube、Google Drive、notification channel を登録します。
 5. Start readiness を実行し、不足している設定がないことを確認します。
@@ -390,7 +403,7 @@ npm run docs:check
 npm run docs:build
 ```
 
-Control Panel と service の疎通は次で見ます。
+Control Panel と Node Agent の疎通は次で見ます。
 
 ```bash
 journalctl -u autostream-control-panel -n 100 --no-pager

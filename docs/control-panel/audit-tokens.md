@@ -73,7 +73,7 @@ API Tokens では、token 作成と同時に service registry entry を作れま
 
 | 項目 | 説明 |
 | --- | --- |
-| Pre-create service ID | 各サービスの `SERVICE_ID` と一致させる |
+| Pre-create Node ID | 各サービスの Node ID と一致させる |
 | Service name | 画面表示名 |
 | Public URL | Control Panel から到達する service URL |
 | Version | service version |
@@ -105,7 +105,7 @@ token を rotate したら、対象サービスを再起動して新しい token
 
 | 状況 | 対応 |
 | --- | --- |
-| Service Health に出てこない | token、CONTROL_PANEL_URL、SERVICE_ID、network を確認 |
+| Service Health に出てこない | Node Runtime Token、Control Panel URL、Node ID、network を確認 |
 | no heartbeat | service は登録済みだが heartbeat 送信に失敗しています |
 | runtime config が読めない | `service.config.read` scope と runtime_config capability を確認 |
 | secret resolve に失敗 | `service.secret.resolve` scope と対象 service assignment を確認 |
