@@ -7,10 +7,12 @@ Worker は、配信中に必要な overlay、caption、participant、active spea
 | 用意するもの | どこで使うか |
 | --- | --- |
 | Worker Node Agent `config.yml` | `/etc/autostream-node/config.yml` |
-| Observability ingest token | `OBSERVABILITY_TOKEN` |
+| Observability ingest token | `OBSERVABILITY_TOKEN=<OBSERVABILITY_INGEST_TOKEN>` |
 | Worker Node名、Host、Port、SSL | Control Panel の Node登録画面 |
 
 Encoder Recorder のURLやstream ingest tokenは、通常 Control Panel の stream job から渡されます。本番envに固定の `ENCODER_RECORDER_URL` や固定tokenを置かない運用にします。
+
+Worker の `OBSERVABILITY_TOKEN` は signal 送信用の ingest token です。Control Panel に入れる Observability admin token とは別の値にします。生成方法は [秘密情報とtoken生成](/security/tokens) を参照してください。
 
 ## host直接起動
 

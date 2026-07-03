@@ -11,9 +11,13 @@ Control Panel は最初に起動するサービスです。ユーザー、権限
 | session secret | `<SESSION_SECRET>` | 長くランダムな値にします |
 | secret encryption key | `<SECRET_ENCRYPTION_KEY>` | 保存 secret の暗号化に使います |
 | Node Runtime Token暗号化 | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Node登録で生成した runtime token の暗号化保存に使います |
+| stream ingest signing key | `<STREAM_INGEST_SIGNING_KEY>` | Control Panel が stream scoped ingest token を発行するために使います |
+| Observability admin token | `<OBSERVABILITY_ADMIN_TOKEN>` | Control Panel が Observability API を読む/操作するために使います |
 | allowed service hosts | `<SERVICE_HOSTS>` | 各サービスの公開URLを許可します |
 
 Discord token、YouTube stream key、Google OAuth secret、通知Webhook URLは、Control Panel起動用envではなく、画面から登録する運用値です。
+
+secret と token の生成方法は [秘密情報とtoken生成](/security/tokens) を参照してください。`OBSERVABILITY_ADMIN_TOKEN` は Control Panel 側では `OBSERVABILITY_TOKEN` という env 名で入れます。
 
 ## host直接起動
 
@@ -41,8 +45,12 @@ AUTOSTREAM_WEB_DIR=/usr/share/autostream-control-panel
 DATABASE_URL=mysql://<DB_USER>:<DB_PASSWORD>@tcp(<DB_HOST>:3306)/autostream_control_panel?parseTime=true
 AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
+AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
 # 既存構成からの移行中だけ使う fallback。新規 Node は config.yml の Node Runtime Token を使います。
 SERVICE_CALL_TOKEN=
+AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
+OBSERVABILITY_URL=https://<OBSERVABILITY_HOST>
+OBSERVABILITY_TOKEN=<OBSERVABILITY_ADMIN_TOKEN>
 AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS=<SERVICE_HOSTS>
 AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS=true
 TZ=Asia/Tokyo

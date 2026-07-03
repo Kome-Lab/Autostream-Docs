@@ -30,7 +30,7 @@ Discord Settings は、Discord Bot がどの server / channel に入るか、ど
 1. Discord Developer Portal で Bot を作ります。
 2. Bot を対象 server に招待します。
 3. Bot に voice channel への接続権限と発話権限を付けます。
-4. Control Panel の API Tokens で Discord Bot 用 token を作り、Discord Bot service を起動します。
+4. Control Panel の Node登録で Discord Bot 用 Node を作り、`config.yml` を保存して Discord Bot service を起動します。
 5. Service Health で Discord Bot が online になったことを確認します。
 6. Discord Settings を開きます。
 7. `Bot service ID` に online になっている Discord Bot の Node ID を入れます。

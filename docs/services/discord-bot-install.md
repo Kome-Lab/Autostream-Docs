@@ -15,6 +15,8 @@ Discord Bot は、Discord の voice channel に参加し、音声と参加者状
 
 Bot には voice channel への参加、音声受信、必要なメッセージ送信権限を付けます。
 
+Discord Bot service 用に AutoStream 側で手生成する token はありません。Node Runtime Token は Node登録で生成された `config.yml` に入り、Discord Bot token 本体は Discord developer portal で発行して Control Panel の Discord Settings に保存します。固定の `DISCORD_BOT_TOKEN` env は本番標準では使いません。
+
 ## host直接起動
 
 ```bash

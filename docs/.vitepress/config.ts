@@ -98,6 +98,7 @@ export default {
         items: [
           { text: '安全に公開する', link: '/security/hardening' },
           { text: '秘密情報の扱い', link: '/security/secrets' },
+          { text: '秘密情報とtoken生成', link: '/security/tokens' },
           { text: '権限', link: '/security/roles-and-permissions' },
         ],
       },

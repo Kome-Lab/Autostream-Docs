@@ -18,6 +18,20 @@
 
 新規構成では `SERVICE_ID`、`SERVICE_PUBLIC_URL`、`CONTROL_PANEL_TOKEN` を env に手入力しません。Control Panel の Node登録で `config.yml` を生成し、各サービスは `AUTOSTREAM_NODE_CONFIG` でそのファイルを読みます。古い `SERVICE_CALL_TOKEN` / `SERVICE_CONTROL_TOKEN_SHA256` は移行中の fallback としてだけ使います。
 
+## token の生成と入力先
+
+生成方法は [秘密情報とtoken生成](/security/tokens) にまとめています。ここでは、各 service で必要になる値だけを確認します。
+
+| service | 手生成する値 | 入力先 |
+| --- | --- | --- |
+| Control Panel | `AUTOSTREAM_SESSION_SECRET`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_SETUP_TOKEN`、`AUTOSTREAM_STREAM_INGEST_SIGNING_KEY`、`OBSERVABILITY_ADMIN_TOKEN` | Control Panel env。`OBSERVABILITY_ADMIN_TOKEN` は env 名 `OBSERVABILITY_TOKEN` に入れます |
+| Observability | `OBSERVABILITY_INGEST_TOKEN_SHA256`、`OBSERVABILITY_ADMIN_TOKEN_SHA256` | Observability env。生 token は置かず、hash と binding を置きます |
+| Encoder Recorder | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY`、`OBSERVABILITY_INGEST_TOKEN` | Encoder Recorder env。signing key は Control Panel と同じ値、ingest token は env 名 `OBSERVABILITY_TOKEN` に入れます |
+| Worker | `OBSERVABILITY_INGEST_TOKEN` | Worker env の `OBSERVABILITY_TOKEN` に入れます |
+| Discord Bot | なし | Node Runtime Token は `config.yml`、Discord Bot token は Control Panel の Discord Settings に保存します |
+
+Node Runtime Token と Configure Token は Node登録で生成されます。紛失した場合は Control Panel の Node登録 Configuration から再生成し、対象 service の `config.yml` を更新してください。
+
 ## 推奨ディレクトリ
 
 | 用途 | 例 |

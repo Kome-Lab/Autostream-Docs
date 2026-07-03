@@ -30,10 +30,15 @@ Linuxサーバーへの配置、systemd、Docker、初回起動、公開URL、da
 | `DATABASE_URL` | Control Panel 用 database |
 | `AUTOSTREAM_SESSION_SECRET` | session 保護 |
 | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | 保存 secret の暗号化 |
-| `SERVICE_CALL_TOKEN` | Control Panel から各サービスへ送る token |
+| `AUTOSTREAM_SETUP_TOKEN` | 初回管理者作成 |
+| `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | stream scoped ingest token の署名 |
 | `OBSERVABILITY_URL` | Observability の URL |
+| `OBSERVABILITY_TOKEN` | Observability admin token の生値 |
+| `SERVICE_CALL_TOKEN` | 旧構成からの移行用 fallback |
 
 `AUTOSTREAM_PUBLIC_URL` は OAuth callback、cookie、他サービスからの参照に関係します。本番では HTTPS の外部 URL を入れます。
+
+token の生成方法と対応関係は [秘密情報とtoken生成](/security/tokens) を参照してください。
 
 ## 初回セットアップの順番
 
@@ -42,7 +47,7 @@ Linuxサーバーへの配置、systemd、Docker、初回起動、公開URL、da
 3. migration が走る状態で Control Panel を起動します。
 4. 初回管理者を作成します。
 5. HTTPS の公開 URL からログインできることを確認します。
-6. API Tokens で各サービス用 token を作ります。
+6. Node登録で各サービス用 Node を作り、`config.yml` を保存します。
 7. Discord Bot、Worker、Encoder Recorder、Observability を起動します。
 8. Service Health で online を確認します。
 9. Integrations、Discord Settings、YouTube Outputs、Archive Settings を登録します。
@@ -74,7 +79,8 @@ raw secret は再表示できません。値を忘れた場合は、元 provider
 | 録画保存先を変える | Integrations、Archive Settings |
 | 通知先を追加する | Notification Channels |
 | ユーザーを追加する | Users、Roles |
-| token を入れ替える | API Tokens |
+| Node Runtime Token を入れ替える | Node登録の Configuration |
+| Observability admin token を入れ替える | Control Panel env と Observability env |
 | 誰が変更したか見る | Audit Logs |
 
 ## 運用中の見方

@@ -60,16 +60,18 @@ openssl rand -hex 32   # AUTOSTREAM_SESSION_SECRET
 openssl rand -hex 32   # AUTOSTREAM_SECRET_ENCRYPTION_KEY
 openssl rand -hex 32   # AUTOSTREAM_SETUP_TOKEN
 openssl rand -hex 32   # AUTOSTREAM_STREAM_INGEST_SIGNING_KEY
-openssl rand -hex 32   # OBSERVABILITY_TOKEN
+openssl rand -hex 32   # OBSERVABILITY_INGEST_TOKEN
 openssl rand -hex 32   # OBSERVABILITY_ADMIN_TOKEN
 ```
 
 Observability の ingest / admin token は Observability 側では SHA-256 で持ちます。
 
 ```bash
-printf '%s' '<OBSERVABILITY_TOKEN>' | sha256sum | awk '{print $1}'
+printf '%s' '<OBSERVABILITY_INGEST_TOKEN>' | sha256sum | awk '{print $1}'
 printf '%s' '<OBSERVABILITY_ADMIN_TOKEN>' | sha256sum | awk '{print $1}'
 ```
+
+Control Panel の `OBSERVABILITY_TOKEN` には admin token の生値を入れます。Worker / Encoder Recorder の `OBSERVABILITY_TOKEN` には ingest token の生値を入れます。詳しい対応表と PowerShell での生成方法は [秘密情報とtoken生成](../security/tokens.md) を参照してください。
 
 ## 4. `.env` を作る
 
@@ -97,8 +99,9 @@ SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 NODE_CONFIG_ROOT=/opt/autostream/node-config
 
-OBSERVABILITY_TOKEN=<OBSERVABILITY_TOKEN>
-OBSERVABILITY_TOKEN_SHA256=<SHA256_OF_OBSERVABILITY_TOKEN>
+OBSERVABILITY_INGEST_TOKEN=<OBSERVABILITY_INGEST_TOKEN>
+OBSERVABILITY_INGEST_TOKEN_SHA256=<SHA256_OF_OBSERVABILITY_INGEST_TOKEN>
+OBSERVABILITY_ADMIN_TOKEN=<OBSERVABILITY_ADMIN_TOKEN>
 OBSERVABILITY_ADMIN_TOKEN_SHA256=<SHA256_OF_OBSERVABILITY_ADMIN_TOKEN>
 ```
 
@@ -176,7 +179,7 @@ services:
       AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS: encoder-recorder,worker,discord-bot,observability
       AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS: "true"
       OBSERVABILITY_URL: http://observability:8080
-      OBSERVABILITY_TOKEN: ${OBSERVABILITY_TOKEN}
+      OBSERVABILITY_TOKEN: ${OBSERVABILITY_ADMIN_TOKEN}
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8080:8080"
@@ -193,8 +196,12 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
-      OBSERVABILITY_INGEST_TOKEN_SHA256: ${OBSERVABILITY_TOKEN_SHA256}
+      OBSERVABILITY_INGEST_TOKEN_SHA256: ${OBSERVABILITY_INGEST_TOKEN_SHA256}
+      OBSERVABILITY_INGEST_TOKEN_BINDINGS: "${OBSERVABILITY_INGEST_TOKEN_SHA256}:encoder_recorder:encoder-recorder-01,${OBSERVABILITY_INGEST_TOKEN_SHA256}:worker:worker-01"
+      OBSERVABILITY_REQUIRE_INGEST_TOKEN_BINDINGS: "true"
       OBSERVABILITY_ADMIN_TOKEN_SHA256: ${OBSERVABILITY_ADMIN_TOKEN_SHA256}
+      OBSERVABILITY_ADMIN_TOKEN_BINDINGS: "${OBSERVABILITY_ADMIN_TOKEN_SHA256}:observability.read|incidents.update|notifications.read|notifications.manage|remediation.read|remediation.approve|remediation.execute"
+      OBSERVABILITY_REQUIRE_ADMIN_TOKEN_BINDINGS: "true"
       AUTOSTREAM_SECRET_ENCRYPTION_KEY: ${AUTOSTREAM_SECRET_ENCRYPTION_KEY}
       DATABASE_URL: ${OBSERVABILITY_DATABASE_URL}
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
@@ -219,7 +226,7 @@ services:
       AUTOSTREAM_ARCHIVE_DIR: /var/lib/autostream/archives
       FFMPEG_BIN: ffmpeg
       OBSERVABILITY_URL: http://observability:8080
-      OBSERVABILITY_TOKEN: ${OBSERVABILITY_TOKEN}
+      OBSERVABILITY_TOKEN: ${OBSERVABILITY_INGEST_TOKEN}
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8081:8080"
@@ -240,7 +247,7 @@ services:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
       ENCODER_RECORDER_URL: http://encoder-recorder:8080
       OBSERVABILITY_URL: http://observability:8080
-      OBSERVABILITY_TOKEN: ${OBSERVABILITY_TOKEN}
+      OBSERVABILITY_TOKEN: ${OBSERVABILITY_INGEST_TOKEN}
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
     ports:

@@ -23,7 +23,7 @@ Control Panel は運用者が触る中心画面です。
 | 操作 | 使う画面 | 補足 |
 | --- | --- | --- |
 | 配信を作る | Streams | 名前、Discord、YouTube、Archive、profileを選ぶ |
-| サービスを登録する | API Tokens | tokenは一度だけ表示される |
+| サービスを登録する | Node登録 | `config.yml` と Node Runtime Token は一度だけ表示される |
 | サービス状態を見る | Service Health | online、heartbeat、capabilityを確認 |
 | 外部連携を設定する | Integrations、Discord Settings、YouTube Outputs | secretは保存後に再表示されない |
 | 配信を開始/停止する | Streams | Check Readiness後にStartする |
@@ -41,7 +41,7 @@ Control Panel は運用者が触る中心画面です。
 ### 初回に最低限やること
 
 1. Control Panel を起動し、管理者でログインします。
-2. API Tokens で Discord Bot、Worker、Encoder Recorder、Observability 用 token を作ります。
+2. Node登録で Discord Bot、Worker、Encoder Recorder、Observability 用 Node を作り、各 `config.yml` を保存します。
 3. 各サービスを起動し、Service Health で online になるまで待ちます。
 4. Integrations で Google OAuth や Drive destination を作ります。
 5. Discord Settings と YouTube Outputs を作ります。
@@ -83,7 +83,7 @@ Discord Bot は、Discord の voice channel に入り、音声を受け取り、
 
 ### 使い方の流れ
 
-1. Control Panel の API Tokens で `discord_bot` 用 token を作ります。
+1. Control Panel の Node登録で `discord_bot` Node を作ります。
 2. Discord Bot の env に `AUTOSTREAM_NODE_CONFIG` を入れ、Panel が生成した `config.yml` を読ませます。
 3. Discord Bot を起動します。
 4. Service Health で `discord_bot` が online になることを確認します。
@@ -137,7 +137,7 @@ Worker は、配信中に発生するイベントを処理します。overlay、
 
 ### 使い方の流れ
 
-1. API Tokens で `worker` 用 token を作ります。
+1. Node登録で `worker` Node を作ります。
 2. Worker の env に `AUTOSTREAM_NODE_CONFIG` を入れ、Panel が生成した `config.yml` を読ませます。
 3. Worker を起動します。
 4. Service Health で online / healthy を確認します。
@@ -192,7 +192,7 @@ Encoder Recorder は、映像と音声を受け取り、FFmpegで配信、録画
 ### 使い方の流れ
 
 1. Linux host に FFmpeg を入れます。
-2. API Tokens で `encoder_recorder` 用 token を作ります。
+2. Node登録で `encoder_recorder` Node を作ります。
 3. Encoder Recorder の env に `AUTOSTREAM_NODE_CONFIG`、archive directory などを入れます。
 4. Encoder Recorder を起動します。
 5. Service Health で online / healthy を確認します。
@@ -254,7 +254,7 @@ Observability は、metricを集め、incidentを作り、diagnosticと通知を
 
 ### 使い方の流れ
 
-1. API Tokens で `observability` 用 token を作ります。
+1. Node登録で `observability` Node を作ります。
 2. Observability の env に `AUTOSTREAM_NODE_CONFIG` と database を入れます。
 3. Observability を起動します。
 4. Service Health で online / healthy を確認します。
@@ -293,7 +293,7 @@ Observability は、metricを集め、incidentを作り、diagnosticと通知を
 
 ## サービスを増やす時の手順
 
-1. Control Panel の API Tokens で対象 service type の token を作ります。
+1. Control Panel の Node登録で対象 service type の Node を作ります。
 2. 対象サービスの env に `AUTOSTREAM_NODE_CONFIG` を入れ、Panel が生成した `config.yml` を読ませます。
 3. サービスを起動します。
 4. Service Health で online になったことを確認します。

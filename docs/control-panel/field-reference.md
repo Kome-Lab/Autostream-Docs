@@ -265,14 +265,14 @@ MFAを有効にした後は、管理者が自分のTOTPまたはPasskeyを登録
 
 | 項目 | 入れるもの | いつ使うか | 保存後の確認 |
 | --- | --- | --- | --- |
-| Service type | tokenを使うサービス種別 | service bootstrap | token scope |
-| Service ID | 登録予定の Node ID | pre-createする場合 | Service Health |
+| Service type | tokenを使うサービス種別 | 旧構成や移行用 token の確認 | token scope |
+| Service ID | 登録予定の Node ID | pre-create fallback を使う場合 | Service Health |
 | Scopes | 許可するAPI | 最小権限にする | token一覧 |
 | Expiration | 有効期限 | 短めにする | revoked / expired |
 | Rotate | token入替 | 漏えい疑い、定期更新 | 新token一度だけ表示 |
 | Revoke | token無効化 | サービス廃止、漏えい疑い | token無効 |
 
-tokenは作成時またはrotate時に一度だけ表示されます。表示後は各サービスのenvやsecret storeに入れ、画面やGitHubには残しません。
+新規構成のサービス登録は [Node Agent登録](/control-panel/node-agent-registration) を使います。API Tokens は旧構成や移行時の token 確認、rotate、revoke に限定します。tokenは作成時またはrotate時に一度だけ表示されます。表示後は必要な場合だけ secret store に入れ、画面やGitHubには残しません。
 
 ## Audit Logs
 
@@ -312,4 +312,4 @@ Audit Logs は原因確認の入口です。秘密情報のraw valueは出ませ
 | uploadできない | Archive / upload | Archive Settings、Drive Destination |
 | 通知が来ない | Notification Channels -> Test Channel | Notification Deliveries |
 | 誰が変えたか知りたい | Audit Logs | Users / Roles |
-| serviceが見えない | Service Health | API Tokens、service env |
+| serviceが見えない | Service Health | Node登録、`AUTOSTREAM_NODE_CONFIG`、service env |

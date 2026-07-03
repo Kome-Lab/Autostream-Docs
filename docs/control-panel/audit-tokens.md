@@ -1,6 +1,6 @@
 # 監査ログとAPIトークン
 
-Audit Logs と API Tokens は、運用の安全性を保つための画面です。誰が何をしたかを確認し、サービスが Control Panel に登録するための token を管理します。
+Audit Logs と API Tokens は、運用の安全性を保つための画面です。誰が何をしたかを確認し、旧構成や移行時の service token を管理します。新規構成でサービスを登録する場合は、先に [Node Agent登録](/control-panel/node-agent-registration) を使います。
 
 ## Audit Logs
 
@@ -39,7 +39,7 @@ Audit Logs では、操作履歴を検索し、必要に応じて CSV export で
 
 ## API Tokens
 
-API Tokens は、Discord Bot、Worker、Encoder Recorder、Observability が Control Panel に登録するために使います。
+API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorder、Observability が Control Panel に登録するための token を確認、rotate、revoke する画面です。新規構成では Node登録で `config.yml` を生成し、Node Runtime Token を service に渡します。
 
 ### Service type
 
@@ -69,7 +69,7 @@ API Tokens は、Discord Bot、Worker、Encoder Recorder、Observability が Con
 
 ### Pre-create service
 
-API Tokens では、token 作成と同時に service registry entry を作れます。
+API Tokens では、互換用途として token 作成と同時に service registry entry を作れます。通常の新規導入では Node登録で Node ID、Host、Port、SSL を登録し、Configuration から `config.yml` を取得します。
 
 | 項目 | 説明 |
 | --- | --- |
@@ -79,27 +79,29 @@ API Tokens では、token 作成と同時に service registry entry を作れま
 | Version | service version |
 | Capabilities | service が対応する機能。カンマ区切り |
 
-pre-create した場合、画面に bootstrap env が一度だけ表示されます。各サービス host の env に入れて起動します。
+pre-create した場合、画面に bootstrap env が一度だけ表示されます。これは旧構成や移行用です。新規構成では bootstrap env ではなく、Node登録で生成した `config.yml` を各 service host に保存します。
 
 ## token作成手順
 
-1. API Tokens を開きます。
-2. `Service type` を選びます。
-3. scope が用途に合っているか確認します。
-4. 可能なら `Pre-create service ID`、`Service name`、`Public URL` を入れます。
-5. `Create Token` を押します。
-6. one-time token と bootstrap env を各 service host の env に入れます。
-7. service を起動します。
-8. Service Health で online になるか確認します。
+新規構成では次の流れにします。
+
+1. Node登録を開きます。
+2. `Node type`、Node ID、Node名、Host、Port、SSL、説明を入れます。
+3. Configuration から `config.yml` または Auto Configure command を取得します。
+4. `config.yml` を service host に保存し、env の `AUTOSTREAM_NODE_CONFIG` で参照します。
+5. service を起動します。
+6. Service Health で online になるか確認します。
+
+API Tokens で token を作るのは、旧構成を維持している場合や移行中に限ります。
 
 ## Rotate / Revoke
 
 | 操作 | 使う場面 | 注意 |
 | --- | --- | --- |
-| Rotate | token を入れ替えたい | 新しい token は一度だけ表示。service host の env 更新が必要 |
-| Revoke | token を無効化したい | service は Control Panel へ登録や heartbeat ができなくなります |
+| Rotate | 旧構成の token を入れ替えたい | 新しい token は一度だけ表示。service host の env 更新が必要 |
+| Revoke | 旧構成の token を無効化したい | 旧構成の service は Control Panel へ登録や heartbeat ができなくなります |
 
-token を rotate したら、対象サービスを再起動して新しい token を読み込ませてください。
+Node Runtime Token を入れ替える場合は API Tokens ではなく Node登録の Configuration で再生成し、対象 service の `config.yml` を更新して再起動してください。旧構成の token を rotate したら、対象サービスを再起動して新しい token を読み込ませてください。
 
 ## よくあるトラブル
 

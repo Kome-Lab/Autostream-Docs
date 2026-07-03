@@ -103,8 +103,18 @@ openssl rand -hex 32   # AUTOSTREAM_SESSION_SECRET
 openssl rand -hex 32   # AUTOSTREAM_SECRET_ENCRYPTION_KEY
 openssl rand -hex 32   # AUTOSTREAM_SETUP_TOKEN
 openssl rand -hex 32   # AUTOSTREAM_STREAM_INGEST_SIGNING_KEY
-openssl rand -hex 32   # OBSERVABILITY_TOKEN
+openssl rand -hex 32   # OBSERVABILITY_INGEST_TOKEN
+openssl rand -hex 32   # OBSERVABILITY_ADMIN_TOKEN
 ```
+
+Observability は生 token ではなく SHA-256 を env に置きます。改行を混ぜないように `printf` で hash 化します。
+
+```bash
+printf '%s' '<OBSERVABILITY_INGEST_TOKEN>' | sha256sum | awk '{print $1}'   # OBSERVABILITY_INGEST_TOKEN_SHA256
+printf '%s' '<OBSERVABILITY_ADMIN_TOKEN>' | sha256sum | awk '{print $1}'    # OBSERVABILITY_ADMIN_TOKEN_SHA256
+```
+
+`OBSERVABILITY_ADMIN_TOKEN` は Control Panel の `OBSERVABILITY_TOKEN` に入れます。`OBSERVABILITY_INGEST_TOKEN` は Worker と Encoder/Recorder の `OBSERVABILITY_TOKEN` に入れます。詳しい対応表と PowerShell での生成方法は [秘密情報とtoken生成](../security/tokens.md) を参照してください。
 
 新方式では、各サービスの登録、heartbeat、Panel から Node への操作に使う token は Node登録後の `config.yml` で配布します。`SERVICE_CALL_TOKEN` は古い構成からの移行用 fallback としてだけ使います。
 
@@ -215,6 +225,8 @@ DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(127.0.0.1:3306)/autostream_con
 # 既存構成からの移行中だけ使う fallback。新規 Node は config.yml の Node Runtime Token を使います。
 SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
+OBSERVABILITY_URL=https://observability.example.com
+OBSERVABILITY_TOKEN=<OBSERVABILITY_ADMIN_TOKEN>
 AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS=encoder.example.com,worker.example.com,discord-bot.example.com,observability.example.com
 AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS=true
 TZ=Asia/Tokyo
@@ -347,13 +359,31 @@ Observability だけは DB を直接使うため、追加で次を設定しま�
 ```text
 DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(127.0.0.1:3306)/autostream_observability?parseTime=true
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
+OBSERVABILITY_INGEST_TOKEN_SHA256=<SHA256_OF_OBSERVABILITY_INGEST_TOKEN>
+OBSERVABILITY_INGEST_TOKEN_BINDINGS=<SHA256_OF_OBSERVABILITY_INGEST_TOKEN>:encoder_recorder:encoder-recorder-01,<SHA256_OF_OBSERVABILITY_INGEST_TOKEN>:worker:worker-01
+OBSERVABILITY_REQUIRE_INGEST_TOKEN_BINDINGS=true
+OBSERVABILITY_ADMIN_TOKEN_SHA256=<SHA256_OF_OBSERVABILITY_ADMIN_TOKEN>
+OBSERVABILITY_ADMIN_TOKEN_BINDINGS=<SHA256_OF_OBSERVABILITY_ADMIN_TOKEN>:observability.read|incidents.update|notifications.read|notifications.manage|remediation.read|remediation.approve|remediation.execute
+OBSERVABILITY_REQUIRE_ADMIN_TOKEN_BINDINGS=true
 ```
+
+`OBSERVABILITY_INGEST_TOKEN_BINDINGS` の service ID は、手順 8 で登録した Encoder/Recorder と Worker の Node ID に合わせます。
 
 Encoder/Recorder では archive path と FFmpeg も確認します。
 
 ```text
+AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 AUTOSTREAM_ARCHIVE_DIR=/var/lib/autostream/archives
 FFMPEG_BIN=ffmpeg
+OBSERVABILITY_URL=https://observability.example.com
+OBSERVABILITY_TOKEN=<OBSERVABILITY_INGEST_TOKEN>
+```
+
+Worker では Observability へ signal を送るため、同じ ingest token を入れます。
+
+```text
+OBSERVABILITY_URL=https://observability.example.com
+OBSERVABILITY_TOKEN=<OBSERVABILITY_INGEST_TOKEN>
 ```
 
 Discord token、YouTube stream key、Google Drive folder、OAuth refresh token、webhook URL、SMTP password は、MVP 標準では Control Panel の Integration / Secret / Notification から登録します。互換 fallback を使う場合だけ service env に入れます。
