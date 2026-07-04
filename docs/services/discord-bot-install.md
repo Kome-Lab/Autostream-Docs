@@ -74,6 +74,12 @@ sudo systemctl status autostream-discord-bot
 
 本番では `DISCORD_BOT_TOKEN` env に頼らず、Control Panel 管理の runtime secret を使います。
 
+## VC参加で自動開始されるか
+
+標準構成では、対象 Discord VC にユーザーが参加すると stream auto-start を要求します。Discord Bot は runtime config の stream / guild / voice channel 対応表を使い、該当 stream の `POST /services/streams/{id}/start` を Node Runtime Token で呼びます。
+
+Control Panel は、その token が対象 stream の primary Discord Bot に紐づき、`streams.start` scope を持つ場合だけ開始を許可します。要求 body の override は使わず、保存済み Stream settings だけで start します。同じ guild / voice channel に複数 stream が紐づく場合は自動開始しません。
+
 ## 接続確認
 
 | 確認 | 正常な状態 |

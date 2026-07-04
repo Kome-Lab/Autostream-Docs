@@ -63,6 +63,7 @@ API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorde
 | `worker.events.write` | Worker event 書き込み |
 | `encoder.status.write` | Encoder Recorder status 書き込み |
 | `discord.status.write` | Discord Bot status 書き込み |
+| `streams.start` | Discord VC参加を起点にした stream auto-start |
 | `observability.ingest` | Observability signal ingest |
 
 通常は service type を選ぶと、必要な scope が初期選択されます。よく分からない場合は初期選択から減らさず、不要な広い scope を足さない運用にしてください。

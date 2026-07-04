@@ -92,6 +92,8 @@ Node Agent は次の Panel API を使います。
 
 Panel から Node Agent API へ送る start / stop / preflight も bearer token で認証します。新方式では Node Runtime Token を優先し、古い構成の互換用途だけ `SERVICE_CALL_TOKEN` を fallback として残します。
 
+Discord Bot Node には、VC参加を起点に Control Panel へ stream start を要求するための `streams.start` scope も付与します。Control Panel は token だけでなく、対象 stream の primary Discord Bot assignment も確認します。
+
 ## セキュリティ
 
 - token はログ、監査ログ、通常APIレスポンスに出しません。

@@ -2,6 +2,21 @@
 
 AutoStream では、同じ env 名でも service によって意味が違うものがあります。特に `OBSERVABILITY_TOKEN` は、Control Panel では admin token、Worker / Encoder Recorder では ingest token として使います。実値を混同しないように、作業時は下の名前で管理してください。
 
+## 基本方針
+
+新規構成では、サービス間の認証はできるだけ Control Panel の Node登録に寄せます。Encoder Recorder、Worker、Discord Bot、Observability の `CONTROL_PANEL_TOKEN` は手入力せず、Node登録で生成される `config.yml` の Node Runtime Token を使います。
+
+一方で、次の値は役割が違うため同じ token にまとめません。
+
+| 分ける値 | 理由 |
+| --- | --- |
+| `OBSERVABILITY_ADMIN_TOKEN` | Control Panel が Observability API を読む/操作するための管理用 token です |
+| `OBSERVABILITY_INGEST_TOKEN` | Worker / Encoder Recorder が signal を送るための投入用 token です |
+| Discord Bot token | Discord developer portal が発行する Bot 接続用 token です |
+| YouTube stream key / Google OAuth secret | YouTube / Google 側が発行する外部 provider secret です |
+
+手入力を減らす場合も、admin token、ingest token、provider secret を同じ値にしないでください。漏えい時の影響範囲が広がります。
+
 ## 生成コマンド
 
 Linux / macOS では、32 byte の random hex を使います。
@@ -46,6 +61,18 @@ $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
 | `OBSERVABILITY_INGEST_TOKEN_SHA256` | Observability env | `OBSERVABILITY_INGEST_TOKEN` の SHA-256 | Observability 側には生 token を置きません |
 | `OBSERVABILITY_ADMIN_TOKEN` | Control Panel env の `OBSERVABILITY_TOKEN` | random hex | Control Panel が Observability API を読む/操作するための生 token です |
 | `OBSERVABILITY_ADMIN_TOKEN_SHA256` | Observability env | `OBSERVABILITY_ADMIN_TOKEN` の SHA-256 | Observability 側には生 token を置きません |
+
+## サービス別の入力一覧
+
+| service | 手生成して入力する値 | Control Panel が生成する値 | provider から取得する値 |
+| --- | --- | --- | --- |
+| Control Panel | `AUTOSTREAM_SESSION_SECRET`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_SETUP_TOKEN`、`AUTOSTREAM_STREAM_INGEST_SIGNING_KEY`、`OBSERVABILITY_ADMIN_TOKEN` | なし | Google OAuth client secret、Webhook URL、SMTP password などを画面から保存 |
+| Observability | `AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`OBSERVABILITY_INGEST_TOKEN_SHA256`、`OBSERVABILITY_ADMIN_TOKEN_SHA256` | Node Runtime Token を `config.yml` で受け取る | 通知先 webhook などを必要に応じて保存 |
+| Encoder Recorder | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY`、`OBSERVABILITY_INGEST_TOKEN` | Node Runtime Token を `config.yml` で受け取る | YouTube stream key は標準運用では Control Panel の YouTube Outputs に保存 |
+| Worker | `OBSERVABILITY_INGEST_TOKEN` | Node Runtime Token を `config.yml` で受け取る | なし |
+| Discord Bot | なし | Node Runtime Token を `config.yml` で受け取る | Discord developer portal の Bot token を Control Panel の Discord Settings に保存 |
+
+`AUTOSTREAM_SECRET_ENCRYPTION_KEY` は Control Panel と Observability の保存 secret 暗号化に使います。別 environment へ同じ DB を移す場合を除き、環境ごとに管理してください。
 
 ## Observability token の対応
 

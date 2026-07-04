@@ -92,6 +92,8 @@ Discord Bot は、Discord の voice channel に入り、音声を受け取り、
 7. Check Readiness で Discord 関連の不足がないことを確認します。
 8. Start 後、Streams の Discord audio と Encoder audio bridge を見ます。
 
+Discord VC へのユーザー参加でも stream auto-start が動きます。Bot は runtime config にある stream / guild / voice channel 対応を使い、対象 stream の開始を Control Panel に要求します。Control Panel は primary Discord Bot の Node Runtime Token と `streams.start` scope を確認してから開始します。
+
 ### 配信中に見る項目
 
 | 項目 | 見方 |
@@ -200,6 +202,8 @@ Encoder Recorder は、映像と音声を受け取り、FFmpegで配信、録画
 7. Streams で Encoder Recorder を primary に割り当て、profile と配信先を選びます。
 8. Check Readiness と Encoder host preflight を確認します。
 9. Start 後は FPS、bitrate、dropped frames、archive、upload を見ます。
+
+YouTube を自動で配信開始したい場合は、YouTube Output を `Live API` mode にし、OAuth connected account と `Enable auto start` を設定します。`Existing stream key` mode は RTMPS 送信のみで、YouTube Studio 側の設定によっては手動開始が必要です。
 
 ### 配信品質の見方
 
