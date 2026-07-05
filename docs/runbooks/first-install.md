@@ -304,8 +304,8 @@ Configure Token と Node Runtime Token は作成直後だけ表示されます�
 ```bash
 # Discord Bot
 cd "$DISCORD_BOT_RELEASE_DIR"
-sudo install -o root -g root -m 0755 bin/discord-bot /usr/local/bin/discord-bot
-sudo ln -sf /usr/local/bin/discord-bot /usr/local/bin/autostream-discord-bot
+sudo install -o root -g root -m 0755 bin/autostream-discord-bot /usr/local/bin/autostream-discord-bot
+sudo ln -sf /usr/local/bin/autostream-discord-bot /usr/local/bin/discord-bot
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/discord-bot
 sudo install -o root -g root -m 0644 systemd/autostream-discord-bot.service.example /etc/systemd/system/autostream-discord-bot.service
 sudo install -d -o root -g root -m 0750 /etc/autostream
@@ -313,8 +313,8 @@ sudo install -o root -g root -m 0640 .env.example /etc/autostream/discord-bot.en
 
 # Worker
 cd /opt/autostream/src/autostream-worker
-sudo install -o root -g root -m 0755 bin/worker /usr/local/bin/worker
-sudo ln -sf /usr/local/bin/worker /usr/local/bin/autostream-worker
+sudo install -o root -g root -m 0755 bin/autostream-worker /usr/local/bin/autostream-worker
+sudo ln -sf /usr/local/bin/autostream-worker /usr/local/bin/worker
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/worker
 sudo install -o root -g root -m 0644 systemd/autostream-worker.service.example /etc/systemd/system/autostream-worker.service
 sudo install -d -o root -g root -m 0750 /etc/autostream
@@ -322,8 +322,8 @@ sudo install -o root -g root -m 0640 .env.example /etc/autostream/worker.env
 
 # Encoder/Recorder
 cd "$ENCODER_RECORDER_RELEASE_DIR"
-sudo install -o root -g root -m 0755 bin/encoder-recorder /usr/local/bin/encoder-recorder
-sudo ln -sf /usr/local/bin/encoder-recorder /usr/local/bin/autostream-encoder-recorder
+sudo install -o root -g root -m 0755 bin/autostream-encoder-recorder /usr/local/bin/autostream-encoder-recorder
+sudo ln -sf /usr/local/bin/autostream-encoder-recorder /usr/local/bin/encoder-recorder
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/encoder-recorder /var/lib/autostream/archives
 sudo install -o root -g root -m 0644 systemd/autostream-encoder-recorder.service.example /etc/systemd/system/autostream-encoder-recorder.service
 sudo install -d -o root -g root -m 0750 /etc/autostream
@@ -331,8 +331,8 @@ sudo install -o root -g root -m 0640 .env.example /etc/autostream/encoder-record
 
 # Observability
 cd "$OBSERVABILITY_RELEASE_DIR"
-sudo install -o root -g root -m 0755 bin/observability /usr/local/bin/observability
-sudo ln -sf /usr/local/bin/observability /usr/local/bin/autostream-observability
+sudo install -o root -g root -m 0755 bin/autostream-observability /usr/local/bin/autostream-observability
+sudo ln -sf /usr/local/bin/autostream-observability /usr/local/bin/observability
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/observability
 sudo install -o root -g root -m 0644 systemd/autostream-observability.service.example /etc/systemd/system/autostream-observability.service
 sudo install -d -o root -g root -m 0750 /etc/autostream
