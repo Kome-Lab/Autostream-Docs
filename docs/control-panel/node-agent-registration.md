@@ -37,10 +37,33 @@ Node登録で入力する項目は次だけです。
 | Configure Token | `/api/node-agent/configure` で `config.yml` を取得するための短期 token |
 | Node Runtime Token | register、heartbeat、report、runtime config、Panel から Node への dispatch に使う token |
 | `config.yml` | `/etc/autostream-node/config.yml` に保存します |
-| Auto Configure command | setup 作業を自動化するためのコマンド例 |
-| systemd unit 例 | Node Agent として起動する場合の unit 例 |
+| Auto Configure command | service binary の `configure` サブコマンドで `config.yml` を取得して保存するコマンド |
 
 Configure Token と Node Runtime Token は作成直後だけ表示します。紛失した場合は Configuration から再生成してください。DB には Configure Token をハッシュで、Node Runtime Token を暗号化して保存します。
+
+`autostream-node` という共通実行ファイルはありません。Node 側では Worker、Encoder Recorder、Discord Bot、Observability の各サービス binary に `configure` サブコマンドがあります。Panel が表示する Auto Configure command は次の形です。
+
+```bash
+sudo autostream-worker configure --panel-url "https://control.example.com" --token "<CONFIGURE_TOKEN>" --node "worker-01" --config "/etc/autostream-node/config.yml"
+```
+
+service type ごとの binary 名は次の通りです。
+
+| Node type | configure command |
+| --- | --- |
+| `worker` | `autostream-worker configure ...` |
+| `encoder_recorder` | `autostream-encoder-recorder configure ...` |
+| `discord_bot` | `autostream-discord-bot configure ...` |
+| `observability` | `autostream-observability configure ...` |
+
+Auto Configure command は、発行直後の Configure Token を使って次の処理を行うための一度きりのコマンドです。
+
+1. 対象 service binary が `POST /api/node-agent/configure` を呼び出します。
+2. レスポンス JSON の `config_yml` を取り出します。
+3. `/etc/autostream-node/config.yml` を `0640` で保存します。
+4. 取得した `node.type` が実行した service binary と違う場合は保存前に拒否します。
+
+保存後は対象サービスの env に `AUTOSTREAM_NODE_CONFIG=/etc/autostream-node/config.yml` を設定して、サービス本体を起動します。
 
 ## config.yml の例
 
@@ -63,7 +86,7 @@ agent:
   log_dir: "/var/log/autostream-node"
 ```
 
-Linux host では `/etc/autostream-node/config.yml` に保存します。Docker では同じ path に read-only mount し、env に `AUTOSTREAM_NODE_CONFIG=/etc/autostream-node/config.yml` を入れます。
+Linux host では `/etc/autostream-node/config.yml` に保存します。Docker では同じ path に read-only mount し、env に `AUTOSTREAM_NODE_CONFIG=/etc/autostream-node/config.yml` を入れます。複数サービスを同じ host で動かす場合は `/etc/autostream-node/worker.yml` のようにファイルを分け、各サービスの env で参照先を分けてください。
 
 ## Node が報告する値
 

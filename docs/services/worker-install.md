@@ -22,6 +22,7 @@ cd /opt/autostream/src/autostream-worker
 go build -o bin/worker ./cmd/worker
 
 sudo install -o root -g root -m 0755 bin/worker /usr/local/bin/worker
+sudo ln -sf /usr/local/bin/worker /usr/local/bin/autostream-worker
 sudo install -d -o autostream -g autostream /var/lib/autostream/worker
 sudo install -o root -g root -m 0644 systemd/autostream-worker.service.example /etc/systemd/system/autostream-worker.service
 sudo install -d -o root -g root -m 0750 /etc/autostream

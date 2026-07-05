@@ -26,6 +26,7 @@ AUTOSTREAM_VERSION=v1.0.0
 AUTOSTREAM_ARCH=amd64   # arm64 server では arm64 に変更
 cd "/opt/autostream/releases/autostream-encoder-recorder_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}"
 sudo install -o root -g root -m 0755 bin/encoder-recorder /usr/local/bin/encoder-recorder
+sudo ln -sf /usr/local/bin/encoder-recorder /usr/local/bin/autostream-encoder-recorder
 sudo install -d -o autostream -g autostream /var/lib/autostream/encoder-recorder /var/lib/autostream/archives
 sudo install -o root -g root -m 0644 systemd/autostream-encoder-recorder.service.example /etc/systemd/system/autostream-encoder-recorder.service
 sudo install -d -o root -g root -m 0750 /etc/autostream

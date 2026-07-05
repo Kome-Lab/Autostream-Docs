@@ -8,7 +8,7 @@
 
 | 項目 | 使い方 |
 | --- | --- |
-| 実行ファイル | release artifact に入っている `bin/<service>` を配置します |
+| 実行ファイル | release artifact に入っている `bin/<service>` を配置し、Auto Configure 用に `/usr/local/bin/autostream-<service>` alias も作ります |
 | env ファイル | `.env.example` を元に `/etc/autostream/<service>.env` を作ります |
 | systemd unit | `systemd/*.service.example` を元に `/etc/systemd/system/` へ置きます |
 | Node ID | Control Panel と各サービスを対応させる固定 ID です |
@@ -36,7 +36,7 @@ Node Runtime Token と Configure Token は Node登録で生成されます。紛
 
 | 用途 | 例 |
 | --- | --- |
-| 実行ファイル | `/usr/local/bin/<service>` |
+| 実行ファイル | `/usr/local/bin/<service>` と `/usr/local/bin/autostream-<service>` |
 | env | `/etc/autostream/<service>.env` |
 | Node config | `/etc/autostream-node/<service>.yml` |
 | service作業領域 | `/var/lib/autostream/<service>` |
@@ -94,7 +94,7 @@ cd "/opt/autostream/releases/${SERVICE_ARTIFACT%.tar.gz}"
 
 その後、展開後 directory の中で次を実行します。
 
-1. `bin/` の実行ファイルを `/usr/local/bin/` に配置します。
+1. `bin/` の実行ファイルを `/usr/local/bin/` に配置し、Panel が表示する Auto Configure command 用の `autostream-<service>` alias を作ります。
 2. `.env.example` を `/etc/autostream/<service>.env` にコピーします。
 3. `systemd/*.service.example` を `/etc/systemd/system/` にコピーし、必要ならパスを調整します。
 4. env の placeholder を実運用値に置き換えます。
@@ -133,6 +133,7 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 ```bash
 sudo systemctl stop autostream-<service>
 sudo install -o root -g root -m 0755 bin/<service> /usr/local/bin/<service>
+sudo ln -sf /usr/local/bin/<service> /usr/local/bin/autostream-<service>
 sudo systemctl start autostream-<service>
 sudo systemctl status autostream-<service>
 ```
