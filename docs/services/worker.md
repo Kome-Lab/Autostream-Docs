@@ -10,16 +10,15 @@ Linuxサーバーへの導入、Node Agent config、primary assignment、Worker 
 - overlay、caption、participant、active speaker event を生成する
 - Encoder Recorder へイベントを送る
 - Control Panel へ heartbeat を送る
-- Observability へ状態やエラーを送る
+- Control Panel 経由で Observability へ状態やエラーを送る
 
 ## envで設定するもの
 
 | 項目 | 目的 |
 | --- | --- |
 | `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Worker 用 `config.yml` |
-| `OBSERVABILITY_URL` | Observability の URL |
 
-Worker は DB に直接接続しません。永続状態は Control Panel と Observability 側で扱います。
+Worker は DB に直接接続せず、標準構成では Observability にも直接接続しません。永続状態と signal 転送は Control Panel と Observability 側で扱います。
 
 ## 通常運用のポイント
 
@@ -75,7 +74,7 @@ Worker だけを入れ替えるなら Worker Management、Discord Bot や Encode
 3. テスト配信を開始します。
 4. Worker がジョブを受けたことを確認します。
 5. Encoder Recorder 側にイベントが届いているか確認します。
-6. Observability に heartbeat や metric が届いているか確認します。
+6. Observability に heartbeat や metric が Control Panel 経由で届いているか確認します。
 
 イベントが届かない場合は、Worker、Encoder Recorder、Control Panel の Node ID、Node Runtime Token、primary assignment の組み合わせを確認してください。
 
