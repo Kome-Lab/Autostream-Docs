@@ -27,7 +27,7 @@ autostream-control-panel_v1.0.0_linux_amd64/
   share/autostream-control-panel/   # Control Panel のみ
 ```
 
-ほかの service も同じ形式で、`bin/discord-bot`、`bin/encoder-recorder`、`bin/observability` のように service ごとの実行ファイルが入ります。
+Node Agent の service も同じ形式で、`bin/autostream-discord-bot`、`bin/autostream-encoder-recorder`、`bin/autostream-observability`、`bin/autostream-worker` のように正規コマンド名の実行ファイルが入ります。互換用に旧名 binary が同梱される場合がありますが、Panel の Auto Configure command は `autostream-<service>` を使います。
 
 GitHub Release に添付されている `.sha256` は `artifacts/<asset>.tar.gz` というパスを含みます。private repo の release asset は生の URL では `Not Found` になりやすいため、標準手順では `gh release download` を使います。`sha256sum -c` をそのまま使う場合は、download file と `.sha256` を `/opt/autostream/releases/artifacts/` に置き、`/opt/autostream/releases` で実行してください。
 
@@ -45,7 +45,7 @@ cd /opt/autostream/releases/autostream-control-panel_v1.0.0_linux_amd64
 1. release から対象サービスの `linux_amd64` または `linux_arm64` artifact をダウンロードします。
 2. `.sha256` と `.tar.gz` を `artifacts/` directory に置いた状態で checksum を確認します。
 3. `/opt/autostream/releases` に展開し、作成された `autostream-<service>_<version>_linux_<arch>/` へ移動します。
-4. `bin/<service>` に実行権限があることを確認します。
+4. Control Panel は `bin/control-panel`、Node Agent は `bin/autostream-<service>` に実行権限があることを確認します。
 5. `.env.example` を参考に env ファイルを作ります。
 6. `systemd/*.service.example` を `/etc/systemd/system/` に配置し、パスを自分の環境に合わせます。
 7. `systemctl daemon-reload` を実行します。
@@ -55,7 +55,7 @@ cd /opt/autostream/releases/autostream-control-panel_v1.0.0_linux_amd64
 ## ディレクトリ例
 
 - 展開先: `/opt/autostream/releases/autostream-<service>_<version>_linux_<arch>`
-- 実行ファイル: `/opt/autostream/releases/autostream-<service>_<version>_linux_<arch>/bin/<service>`
+- 実行ファイル: Control Panel は `/opt/autostream/releases/autostream-control-panel_<version>_linux_<arch>/bin/control-panel`、Node Agent は `/opt/autostream/releases/autostream-<service>_<version>_linux_<arch>/bin/autostream-<service>`
 - env ファイル: `/etc/autostream/<service>.env`
 - 録画保存先: `/var/lib/autostream/recordings`
 - ログ: `journalctl -u <service>`

@@ -19,7 +19,7 @@ Worker の Observability signal は、標準構成では Node Runtime Token で 
 
 ```bash
 cd /opt/autostream/src/autostream-worker
-go build -o bin/worker ./cmd/worker
+go build -o bin/autostream-worker ./cmd/worker
 
 sudo install -o root -g root -m 0755 bin/autostream-worker /usr/local/bin/autostream-worker
 sudo ln -sf /usr/local/bin/autostream-worker /usr/local/bin/worker

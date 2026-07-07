@@ -8,7 +8,7 @@
 
 | 項目 | 使い方 |
 | --- | --- |
-| 実行ファイル | release artifact に入っている `bin/<service>` を配置し、Auto Configure 用に `/usr/local/bin/autostream-<service>` alias も作ります |
+| 実行ファイル | Control Panel は `bin/control-panel`、Node Agent は release artifact に入っている `bin/autostream-<service>` を配置します |
 | env ファイル | `.env.example` を元に `/etc/autostream/<service>.env` を作ります |
 | systemd unit | `systemd/*.service.example` を元に `/etc/systemd/system/` へ置きます |
 | Node ID | Control Panel と各サービスを対応させる固定 ID です |
@@ -36,7 +36,7 @@ Node Runtime Token と Configure Token は Node登録で生成されます。紛
 
 | 用途 | 例 |
 | --- | --- |
-| 実行ファイル | `/usr/local/bin/<service>` と `/usr/local/bin/autostream-<service>` |
+| 実行ファイル | Control Panel は `/usr/local/bin/control-panel`、Node Agent は `/usr/local/bin/autostream-<service>` |
 | env | `/etc/autostream/<service>.env` |
 | Node config | `/etc/autostream-node/<service>.yml` |
 | service作業領域 | `/var/lib/autostream/<service>` |
@@ -94,13 +94,13 @@ cd "/opt/autostream/releases/${SERVICE_ARTIFACT%.tar.gz}"
 
 その後、展開後 directory の中で次を実行します。
 
-1. `bin/` の実行ファイルを `/usr/local/bin/` に配置し、Panel が表示する Auto Configure command 用の `autostream-<service>` alias を作ります。
+1. `bin/` の実行ファイルを `/usr/local/bin/` に配置します。Node Agent は `autostream-<service>` が正規コマンド名です。
 2. `.env.example` を `/etc/autostream/<service>.env` にコピーします。
 3. `systemd/*.service.example` を `/etc/systemd/system/` にコピーし、必要ならパスを調整します。
 4. env の placeholder を実運用値に置き換えます。
 5. `systemctl daemon-reload` 後に起動します。
 
-2026-06-29 時点では `Kome-Lab/Autostream-Worker` の GitHub Release asset は未公開です。Worker は source checkout から `go build -o bin/worker ./cmd/worker` で build するか、Worker repo の Host Release workflow で artifact を作成してから同じ配置手順を使ってください。
+2026-06-29 時点では `Kome-Lab/Autostream-Worker` の GitHub Release asset は未公開です。Worker は source checkout から `go build -o bin/autostream-worker ./cmd/worker` で build するか、Worker repo の Host Release workflow で artifact を作成してから同じ配置手順を使ってください。
 
 ```bash
 sudo systemctl daemon-reload
@@ -122,7 +122,7 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 
 ## 更新方法
 
-1. 現在の version と設定を控えます。
+1. 現在の version と設定を控えます。Node Agent は `autostream-<service> --version`、Control Panel は `control-panel --version` で build version / commit / build date を確認できます。
 2. 新しい release artifact を取得します。
 3. env に新しい必須項目が増えていないか `.env.example` と比較します。
 4. 対象サービスを停止します。
@@ -132,8 +132,7 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 
 ```bash
 sudo systemctl stop autostream-<service>
-sudo install -o root -g root -m 0755 bin/<service> /usr/local/bin/<service>
-sudo ln -sf /usr/local/bin/<service> /usr/local/bin/autostream-<service>
+sudo install -o root -g root -m 0755 bin/autostream-<service> /usr/local/bin/autostream-<service>
 sudo systemctl start autostream-<service>
 sudo systemctl status autostream-<service>
 ```

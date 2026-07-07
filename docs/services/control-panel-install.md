@@ -53,8 +53,14 @@ OBSERVABILITY_URL=https://<OBSERVABILITY_HOST>
 OBSERVABILITY_TOKEN=<OBSERVABILITY_ADMIN_TOKEN>
 AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS=<SERVICE_HOSTS>
 AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS=true
+# 任意。Control Panel 画面に新しい version 通知を出す場合だけ設定します。
+AUTOSTREAM_LATEST_VERSION=
+AUTOSTREAM_UPDATE_CHECK_URL=
+AUTOSTREAM_UPDATE_CHECK_TOKEN=
 TZ=Asia/Tokyo
 ```
+
+Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。新しい version の通知を出したい場合は、固定値なら `AUTOSTREAM_LATEST_VERSION=v1.2.3`、外部 endpoint から確認するなら `AUTOSTREAM_UPDATE_CHECK_URL` を設定します。URL は HTTPS を使い、認証が必要な場合だけ `AUTOSTREAM_UPDATE_CHECK_TOKEN` を bearer token として設定します。
 
 起動します。
 

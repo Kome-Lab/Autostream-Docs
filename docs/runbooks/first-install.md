@@ -179,16 +179,16 @@ cd ..
 go build -o bin/control-panel ./cmd/control-panel
 
 cd /opt/autostream/src/autostream-discord-bot
-go build -o bin/discord-bot ./cmd/discord-bot
+go build -o bin/autostream-discord-bot ./cmd/discord-bot
 
 cd /opt/autostream/src/autostream-worker
-go build -o bin/worker ./cmd/worker
+go build -o bin/autostream-worker ./cmd/worker
 
 cd /opt/autostream/src/autostream-encoder-recorder
-go build -o bin/encoder-recorder ./cmd/encoder-recorder
+go build -o bin/autostream-encoder-recorder ./cmd/encoder-recorder
 
 cd /opt/autostream/src/autostream-observability
-go build -o bin/observability ./cmd/observability
+go build -o bin/autostream-observability ./cmd/observability
 ```
 
 ## 6. Control Panel を入れる

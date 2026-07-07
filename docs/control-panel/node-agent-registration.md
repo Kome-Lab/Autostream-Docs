@@ -41,9 +41,9 @@ Node登録で入力する項目は次だけです。
 
 Configure Token と Node Runtime Token は作成直後だけ表示します。紛失した場合は Configuration から再生成してください。DB には Configure Token をハッシュで、Node Runtime Token を暗号化して保存します。
 
-作成した Node は、同じ Node登録画面の「登録済みNode」一覧と Service Health で確認できます。Auto Configure command を Node 側で実行する前は `pending` / 接続待ちとして表示され、初回 heartbeat 後に online や報告 version / capability が更新されます。
+作成した Node は、同じ Node登録画面の「登録済みNode」一覧で確認できます。この一覧は Node登録に必要な最小情報だけを表示するため、`api_tokens.create` 権限で取得できます。運用監視用の metrics / capability / 詳細 heartbeat は Service Health で確認し、こちらは `service_health.read` 権限が必要です。Auto Configure command を Node 側で実行する前は `pending` / 接続待ちとして表示され、初回 heartbeat 後に online や報告 version が更新されます。
 
-`autostream-node` という共通実行ファイルはありません。Node 側では Worker、Encoder Recorder、Discord Bot、Observability の各サービス binary に `configure` サブコマンドがあります。Panel が表示する Auto Configure command は、`autostream-<service>` alias を優先し、なければ既存 install の `/usr/local/bin/<service>` を使います。概念的には次のコマンドを実行します。
+`autostream-node` という共通実行ファイルはありません。Node 側では Worker、Encoder Recorder、Discord Bot、Observability の各サービス binary に `configure` サブコマンドがあります。Panel が表示する Auto Configure command は正規の `autostream-<service>` コマンドを使う 1 行のコマンドです。
 
 ```bash
 sudo autostream-worker configure --panel-url "https://control.example.com" --token "<CONFIGURE_TOKEN>" --node "worker-01" --config "/etc/autostream-node/config.yml"
@@ -51,12 +51,14 @@ sudo autostream-worker configure --panel-url "https://control.example.com" --tok
 
 service type ごとの binary 名は次の通りです。
 
-| Node type | 優先 binary | fallback binary |
-| --- | --- | --- |
-| `worker` | `autostream-worker` | `/usr/local/bin/worker` |
-| `encoder_recorder` | `autostream-encoder-recorder` | `/usr/local/bin/encoder-recorder` |
-| `discord_bot` | `autostream-discord-bot` | `/usr/local/bin/discord-bot` |
-| `observability` | `autostream-observability` | `/usr/local/bin/observability` |
+| Node type | binary |
+| --- | --- |
+| `worker` | `autostream-worker` |
+| `encoder_recorder` | `autostream-encoder-recorder` |
+| `discord_bot` | `autostream-discord-bot` |
+| `observability` | `autostream-observability` |
+
+`sudo: autostream-observability: command not found` のように出る場合は、Node Agent の host release artifact から `bin/autostream-observability` を `/usr/local/bin/autostream-observability` へ配置できていません。対象サービスの install 手順で正規 binary を配置し直してください。
 
 Auto Configure command は、発行直後の Configure Token を使って次の処理を行うための一度きりのコマンドです。
 
