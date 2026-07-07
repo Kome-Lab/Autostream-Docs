@@ -52,16 +52,19 @@ sudo systemctl enable --now autostream-discord-bot
 sudo systemctl status autostream-discord-bot
 ```
 
+この時点で `/etc/autostream-discord-bot/config.yml` がまだ無い場合でも、Discord Bot は終了せず `node config pending: waiting for /etc/autostream-discord-bot/config.yml` を出して dry-run で待機します。Auto Configure コマンドで `config.yml` を作成し、Control Panel の Discord Settings に Bot token を保存した後は、実際の Discord 接続を開始するため Discord Bot を再起動します。
+
 ## Control Panelで登録する
 
 1. Node登録で `discord_bot` を選び、Node名、Host、Port、SSL、説明を入力します。
 2. Configuration から `config.yml` または Auto Configure コマンドを取得します。
-3. `config.yml` を `/etc/autostream-discord-bot/config.yml` に配置して Bot を起動します。
+3. `config.yml` を `/etc/autostream-discord-bot/config.yml` に配置します。
 4. Discord Settings を開きます。
 5. Bot token、guild ID、voice channel ID、text channel ID を登録します。
 6. `Bot service ID` に Node ID を指定します。
-7. Service Health で Discord Bot が online、報告バージョン、Capability を出しているか確認します。
-8. Streams で Discord Config を選びます。
+7. Discord Bot が未起動なら起動します。先に起動して pending / dry-run になっていた場合は `sudo systemctl restart autostream-discord-bot` を実行します。
+8. Service Health で Discord Bot が online、報告バージョン、Capability を出しているか確認します。
+9. Streams で Discord Config を選びます。
 
 ## 配信開始時の流れ
 

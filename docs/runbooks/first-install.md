@@ -387,6 +387,8 @@ systemctl status autostream-worker
 systemctl status autostream-discord-bot
 ```
 
+`config.yml` を保存する前に Node Agent を起動した場合は `node config pending` として待機します。Auto Configure コマンドで `config.yml` を作成した後、Worker、Encoder Recorder、Discord Bot は `systemctl restart` で登録と runtime config の初期読込をそろえます。Observability は起動中に `config.yml` を再読込して登録を開始します。
+
 各 service の health を確認します。
 
 ```bash

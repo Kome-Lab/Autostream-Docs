@@ -46,12 +46,14 @@ sudo systemctl enable --now autostream-worker
 sudo systemctl status autostream-worker
 ```
 
+この時点で `/etc/autostream-worker/config.yml` がまだ無い場合でも、Worker は終了せず `node config pending: waiting for /etc/autostream-worker/config.yml` を出して待機します。Auto Configure コマンドで `config.yml` を作成した後は、登録、heartbeat、runtime config の初期読込を確実にそろえるため Worker を再起動します。
+
 ## Control Panelで登録する
 
 1. Node登録で `worker` を選び、Node名、Host、Port、SSL、説明を入力します。
 2. 作成後の Configuration で `config.yml` または Auto Configure コマンドを取得します。
 3. `config.yml` を `/etc/autostream-worker/config.yml` に配置します。Configure Token と Node Runtime Token は生成直後だけ表示されます。
-4. Worker を起動します。
+4. Worker が未起動なら起動します。先に起動して pending になっていた場合は `sudo systemctl restart autostream-worker` を実行します。
 5. Service Health で online、報告バージョン、Capability が表示されることを確認します。
 6. Worker Management または Stream assignment planner で stream に primary として割り当てます。
 7. Streams の Worker event test を実行します。

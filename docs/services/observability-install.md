@@ -48,11 +48,13 @@ sudo systemctl enable --now autostream-observability
 sudo systemctl status autostream-observability
 ```
 
+この時点で `/etc/autostream-observability/config.yml` がまだ無い場合でも、Observability は終了せず `node config pending: waiting for /etc/autostream-observability/config.yml` を出して待機します。Auto Configure コマンドで `config.yml` を作成すると、起動中のプロセスが再読込して Control Panel へ登録と heartbeat を開始します。
+
 ## Control Panelで使う
 
 1. Node登録で `observability` を選び、Node名、Host、Port、SSL、説明を入力します。
 2. Configuration から `config.yml` または Auto Configure コマンドを取得し、`/etc/autostream-observability/config.yml` に配置します。
-3. Observability を起動します。
+3. Observability が未起動なら起動します。すでに起動済みなら pending 状態から自動で登録されます。
 4. Service Health で online、報告バージョン、Capability を確認します。
 5. Monitoring Dashboard を開きます。
 6. Notification Channels で通知先を作ります。
