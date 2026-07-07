@@ -11,7 +11,7 @@ Worker は、配信中に必要な overlay、caption、participant、active spea
 
 Encoder Recorder のURLやstream ingest tokenは、通常 Control Panel の stream job から渡されます。本番envに固定の `ENCODER_RECORDER_URL` や固定tokenを置かない運用にします。
 
-Worker の Observability signal は、標準構成では Node Runtime Token で Control Panel に送ります。Worker env に `OBSERVABILITY_TOKEN` は入れません。Worker から Observability へ直接送る互換fallbackを使う場合だけ、`OBSERVABILITY_URL` と `OBSERVABILITY_TOKEN=<OBSERVABILITY_INGEST_TOKEN>` を追加します。生成方法は [秘密情報とtoken生成](/security/tokens) を参照してください。
+Worker の Observability signal は、Node Runtime Token で Control Panel に送ります。Worker env に Observability 接続用tokenは入れません。生成方法は [秘密情報とtoken生成](/security/tokens) を参照してください。
 
 ## host直接起動
 

@@ -60,16 +60,9 @@ openssl rand -hex 32   # AUTOSTREAM_SESSION_SECRET
 openssl rand -hex 32   # AUTOSTREAM_SECRET_ENCRYPTION_KEY
 openssl rand -hex 32   # AUTOSTREAM_SETUP_TOKEN
 openssl rand -hex 32   # AUTOSTREAM_STREAM_INGEST_SIGNING_KEY
-openssl rand -hex 32   # OBSERVABILITY_ADMIN_TOKEN
 ```
 
-Observability の admin token は Observability 側では SHA-256 で持ちます。
-
-```bash
-printf '%s' '<OBSERVABILITY_ADMIN_TOKEN>' | sha256sum | awk '{print $1}'
-```
-
-Control Panel の `OBSERVABILITY_TOKEN` には admin token の生値を入れます。Worker / Encoder Recorder には標準構成で `OBSERVABILITY_TOKEN` を入れず、Node Runtime Token で Control Panel 経由の signal 送信にします。詳しい対応表、PowerShell での生成方法、直接ingest互換fallbackの生成方法は [秘密情報とtoken生成](../security/tokens.md) を参照してください。
+Observability 用の別admin tokenや直接ingest tokenは作りません。Control Panel は登録済み Observability Node の公開URLと Node Runtime Token で Observability API を呼びます。詳しい対応表と PowerShell での生成方法は [秘密情報とtoken生成](../security/tokens.md) を参照してください。
 
 ## 4. `.env` を作る
 
@@ -96,9 +89,6 @@ AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
 SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 NODE_CONFIG_ROOT=/opt/autostream/node-config
-
-OBSERVABILITY_ADMIN_TOKEN=<OBSERVABILITY_ADMIN_TOKEN>
-OBSERVABILITY_ADMIN_TOKEN_SHA256=<SHA256_OF_OBSERVABILITY_ADMIN_TOKEN>
 ```
 
 初回は Node Agent 用 `config.yml` がまだないため、Control Panel 起動後に Node登録で各Nodeを作り、Configuration から `config.yml` を `NODE_CONFIG_ROOT` 配下に保存してから各 service container を起動します。`CONTROL_PANEL_TOKEN` を `.env` に手入力しません。
@@ -174,8 +164,6 @@ services:
       AUTOSTREAM_STREAM_INGEST_SIGNING_KEY: ${AUTOSTREAM_STREAM_INGEST_SIGNING_KEY}
       AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS: encoder-recorder,worker,discord-bot,observability
       AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS: "true"
-      OBSERVABILITY_URL: http://observability:8080
-      OBSERVABILITY_TOKEN: ${OBSERVABILITY_ADMIN_TOKEN}
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8080:8080"
@@ -192,12 +180,9 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
-      OBSERVABILITY_ADMIN_TOKEN_SHA256: ${OBSERVABILITY_ADMIN_TOKEN_SHA256}
-      OBSERVABILITY_ADMIN_TOKEN_BINDINGS: "${OBSERVABILITY_ADMIN_TOKEN_SHA256}:observability.read|observability.ingest|incidents.update|notifications.read|notifications.manage|remediation.read|remediation.approve|remediation.execute"
-      OBSERVABILITY_REQUIRE_ADMIN_TOKEN_BINDINGS: "true"
       AUTOSTREAM_SECRET_ENCRYPTION_KEY: ${AUTOSTREAM_SECRET_ENCRYPTION_KEY}
       DATABASE_URL: ${OBSERVABILITY_DATABASE_URL}
-      AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
+      OBSERVABILITY_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8082:8080"

@@ -24,13 +24,13 @@
 
 | service | 手生成する値 | 入力先 |
 | --- | --- | --- |
-| Control Panel | `AUTOSTREAM_SESSION_SECRET`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_SETUP_TOKEN`、`AUTOSTREAM_STREAM_INGEST_SIGNING_KEY`、`OBSERVABILITY_ADMIN_TOKEN` | Control Panel env。`OBSERVABILITY_ADMIN_TOKEN` は env 名 `OBSERVABILITY_TOKEN` に入れます |
-| Observability | `AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`OBSERVABILITY_ADMIN_TOKEN_SHA256` | Observability env。admin binding には `observability.ingest` scope も入れます |
+| Control Panel | `AUTOSTREAM_SESSION_SECRET`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_SETUP_TOKEN`、`AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Control Panel env |
+| Observability | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Observability env。Control Panel からの API 呼び出しは登録済み Observability Node の Runtime Token を使います |
 | Encoder Recorder | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Encoder Recorder env。signing key は Control Panel と同じ値にします |
 | Worker | なし | signal は Node Runtime Token で Control Panel 経由にします |
 | Discord Bot | なし | Node Runtime Token は `config.yml`、Discord Bot token は Control Panel の Discord Settings に保存します |
 
-Node Runtime Token と Configure Token は Node登録で生成されます。紛失した場合は Control Panel の Node登録 Configuration から再生成し、対象 service の `config.yml` を更新してください。Worker / Encoder Recorder から Observability へ直接送る互換fallbackを使う場合だけ、別途 `OBSERVABILITY_INGEST_TOKEN` と hash / binding を作ります。
+Node Runtime Token と Configure Token は Node登録で生成されます。紛失した場合は Control Panel の Node登録 Configuration から再生成し、対象 service の `config.yml` を更新してください。
 
 ## 推奨ディレクトリ
 

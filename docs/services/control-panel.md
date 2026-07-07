@@ -32,8 +32,6 @@ Linuxサーバーへの配置、systemd、Docker、初回起動、公開URL、da
 | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | 保存 secret の暗号化 |
 | `AUTOSTREAM_SETUP_TOKEN` | 初回管理者作成 |
 | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | stream scoped ingest token の署名 |
-| `OBSERVABILITY_URL` | Observability の URL |
-| `OBSERVABILITY_TOKEN` | Observability admin token の生値 |
 | `SERVICE_CALL_TOKEN` | 旧構成からの移行用 fallback |
 
 `AUTOSTREAM_PUBLIC_URL` は OAuth callback、cookie、他サービスからの参照に関係します。本番では HTTPS の外部 URL を入れます。
@@ -80,7 +78,7 @@ raw secret は再表示できません。値を忘れた場合は、元 provider
 | 通知先を追加する | Notification Channels |
 | ユーザーを追加する | Users、Roles |
 | Node Runtime Token を入れ替える | Node登録の Configuration |
-| Observability admin token を入れ替える | Control Panel env と Observability env |
+| Observability の接続先を変える | Node登録の Observability Node |
 | 誰が変更したか見る | Audit Logs |
 
 ## 運用中の見方
