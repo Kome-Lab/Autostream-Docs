@@ -88,10 +88,10 @@ AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
 AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
 SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
-NODE_CONFIG_ROOT=/opt/autostream/node-config
+SERVICE_CONFIG_ROOT=/opt/autostream/config
 ```
 
-初回は Node Agent 用 `config.yml` がまだないため、Control Panel 起動後に Node登録で各Nodeを作り、Configuration から `config.yml` を `NODE_CONFIG_ROOT` 配下に保存してから各 service container を起動します。`CONTROL_PANEL_TOKEN` を `.env` に手入力しません。
+初回は Node Agent 用 `config.yml` がまだないため、Control Panel 起動後に Node登録で各Nodeを作り、Configuration から `config.yml` を `SERVICE_CONFIG_ROOT` 配下のサービス別 directory に保存してから各 service container を起動します。`CONTROL_PANEL_TOKEN` を `.env` に手入力しません。
 
 DB URL は Control Panel と Observability だけに必要です。Encoder/Recorder、Worker、Discord Bot は個別 database を持たず、Control Panel から runtime config を取得します。
 
@@ -179,7 +179,7 @@ services:
       control-panel:
         condition: service_started
     environment:
-      AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
+      AUTOSTREAM_NODE_CONFIG: /etc/autostream-observability/config.yml
       AUTOSTREAM_SECRET_ENCRYPTION_KEY: ${AUTOSTREAM_SECRET_ENCRYPTION_KEY}
       DATABASE_URL: ${OBSERVABILITY_DATABASE_URL}
       OBSERVABILITY_BIND_ADDR: 0.0.0.0:8080
@@ -187,7 +187,7 @@ services:
     ports:
       - "127.0.0.1:8082:8080"
     volumes:
-      - ${NODE_CONFIG_ROOT}/observability.yml:/etc/autostream-node/config.yml:ro
+      - ${SERVICE_CONFIG_ROOT}/observability/config.yml:/etc/autostream-observability/config.yml:ro
 
   encoder-recorder:
     build: ./src/autostream-encoder-recorder
@@ -196,7 +196,7 @@ services:
       control-panel:
         condition: service_started
     environment:
-      AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
+      AUTOSTREAM_NODE_CONFIG: /etc/autostream-encoder-recorder/config.yml
       AUTOSTREAM_STREAM_INGEST_SIGNING_KEY: ${AUTOSTREAM_STREAM_INGEST_SIGNING_KEY}
       AUTOSTREAM_REQUIRE_SIGNED_INGEST_TOKENS: "true"
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
@@ -207,7 +207,7 @@ services:
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
-      - ${NODE_CONFIG_ROOT}/encoder-recorder.yml:/etc/autostream-node/config.yml:ro
+      - ${SERVICE_CONFIG_ROOT}/encoder-recorder/config.yml:/etc/autostream-encoder-recorder/config.yml:ro
       - encoder-data:/var/lib/autostream/encoder-recorder
       - archives:/var/lib/autostream/archives
 
@@ -220,14 +220,14 @@ services:
       encoder-recorder:
         condition: service_started
     environment:
-      AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
+      AUTOSTREAM_NODE_CONFIG: /etc/autostream-worker/config.yml
       ENCODER_RECORDER_URL: http://encoder-recorder:8080
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8084:8080"
     volumes:
-      - ${NODE_CONFIG_ROOT}/worker.yml:/etc/autostream-node/config.yml:ro
+      - ${SERVICE_CONFIG_ROOT}/worker/config.yml:/etc/autostream-worker/config.yml:ro
 
   discord-bot:
     build: ./src/autostream-discord-bot
@@ -240,7 +240,7 @@ services:
       worker:
         condition: service_started
     environment:
-      AUTOSTREAM_NODE_CONFIG: /etc/autostream-node/config.yml
+      AUTOSTREAM_NODE_CONFIG: /etc/autostream-discord-bot/config.yml
       WORKER_URL: http://worker:8080
       ENCODER_AUDIO_TOKEN: ""
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
@@ -248,7 +248,7 @@ services:
     ports:
       - "127.0.0.1:8083:8080"
     volumes:
-      - ${NODE_CONFIG_ROOT}/discord-bot.yml:/etc/autostream-node/config.yml:ro
+      - ${SERVICE_CONFIG_ROOT}/discord-bot/config.yml:/etc/autostream-discord-bot/config.yml:ro
 
 volumes:
   mariadb:
@@ -292,14 +292,18 @@ curl -fsS -X POST http://127.0.0.1:8080/setup/first-admin \
 
 Control Panel にログインし、Node登録で Encoder/Recorder、Worker、Discord Bot、Observability を作ります。入力するのは Node名、Host、Port、SSL、説明です。バージョンやCapabilityは入力しません。
 
-各Nodeの Configuration から `config.yml` を取得し、次のように保存します。
+各Nodeの Configuration から `config.yml` を取得し、次のように保存します。Node service container は nonroot で起動するため、bind mount する `config.yml` は container 側の group `65532` が読める権限にします。
 
 ```bash
-sudo install -d -o root -g root -m 0750 /opt/autostream/node-config
-sudo install -o root -g root -m 0640 encoder-recorder.yml /opt/autostream/node-config/encoder-recorder.yml
-sudo install -o root -g root -m 0640 worker.yml /opt/autostream/node-config/worker.yml
-sudo install -o root -g root -m 0640 discord-bot.yml /opt/autostream/node-config/discord-bot.yml
-sudo install -o root -g root -m 0640 observability.yml /opt/autostream/node-config/observability.yml
+sudo install -d -m 0750 /opt/autostream/config/encoder-recorder
+sudo install -d -m 0750 /opt/autostream/config/worker
+sudo install -d -m 0750 /opt/autostream/config/discord-bot
+sudo install -d -m 0750 /opt/autostream/config/observability
+sudo install -m 0640 encoder-recorder.yml /opt/autostream/config/encoder-recorder/config.yml
+sudo install -m 0640 worker.yml /opt/autostream/config/worker/config.yml
+sudo install -m 0640 discord-bot.yml /opt/autostream/config/discord-bot/config.yml
+sudo install -m 0640 observability.yml /opt/autostream/config/observability/config.yml
+sudo chown -R root:65532 /opt/autostream/config
 ```
 
 Configure Token と Node Runtime Token は生成直後だけ表示されます。紛失した場合は Configuration で再生成します。

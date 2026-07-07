@@ -11,7 +11,7 @@ Discord Bot は、Discord の voice channel に参加し、音声と参加者状
 | guild ID | Control Panel の Discord Settings |
 | voice channel ID | Control Panel の Discord Settings |
 | text channel ID | 必要なら Control Panel の Discord Settings |
-| Discord Bot Node Agent `config.yml` | `/etc/autostream-node/config.yml` |
+| Discord Bot Node Agent `config.yml` | `/etc/autostream-discord-bot/config.yml` |
 
 Bot には voice channel への参加、音声受信、必要なメッセージ送信権限を付けます。
 
@@ -34,7 +34,7 @@ sudo install -o root -g root -m 0640 .env.example /etc/autostream/discord-bot.en
 `/etc/autostream/discord-bot.env` を編集します。
 
 ```text
-AUTOSTREAM_NODE_CONFIG=/etc/autostream-node/config.yml
+AUTOSTREAM_NODE_CONFIG=/etc/autostream-discord-bot/config.yml
 AUTOSTREAM_ENV=production
 AUTOSTREAM_REQUIRE_CONTROL_PANEL_RUNTIME_CONFIG=true
 DISCORD_RECONNECT_ENABLED=true
@@ -56,7 +56,7 @@ sudo systemctl status autostream-discord-bot
 
 1. Node登録で `discord_bot` を選び、Node名、Host、Port、SSL、説明を入力します。
 2. Configuration から `config.yml` または Auto Configure コマンドを取得します。
-3. `config.yml` を `/etc/autostream-node/config.yml` に配置して Bot を起動します。
+3. `config.yml` を `/etc/autostream-discord-bot/config.yml` に配置して Bot を起動します。
 4. Discord Settings を開きます。
 5. Bot token、guild ID、voice channel ID、text channel ID を登録します。
 6. `Bot service ID` に Node ID を指定します。
@@ -93,7 +93,7 @@ Control Panel は、その token が対象 stream の primary Discord Bot に紐
 
 ## Dockerで起動する場合
 
-Dockerでは Panel が生成した `config.yml` を `/etc/autostream-node/config.yml` へ read-only mount し、env には `AUTOSTREAM_NODE_CONFIG` を入れます。Bot token 本体は Control Panel の Discord Settings に登録します。
+Dockerでは Panel が生成した `config.yml` を `/etc/autostream-discord-bot/config.yml` へ read-only mount し、env には `AUTOSTREAM_NODE_CONFIG` を入れます。Bot token 本体は Control Panel の Discord Settings に登録します。
 
 Bot container から Control Panel と Encoder Recorder へ到達できる network に置いてください。
 

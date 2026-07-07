@@ -12,7 +12,7 @@
 | env ファイル | `.env.example` を元に `/etc/autostream/<service>.env` を作ります |
 | systemd unit | `systemd/*.service.example` を元に `/etc/systemd/system/` へ置きます |
 | Node ID | Control Panel と各サービスを対応させる固定 ID です |
-| Node Agent config | Panel が生成する `/etc/autostream-node/config.yml` またはサービス別の yml です |
+| Node Agent config | Panel が生成する `/etc/autostream-<service>/config.yml` です |
 | Node Runtime Token | `config.yml` に入る token です。登録、heartbeat、runtime config、Panel から Node への操作に使います |
 | Node Agent API | Host、Port、SSL から Panel が組み立てる API URL です |
 
@@ -38,7 +38,7 @@ Node Runtime Token と Configure Token は Node登録で生成されます。紛
 | --- | --- |
 | 実行ファイル | Control Panel は `/usr/local/bin/control-panel`、Node Agent は `/usr/local/bin/autostream-<service>` |
 | env | `/etc/autostream/<service>.env` |
-| Node config | `/etc/autostream-node/<service>.yml` |
+| Node config | `/etc/autostream-<service>/config.yml` |
 | service作業領域 | `/var/lib/autostream/<service>` |
 | 録画保存先 | `/var/lib/autostream/archives` |
 | Control Panel web assets | `/usr/share/autostream-control-panel` |
