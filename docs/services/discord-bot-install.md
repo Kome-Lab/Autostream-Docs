@@ -10,10 +10,10 @@ Discord Bot は、Discord の voice channel に参加し、音声と参加者状
 | Bot token | Control Panel の Discord Settings |
 | guild ID | Control Panel の Streams |
 | voice channel ID | Control Panel の Streams |
-| text channel ID | chat overlay を使う場合は Control Panel の Streams |
+| text channel ID | chat表示を使う場合は Control Panel の Streams |
 | Discord Bot Node Agent `config.yml` | `/etc/autostream-discord-bot/config.yml` |
 
-Bot には voice channel への参加、音声受信、配信中chatを拾う text channel の閲覧権限を付けます。chat overlay を使う場合は Discord Developer Portal で Message Content Intent を有効にします。
+Bot には voice channel への参加、音声受信、配信中chatを拾う text channel の閲覧権限を付けます。chat表示を使う場合は Discord Developer Portal で Message Content Intent を有効にします。
 
 Discord Bot service 用に AutoStream 側で手生成する token はありません。Node Runtime Token は Node登録で生成された `config.yml` に入り、Discord Bot token 本体は Discord developer portal で発行して Control Panel の Discord Settings に保存します。固定の `DISCORD_BOT_TOKEN` env は本番標準では使いません。
 
@@ -62,7 +62,7 @@ sudo systemctl status autostream-discord-bot
 3. `config.yml` を `/etc/autostream-discord-bot/config.yml` に配置します。
 4. Discord Settings を開きます。
 5. Bot token を登録します。
-6. `Bot service ID` に Node ID を指定します。
+6. `Discord BOT Node` で登録済み Discord Bot Node を選びます。
 7. Discord Bot が未起動なら起動します。先に起動して pending / dry-run になっていた場合は `sudo systemctl restart autostream-discord-bot` を実行します。
 8. Service Health で Discord Bot が online、報告バージョン、Capability を出しているか確認します。
 9. Streams で Discord Config を選び、guild ID、voice channel ID、必要なら text channel ID を配信枠に保存します。VC参加で開始する待機枠は `Discord VC参加で自動開始` をONにします。
@@ -94,7 +94,7 @@ Discord Bot は runtime config を定期的に再読込します。Bot 起動後
 | Service Health | `discord_bot` が online |
 | Runtime config preview | Discord Config が対象serviceに紐付いている |
 | Discord voice channel | Bot が配信開始時に参加する |
-| Chat overlay | 配信枠の text channel ID と Worker event 到達性 |
+| Chat 表示 | 配信枠の text channel ID と Worker event 到達性 |
 | Metrics | audio receiving、audio packets、forwarded packets が増える |
 | Incidents | voice disconnected や audio forward stale が出ていない |
 
@@ -110,7 +110,7 @@ Bot container から Control Panel と Encoder Recorder へ到達できる netwo
 | --- | --- |
 | Service Health に出ない | `AUTOSTREAM_NODE_CONFIG`、Node ID、Node Runtime Token |
 | Bot がvoice channelに入らない | Discord Bot権限、guild ID、voice channel ID、Bot token |
-| Chat overlayが出ない | text channel ID、Bot の channel閲覧権限、Message Content Intent、Worker event |
+| Chat 表示が出ない | text channel ID、Bot の channel閲覧権限、Message Content Intent、Worker event |
 | readiness が失敗する | Discord Settings と Streams の Discord Config 選択 |
 | 音声がEncoderに届かない | Encoder assignment、stream ingest token、network、Audio Bridge |
 | standbyなのにstartされない | standbyは待機用です。primaryに昇格してからstart対象になります |

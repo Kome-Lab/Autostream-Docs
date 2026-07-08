@@ -7,7 +7,7 @@ Linuxサーバーへの導入、Node Agent config、primary assignment、Worker 
 ## 役割
 
 - Control Panel から配信ジョブを受ける
-- overlay、caption、participant、active speaker event を生成する
+- caption、chat、participant、active speaker event を生成する
 - Encoder Recorder へイベントを送る
 - Control Panel へ heartbeat を送る
 - Control Panel 経由で Observability へ状態やエラーを送る
@@ -34,7 +34,7 @@ Worker は DB に直接接続せず、標準構成では Observability にも直
 | Service Health | Worker の heartbeat、自動報告された version / capability / OS / arch を確認します |
 | Worker Management | Worker を stream に primary / standby として割り当てます |
 | Streams | Worker event test、Worker Event Sidecar、Start readiness を確認します |
-| Metrics | scene updates、overlay events、caption events、send failures を確認します |
+| Metrics | scene updates、映像生成events、caption events、send failures を確認します |
 
 ## Worker Managementの項目
 
@@ -60,7 +60,7 @@ Worker だけを入れ替えるなら Worker Management、Discord Bot や Encode
 
 ## Worker event
 
-Worker は配信中の `overlay.*` と `caption.*` event を受け付け、Encoder Recorder へ転送します。
+Worker は配信中の `overlay.*` と `caption.*` event を受け付け、Encoder Recorder へ転送します。`overlay.*` は互換用の内部event namespaceで、画面上のウォーターマーク設定そのものではありません。
 
 | event type | 主な送信元 | payload |
 | --- | --- | --- |
@@ -77,7 +77,7 @@ Streams の Chat Channel ID が設定されている配信では、開始後に 
 | metric | 正常の目安 |
 | --- | --- |
 | `worker.scene_updates_total` | 配信中に必要に応じて増える |
-| `worker.overlay_events_total` | overlay を使う配信で増える |
+| `worker.overlay_events_total` | chat、参加者状態、sceneなどの映像生成eventで増える |
 | `worker.caption_events_total` | caption を使う配信で増える |
 | `worker.event_send_failures_total` | 0 付近 |
 

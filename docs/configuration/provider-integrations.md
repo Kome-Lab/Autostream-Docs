@@ -6,7 +6,7 @@ AutoStream は Discord、YouTube、Google Drive、通知先など複数の外部
 
 | 連携 | 主な値 | 置く場所 |
 | --- | --- | --- |
-| Discord | Bot token、Bot service ID、配信枠ごとの guild / voice / chat channel | Control Panel |
+| Discord | Bot token、Discord BOT Node、配信枠ごとの guild / voice / chat channel | Control Panel |
 | YouTube | RTMPS URL、stream key | Control Panel |
 | Google Drive | folder、OAuth connected account | Control Panel |
 | 通知 | Webhook URL、SMTP password | Control Panel / Observability |
@@ -16,7 +16,7 @@ AutoStream は Discord、YouTube、Google Drive、通知先など複数の外部
 
 1. Discord 側で Bot を作ります。
 2. Bot を対象 server に招待します。
-3. Control Panel の Discord Settings に Bot token と Bot service ID を登録します。
+3. Control Panel の Discord Settings に Bot token を保存し、登録済み Discord Bot Node を選びます。
 4. Streams の配信枠に guild / voice channel / 必要なら chat channel を登録します。
 5. Discord Bot service を起動します。
 6. テスト配信で voice channel へ参加するか確認します。

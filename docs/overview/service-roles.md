@@ -16,7 +16,7 @@ AutoStream は 1 つの大きなアプリではなく、役割ごとに分かれ
 | --- | --- | --- |
 | Control Panel | 管理画面、認証、設定、配信ジョブ管理 | しない |
 | Discord Bot | Discord 接続、音声取得、参加者状態 | しない |
-| Worker | ジョブ制御、overlay/caption/event 生成 | 基本しない |
+| Worker | ジョブ制御、字幕/chat/参加者event 生成 | 基本しない |
 | Encoder Recorder | FFmpeg、配信、録画、保存処理 | する |
 | Observability | 監視、通知、診断、インシデント | しない |
 

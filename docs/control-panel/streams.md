@@ -23,7 +23,7 @@ Streams では、次の作業を行います。
 2. `予定開始` と `予定終了` を入れます。Dashboard の本日の配信予定はこの日時を使います。
 3. 先に使う予定の `Discord BOT設定`、`YouTube Output`、`Encoder Profile` などを選びます。
 4. `Primary Encoder Node` と `Primary Worker Node` を選びます。Nodeが1つだけなら自動選択されます。
-5. Google Driveへ保存する場合は、Archive OAuth account、Drive Folder ID、必要に応じて共有ドライブIDと保存ファイル名を入れます。
+5. ローカル保持日数を決めます。Google Driveへ保存する場合は、Archive OAuth account、Drive Folder ID、必要に応じて共有ドライブIDと保存ファイル名も入れます。
 6. `待機用の配信枠を作成` を押します。
 7. 作成後、一覧に新しい配信枠が追加されたことを確認します。
 
@@ -39,24 +39,25 @@ Streams では、次の作業を行います。
 | Discord Config | Discord Bot 設定 | Discord 連携なし、または開始前チェックで不足になります | 通常は必須です |
 | Discord Guild ID | Bot が入る Discord server の ID | Discord 音声なし、または readiness 不足 | 配信枠ごとに必ず指定します |
 | VC Channel ID | Bot が参加する voice channel の ID | Discord 音声なし、または readiness 不足 | VC参加auto-startの判定にも使います |
-| Chat Channel ID | 配信画面へ載せる text channel の ID | chat overlay なし | 配信開始後の新規messageを Worker へ送ります |
+| Chat Channel ID | 配信画面へ載せる text channel の ID | chat表示なし | 配信開始後の新規messageを Worker へ送ります |
 | Discord VC参加で自動開始 | 対象VCへの参加を開始条件にするか | 手動開始だけ | 待機枠として自動運用する配信だけONにします |
 | Encoder Profile | 解像度、fps、bitrate などの profile | 既定または未指定扱い | 配信品質を変える時に使います |
 | Caption Profile | 字幕/STT の profile | 字幕なし | 字幕を使う配信だけ選びます |
-| Overlay Profile | overlay 表示の profile | overlay なし、または既定 | 参加者表示や時刻表示などを使う時に選びます |
+| Watermark Profile | 配信映像へ載せる画像の profile | ウォーターマークなし | ロゴ画像を配信枠ごとにON/OFFする時に選びます |
 | Primary Encoder Node | 配信と録画を担当する Encoder Recorder | 自動開始枠では作成できません | `services.assign` 権限がある場合に表示されます |
-| Primary Worker Node | overlay、caption、chat event を担当する Worker | 自動開始枠では作成できません | `workers.assign` 権限がある場合に表示されます |
+| Primary Worker Node | caption、chat、参加者状態 event を担当する Worker | 自動開始枠では作成できません | `workers.assign` 権限がある場合に表示されます |
 | Archive OAuth Account | Google Drive保存に使う接続アカウント | Drive uploadなし | 録画をGoogle Driveへ保存する配信で選びます |
 | Drive Folder ID | 保存先folder ID | Drive uploadなし | 保存先folderを配信枠ごとに指定します |
 | 共有ドライブID | 共有ドライブを使う場合のdrive ID | 通常Driveとして扱います | 共有ドライブ保存を有効にした時だけ入れます |
 | 保存ファイル名 | Drive上のMP4名 | `配信枠名-年月日.mp4` | 顧客名や番組名で後から探しやすくします |
+| ローカル保持日数 | Encoder Recorder に残す final artifact の日数 | 30日 | Drive uploadなしでもローカル管理したい配信で指定します |
 | YouTube Output | 配信先 | 外部配信なし、または開始前チェックで不足 | 本番配信では通常選びます |
 | Encoder Input URL | Discord 以外の映像入力 URL | Discord 音声と生成映像を使う | 外部映像や中継 input を使う時だけ入れます |
 | RTMP URL | start 時に直接渡す RTMP/RTMPS URL | YouTube Output の設定を使います | 通常は YouTube Output 側で管理します |
 
 ## Discord channel 指定の考え方
 
-Discord Settings は Bot token と Bot service ID だけを持ちます。実際に入る guild / voice / chat channel は Streams の配信枠へ保存します。
+Discord Settings は Bot token と登録済み Discord Bot Node だけを持ちます。実際に入る guild / voice / chat channel は Streams の配信枠へ保存します。
 
 | 運用 | Streams に保存する値 | 補足 |
 | --- | --- | --- |
@@ -85,7 +86,7 @@ Discord Settings は Bot token と Bot service ID だけを持ちます。実際
 | サービス種別 | 役割 | 不足時に起きること |
 | --- | --- | --- |
 | `discord_bot` | voice channel 参加、音声取得、音声転送 | Discord 音声が使えません |
-| `worker` | overlay、caption、参加者状態などの event 生成 | 表示イベントや字幕が流れません |
+| `worker` | caption、chat、参加者状態などの event 生成 | 映像生成イベントや字幕が流れません |
 | `encoder_recorder` | FFmpeg、配信、録画、upload | 配信と録画ができません |
 
 Streamsの作成画面で `Primary Encoder Node` と `Primary Worker Node` を選ぶと、配信枠の作成と同時に primary assignment が保存されます。Discord Bot は Streamsで選んだ `Discord BOT設定` の Node ID を使って待機枠を受け取り、VC参加による開始要求の直前に Control Panel が primary assignment を作ります。

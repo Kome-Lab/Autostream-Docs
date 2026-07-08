@@ -12,6 +12,7 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 - FFmpeg による live output
 - MKV 録画と MP4 化
 - Google Drive など保存先への upload
+- Control Panel からの local archive download / rename / delete
 - metric と failure signal の送信
 
 ## host側で必要なもの
@@ -44,6 +45,7 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 | Integrations | Google OAuth connected account、生成済みDrive destinationの確認 |
 | Archive Settings | 互換用のupload、dry-run、retention、Drive destination |
 | Streams | Encoder Profile、Archive OAuth account、Drive Folder ID、YouTube Output、input URL、preflight |
+| Archive | local artifact の download、rename、delete、Drive upload 結果の確認 |
 | Metrics / Incidents | FFmpeg、録画、upload、audio bridge の状態 |
 
 ## 本番での注意
@@ -58,7 +60,8 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 4. Control Panel で online を確認します。
 5. 短いテスト配信を行います。
 6. `final.mkv` と `final.mp4` が作られるか確認します。
-7. 保存先への upload 結果を確認します。
+7. Control Panel の Archive で local artifact を download できるか確認します。
+8. 保存先への upload 結果を確認します。
 
 ## Streamsで見る項目
 
@@ -69,7 +72,7 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 | RTMP URL | 直接出力先を指定したい時の補助項目 |
 | Encoder host preflight | ffmpeg、archive dir、output 設定の準備状態 |
 | Audio Bridge | Discord Bot から音声 packet が届いているか |
-| Archive / upload | final MKV / MP4、upload status、retry 状態 |
+| Archive / upload | final MKV / MP4、local artifact、upload status、retry 状態 |
 
 ## metricの見方
 
