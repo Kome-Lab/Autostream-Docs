@@ -14,7 +14,7 @@ Linuxサーバーへの配置、systemd、Docker、初回起動、公開URL、da
 | --- | --- | --- |
 | 配信運用 | Streams | stream、start / stop、readiness、service assignment |
 | 配信先 | YouTube Outputs | RTMPS URL、stream key、Live API 設定 |
-| Discord | Discord Settings | Bot token、guild、voice channel、audio forward |
+| Discord | Discord Settings + Streams | Bot token、Bot service ID、配信枠ごとの guild / voice channel、audio forward |
 | 録画保存 | Archive Settings、Integrations | archive profile、Drive destination、upload dry-run |
 | サービス | Service Health、Node登録 | Node Runtime Token、heartbeat、capability、runtime config |
 | ユーザー | Users、Roles、Security Settings | user、role、MFA、Passkey、secret 更新 |
@@ -72,7 +72,7 @@ raw secret は再表示できません。値を忘れた場合は、元 provider
 | --- | --- |
 | 今日の配信が始められるか確認 | Dashboard、Streams |
 | サービスが落ちていないか確認 | Service Health |
-| Discord channel を変える | Streams の override、または Discord Settings |
+| Discord channel を変える | Streams の Discord Guild ID / VC Channel ID / Chat Channel ID |
 | 配信先を変える | YouTube Outputs、Streams |
 | 録画保存先を変える | Integrations、Archive Settings |
 | 通知先を追加する | Notification Channels |

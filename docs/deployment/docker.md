@@ -374,20 +374,9 @@ Control Panel UI で登録します。compose `.env` に直接入れないでく
 | webhook URL | Notification channel |
 | SMTP password | Email notification channel |
 
-Service Account fallback を使う場合だけ、credential JSON を host に置き、container に read-only mount します。
+Google Drive の archive upload は Service Account fallback を使いません。Control Panel の配信枠設定で OAuth account、folder ID、必要に応じて shared drive ID と archive file name を指定します。
 
-```yaml
-services:
-  encoder-recorder:
-    volumes:
-      - /opt/autostream/secrets/google-service-account.json:/etc/autostream/google-service-account.json:ro
-    environment:
-      GOOGLE_DRIVE_AUTH_MODE: service_account
-      GOOGLE_APPLICATION_CREDENTIALS: /etc/autostream/google-service-account.json
-      GOOGLE_DRIVE_FOLDER_ID: <DRIVE_FOLDER_ID>
-```
-
-この fallback を使う場合も、JSON の中身と Drive folder ID を evidence、logs、docs に残さないでください。
+Encoder/Recorder の container へ Google credential JSON を mount しないでください。Drive folder ID、OAuth client secret、refresh token は Control Panel の runtime secret lease で Encoder/Recorder へ渡され、request body、env、logs、docs には残しません。
 
 ## 11. 起動後の確認
 

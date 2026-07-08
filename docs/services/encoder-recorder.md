@@ -41,9 +41,9 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 | Service Health | heartbeat、自動報告された version / capability / OS / arch |
 | Encoder Profiles | 解像度、fps、bitrate、FFmpeg profile |
 | YouTube Outputs | RTMPS URL、stream key、Live API 設定 |
-| Integrations | Google OAuth connected account、Drive destination |
-| Archive Settings | upload、dry-run、retention、Drive destination |
-| Streams | Encoder Profile、Archive Profile、YouTube Output、input URL、preflight |
+| Integrations | Google OAuth connected account、生成済みDrive destinationの確認 |
+| Archive Settings | 互換用のupload、dry-run、retention、Drive destination |
+| Streams | Encoder Profile、Archive OAuth account、Drive Folder ID、YouTube Output、input URL、preflight |
 | Metrics / Incidents | FFmpeg、録画、upload、audio bridge の状態 |
 
 ## 本番での注意

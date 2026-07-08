@@ -1,6 +1,6 @@
 # サービス割り当て
 
-Service Health と Worker Management は、起動済みサービスを stream に割り当てる画面です。配信が始まらない時は、まずここを確認します。
+Service Health と Worker Management は、起動済みサービスを stream に割り当てる画面です。新しい配信枠では Streams 画面から Primary Encoder Node と Primary Worker Node を選べます。あとから割り当てを変更する場合や、配信が始まらない場合はここを確認します。
 
 ## 登録されるサービス
 

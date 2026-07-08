@@ -66,9 +66,11 @@ sudo systemctl status autostream-observability
 | type | 入力するもの |
 | --- | --- |
 | `discord` | Webhook URL、severity filter |
-| `slack` | Webhook URL、severity filter |
-| `generic` | 任意のWebhook URL、header設定 |
+| `slack` | Slack Incoming Webhook URL、severity filter |
+| `generic` | 任意の公開 HTTPS Webhook URL、severity filter |
 | `email` | SMTP host、port、TLS、recipients、password |
+
+Slack は Slack App の Incoming Webhooks から `https://hooks.slack.com/services/...` を発行し、Control Panel の Notification Channels に貼り付けます。email は recipients を改行またはカンマで指定し、SMTP password は保存後に再表示されません。
 
 本番ではprivate network向けWebhookやSMTPを安易に許可しないでください。通知先は外部到達性と送信先を確認してから登録します。
 
@@ -92,6 +94,7 @@ Observability は heartbeat、disk、upload retry、packet loss、encoder fps、
 | --- | --- |
 | Service Health | `observability` が online |
 | Signal ingest | Worker / Encoder Recorder のmetricが Control Panel 経由で届く |
+| Metrics | `observability.goroutines`、heap、uptime と各service metricが表示される |
 | Monitoring Dashboard | incident、metric、deliveryが表示される |
 | Test Channel | 通知が届く |
 | Delivery History | raw URLやpasswordが表示されない |
@@ -104,8 +107,21 @@ Observability は heartbeat、disk、upload retry、packet loss、encoder fps、
 | 起動しない | `DATABASE_URL`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_NODE_CONFIG` |
 | signalが届かない | Observability Node登録、Worker / Encoder Recorder の Node Runtime Token、Control Panel のログ |
 | Control Panelから読めない | Observability Node の Host / Port / SSL、`OBSERVABILITY_BIND_ADDR`、firewall、reverse proxy |
+| 公開URLの `/` が想定外 | root `/` は安全な状態JSONだけを返します。Metrics は Control Panel の Metrics 画面、または token付き `/metrics` で確認します |
+| OS / Arch が未取得 | `autostream-observability configure` を最新binaryで実行したか、`config.yml` の保存先と `AUTOSTREAM_NODE_CONFIG` が一致しているか、heartbeat が成功しているか |
 | 通知が届かない | channel設定、network、severity filter、delivery history |
 | 通知が多すぎる | threshold、event type filter、severity filter |
+
+OS / Arch や Metrics が出ない場合は、まず次を確認します。
+
+```bash
+command -v autostream-observability
+autostream-observability --version
+sudo -u autostream test -r /etc/autostream-observability/config.yml
+journalctl -u autostream-observability -n 100 --no-pager
+```
+
+`/metrics` は token 保護されています。ブラウザで直接開くのではなく、通常は Control Panel の Metrics 画面で確認します。
 
 ## 次に読むページ
 

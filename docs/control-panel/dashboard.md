@@ -1,54 +1,44 @@
 # ダッシュボード
 
-Dashboard は、AutoStream を開いたときに最初に見る運用サマリーです。細かい設定をする場所ではなく、「今すぐ注意が必要か」を判断する画面です。
+Dashboard は、AutoStream を開いたときに最初に見る運用サマリーです。設定や本番前チェックを行う画面ではなく、配信枠、Node、監視値、最近の操作から「今見るべきもの」を判断します。
 
 ## 表示されるカード
 
-| カード | 見る内容 | 正常の目安 | 異常時に見る画面 |
+| カード | 見る内容 | 正常の目安 | 次に見る画面 |
 | --- | --- | --- | --- |
-| Active Stream | 配信中または開始中の stream | `No active stream` または想定した stream 名 | [配信画面](/control-panel/streams) |
-| Services | online のサービス数 | 必要サービスがすべて online | [サービス割り当て](/control-panel/services-workers) |
-| Workers | 登録済み Worker 数 | 1 台以上。冗長化するなら standby も登録 | [サービス割り当て](/control-panel/services-workers) |
-| Current User | ログイン中ユーザー | 自分の管理者アカウント | [ユーザーとセキュリティ](/control-panel/users-roles-security) |
-| Open Incidents | 未解決の異常数 | 0 | [監視と通知](/control-panel/observability) |
-| Pending Remediation | 承認待ち・提案中の対応数 | 0 | [監視と通知](/control-panel/observability) |
+| 配信中 | `live` または `starting` の配信数 | 想定した本番配信だけが入っている | [配信画面](/control-panel/streams) |
+| 予約・準備 | `created`、`draft`、`scheduled`、`ready` の配信枠数 | 今日または次回の待機枠が見える | [配信画面](/control-panel/streams) |
+| 要確認 | `failed` または `error` の配信数 | 0 | [インシデント](/control-panel/observability) |
+| オンラインNode | online の Node 数 / 登録Node数 | 必要な Node が online | [Node登録](/control-panel/node-agent-registration) |
 
-## Metric summary の見方
+## 配信状態
 
-Dashboard には Encoder、Audio、Worker、Archive の代表 metric が出ます。
+配信状態グラフは、進行中、待機中、要確認の配信枠があるときだけ表示します。配信枠がまだない、または完了済みの履歴だけの場合はグラフではなく空状態を表示します。
 
-| 領域 | 代表項目 | 何を見るか |
-| --- | --- | --- |
-| Encoder / Recorder | Encoder Process、Output FPS、Output Bitrate、Dropped Frames | FFmpeg が動いているか、出力品質が落ちていないか |
-| Audio / Input Health | Discord Audio、Discord Packets、Input Timeout、Audio Silence | Discord 音声が届いているか、無音や入力 timeout がないか |
-| Worker Event Metrics | Scene Updates、Overlay Events、Caption Events、Event Send Failures | Worker から Encoder Recorder へイベントが流れているか |
-| Archive / Google Drive Metrics | Package Status、Final MKV、Final MP4、Google Drive Upload | 録画と upload が最後まで終わっているか |
-
-## 毎回見るポイント
-
-配信前は、次の 4 つだけでも確認してください。
-
-1. Active Stream が意図しない配信中状態になっていない。
-2. Services が必要台数 online になっている。
-3. Open Incidents が 0、または既知の軽微なものだけである。
-4. Archive / Google Drive Metrics に前回配信の未完了が残っていない。
-
-## ここで異常を見つけたら
-
-| 見つけた状態 | 対応 |
+| 状態 | 含まれる status |
 | --- | --- |
-| Services が少ない | Service Health で warning / offline / unconfigured のサービスを確認します |
-| Open Incidents がある | Incidents で severity、service、stream、summary を確認します |
-| Pending Remediation がある | Remediation Actions で承認が必要か確認します |
-| Output FPS が低い | Encoder Recorder の host 負荷、入力 URL、FFmpeg log を確認します |
-| Discord Audio が not receiving | Discord Bot の接続、voice channel 権限、音声転送状態を確認します |
-| Google Drive Upload が failed | Archive Settings と Drive destination を確認し、必要なら Retry Upload を使います |
+| 配信中 | `live`、`starting` |
+| 予約・準備 | `created`、`draft`、`scheduled`、`ready` |
+| 要確認 | `failed`、`error` |
+| 停止・完了 | `stopped`、`completed` など |
 
-## Dashboardだけで判断しないもの
+## Metrics
 
-Dashboard は概要です。次の作業は、必ず専用画面で確認してください。
+Metrics は Observability から届いた最新値と、Control Panel が Node heartbeat で受け取った最新値を表示します。まだ metric が届いていない場合は空状態になります。
 
-- 配信開始前の最終確認: [配信画面](/control-panel/streams)
-- サービスの割り当て変更: [サービス割り当て](/control-panel/services-workers)
-- 通知先の追加や test: [監視と通知](/control-panel/observability)
-- ユーザー追加や権限変更: [ユーザーとセキュリティ](/control-panel/users-roles-security)
+| 代表 metric | 見るポイント |
+| --- | --- |
+| `worker.cpu_percent`、`worker.memory_percent` | Worker の負荷 |
+| `encoder.process_alive`、fps、bitrate | Encoder / Recorder が動いているか |
+| `discord.audio_forward_active` | Discord 音声転送が有効か |
+| `observability.goroutines`、heap、uptime | Observability 自体が動いているか |
+
+## 本日の配信予定
+
+本日の配信予定には、Settings のタイムゾーンで当日の `scheduled_start_at` を持つ配信枠を表示します。当日予定がまだない場合でも、待機中の配信枠があれば最大 5 件まで表示します。
+
+配信開始の判断は、Dashboard だけでは行いません。実際の開始、停止、割り当て変更は Streams 画面で行い、異常があれば Service Health、Incidents、Metrics を確認します。
+
+## 最近の操作
+
+最近の操作には Audit Log の直近イベントを表示します。意図しない Start、Stop、設定変更、通知設定変更があれば、Audit Logs で詳細を確認します。

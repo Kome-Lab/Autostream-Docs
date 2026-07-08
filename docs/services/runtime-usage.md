@@ -35,7 +35,7 @@ Control Panel は運用者が触る中心画面です。
 1. Dashboard で Open Incidents と Services を見ます。
 2. Streams で対象配信を選びます。
 3. Check Readiness を押します。
-4. Service Health で必要サービスが primary になっているか見ます。
+4. Streams の配信枠で Primary Encoder Node と Primary Worker Node を選び、Service Health で必要サービスが primary になっているか見ます。
 5. Start / Stop 後は Audit Logs と Metrics を確認します。
 
 ### 初回に最低限やること
@@ -66,9 +66,9 @@ Discord Bot は、Discord の voice channel に入り、音声を受け取り、
 
 | Control Panelで設定するもの | 用途 |
 | --- | --- |
-| Discord Settings | Bot token、guild、voice channel、audio forward |
+| Discord Settings | Bot token、Bot service ID、audio forward、reconnect |
 | Streams の Discord Config | どの配信でどのDiscord設定を使うか |
-| Streams の Discord override | 配信ごとに別channelを使う場合 |
+| Streams の Discord channel | 配信ごとの guild、voice channel、chat channel |
 | Service Health | Botがonlineか、audio forward capabilityがあるか |
 | Metrics | audio receiving、packets、forward errors |
 
@@ -87,12 +87,14 @@ Discord Bot は、Discord の voice channel に入り、音声を受け取り、
 2. Discord Bot の env に `AUTOSTREAM_NODE_CONFIG` を入れ、Panel が生成した `config.yml` を読ませます。
 3. Discord Bot を起動します。
 4. Service Health で `discord_bot` が online になることを確認します。
-5. Discord Settings で Bot token、guild ID、voice channel ID を保存します。
-6. Streams で Discord Config を選びます。
+5. Discord Settings で Bot token と Bot service ID を保存します。
+6. Streams で Discord Config、Discord Guild ID、VC Channel ID、必要なら Chat Channel ID を保存します。VC参加で開始する待機枠は `Discord VC参加で自動開始` をONにし、Primary Encoder Node と Primary Worker Node も選びます。
 7. Check Readiness で Discord 関連の不足がないことを確認します。
 8. Start 後、Streams の Discord audio と Encoder audio bridge を見ます。
 
-Discord VC へのユーザー参加でも stream auto-start が動きます。Bot は runtime config にある stream / guild / voice channel 対応を使い、対象 stream の開始を Control Panel に要求します。Control Panel は primary Discord Bot の Node Runtime Token と `streams.start` scope を確認してから開始します。
+Discord VC へのユーザー参加でも stream auto-start が動きます。Bot は runtime config にある stream / guild / voice channel / auto-start trigger 対応を使い、`Discord VC参加で自動開始` がONの待機streamだけを Control Panel に開始要求します。runtime config には、Streamsで選んだDiscord Configの `service_id` がそのBot Node IDと一致する待機枠が入ります。Control Panel は Node Runtime Token、`streams.start` scope、保存済みtrigger、待機状態を確認し、開始直前に対象streamへ primary Discord Bot assignment を作ります。明示的に別Botが primary assigned されているstreamは上書きしません。Bot は runtime config を定期的に再読込するため、起動後に追加した待機枠も次回 refresh 後に候補になります。
+
+Stream settings に text channel ID がある場合、配信開始後にその channel へ投稿された新規messageは Worker event の `overlay.discord_chat` として送られます。Discord 側では Bot の channel閲覧権限と Message Content Intent が必要です。
 
 ### 配信中に見る項目
 
@@ -143,7 +145,7 @@ Worker は、配信中に発生するイベントを処理します。overlay、
 2. Worker の env に `AUTOSTREAM_NODE_CONFIG` を入れ、Panel が生成した `config.yml` を読ませます。
 3. Worker を起動します。
 4. Service Health で online / healthy を確認します。
-5. Worker Management または Service Health で対象 stream に primary として割り当てます。
+5. Streams の配信枠作成時に Primary Worker Node として選びます。あとから変更する場合は Worker Management または Service Health で対象 stream に primary として割り当てます。
 6. Streams で Overlay Profile または Caption Profile を選びます。
 7. Worker event test を実行します。
 8. 配信中は Worker events、Event Send Failures、Scene Updates を確認します。
@@ -155,6 +157,7 @@ Worker は、配信中に発生するイベントを処理します。overlay、
 | overlay を出す | Overlay Settings、Worker assignment | Streams の Worker events |
 | caption を出す | Caption/STT Settings、Worker assignment | Caption event test |
 | 参加者状態を表示 | Worker event、Discord Bot 状態 | Worker events、Metrics |
+| Discord chatを表示 | Streams の text channel ID、Bot 権限 | Worker events、Discord Bot logs |
 | standby を用意 | Worker Management | Service Health の assignment |
 
 Worker が online でも、stream に primary として割り当てられていなければ Start の dispatch 対象になりません。
@@ -199,7 +202,7 @@ Encoder Recorder は、映像と音声を受け取り、FFmpegで配信、録画
 4. Encoder Recorder を起動します。
 5. Service Health で online / healthy を確認します。
 6. Encoder Profiles、Archive Settings、YouTube Outputs を Control Panel で作ります。
-7. Streams で Encoder Recorder を primary に割り当て、profile と配信先を選びます。
+7. Streams の配信枠作成時に Primary Encoder Node として選び、profile と配信先を選びます。あとから変更する場合は Service Health で primary assignment を更新します。
 8. Check Readiness と Encoder host preflight を確認します。
 9. Start 後は FPS、bitrate、dropped frames、archive、upload を見ます。
 

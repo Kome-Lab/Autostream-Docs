@@ -58,6 +58,20 @@ Worker だけを入れ替えるなら Worker Management、Discord Bot や Encode
 | Worker Event Sidecar | event の一覧や最終到達状態 |
 | Start Readiness | Worker assignment と capability が満たされているか |
 
+## Worker event
+
+Worker は配信中の `overlay.*` と `caption.*` event を受け付け、Encoder Recorder へ転送します。
+
+| event type | 主な送信元 | payload |
+| --- | --- | --- |
+| `overlay.current_time` | Worker event test | 現在時刻 |
+| `overlay.participants` | Discord Bot | `participants` |
+| `overlay.active_speaker` | Discord Bot | `user_id`, `display_name` |
+| `overlay.discord_chat` | Discord Bot | `message_id`, `user_id`, `display_name`, `text`, `text_channel_id`, `created_at` |
+| `caption.telop` | Worker event test / caption連携 | `text`, `speaker_user_id` |
+
+Streams の Chat Channel ID が設定されている配信では、開始後に Discord Bot が対象 text channel の新規messageだけを `overlay.discord_chat` として Worker へ送ります。Worker は payload 内の token や secret を要求しません。
+
 ## metricの見方
 
 | metric | 正常の目安 |

@@ -4,9 +4,9 @@
 
 ## Discord Settings
 
-Discord Settings は、Discord Bot がどの server / channel に入るか、どの token を使うかを登録する画面です。
+Discord Settings は、Discord Bot Node と Bot token、音声転送、再接続ポリシーを登録する画面です。Bot が入る guild / voice channel と chat overlay 用 text channel は Streams の配信枠で指定します。
 
-Discord Bot の登録は OAuth ログインではありません。Discord developer portal で発行した Bot token を Control Panel に保存し、Discord Bot service は runtime config と runtime secret resolve でその token を受け取ります。Integrations の OAuth は、Google / YouTube / Drive 連携用です。
+Discord Bot の登録は OAuth ログインではありません。Discord developer portal で発行した Bot token を Control Panel に保存し、Discord Bot service は runtime config と runtime secret resolve でその token を受け取ります。Integrations の OAuth Provider は管理画面ログイン用で、YouTube / Drive の権限は OAuth Connected Account として接続します。
 
 ### 入力項目
 
@@ -15,17 +15,12 @@ Discord Bot の登録は OAuth ログインではありません。Discord devel
 | Existing config | 編集対象 | 新規作成 |
 | Name | 設定名 | 保存できません |
 | Bot service ID | この設定を読む Discord Bot の Node ID | Bot 側で一致しないと runtime config を受けられません |
-| Guild ID | Discord server の ID | Streams 側で override しない限り不足 |
-| Voice channel ID | Bot が参加する voice channel の ID | Streams 側で override しない限り不足 |
-| Text channel ID | 通知や補助投稿に使う channel ID | 任意 |
 | Bot token | Discord Bot token | 既存編集時は空欄なら保持 |
-| STT profile ID | 字幕/STT 用 profile ID | 任意 |
 | Enable audio forward | Discord 音声を Encoder Recorder へ送る | off だと音声配信に使えません |
 | Reconnect voice automatically | voice 切断時に再接続する | off だと手動対応が増えます |
 | Reconnect attempts | 再接続試行回数 | 1 以上が必要 |
 | Reconnect base delay | 最初の再接続待ち | 例: `2s` |
 | Reconnect max delay | 最大待ち時間 | 例: `30s` |
-| Enable captions/STT forwarding | 字幕/STT 連携を有効化 | 字幕を使わない場合は off |
 
 ### 作成手順
 
@@ -36,22 +31,25 @@ Discord Bot の登録は OAuth ログインではありません。Discord devel
 5. Service Health で Discord Bot が online になったことを確認します。
 6. Discord Settings を開きます。
 7. `Bot service ID` に online になっている Discord Bot の Node ID を入れます。
-8. guild、voice channel、必要なら text channel を入れます。
-9. Bot token を保存します。
-10. Streams でこの Discord Config を選び、Check Readiness を実行します。
+8. Bot token を保存します。
+9. Streams でこの Discord Config を選び、配信枠ごとの Discord Guild ID、VC Channel ID、必要なら Chat Channel ID を保存します。VC参加で開始する待機枠は `Discord VC参加で自動開始` をONにします。
+10. Check Readiness を実行します。
 
 ### VC参加で自動開始されるか
 
-Discord Bot が primary assignment になっていて、Node Runtime Token に `streams.start` scope があり、runtime config に対象 stream の Discord Config が配布されている場合、対象 VC にユーザーが参加すると Control Panel に auto-start を要求します。
+Discord Bot が primary assignment になっていて、Node Runtime Token に `streams.start` scope があり、runtime config に対象 stream の Discord Config と `auto_start_trigger: discord_voice_join` が配布されている場合、対象 VC にユーザーが参加すると Control Panel に auto-start を要求します。
 
-1. ユーザーが Discord Config に紐づく voice channel に参加します。
+1. ユーザーが Streams の配信枠に保存した voice channel に参加します。
 2. Discord Bot が VoiceStateUpdate を受け取り、guild / voice channel から対象 stream を特定します。
 3. Discord Bot が `POST /services/streams/{id}/start` を Node Runtime Token で呼びます。
-4. Control Panel は、その token が対象 stream の primary Discord Bot に紐づく場合だけ開始を許可します。
+4. Control Panel は、その token が対象 stream の primary Discord Bot に紐づき、配信枠が `Discord VC参加で自動開始` ONの待機状態である場合だけ開始を許可します。
 5. Control Panel が Discord Bot、Worker、Encoder Recorder へ通常の start job を送ります。
 6. Bot が voice channel に参加し、stream が active になった後は参加/退出を参加者状態として記録します。
+7. Stream settings の Text channel ID がある場合、開始後にその channel へ投稿された新規messageを Worker へ `overlay.discord_chat` として送ります。
 
-auto-start は保存済みの Stream settings だけを使います。Discord Bot からの要求 body で YouTube Output、Discord Config、入力URLを上書きすることはできません。同じ guild / voice channel に複数 stream が紐づく場合は、誤配信を避けるため自動開始しません。
+auto-start は保存済みの Stream settings だけを使います。Discord Bot からの要求 body で YouTube Output、Discord Config、入力URLを上書きすることはできません。同じ guild / voice channel に複数の auto-start 有効streamが紐づく場合は、誤配信を避けるため自動開始しません。
+
+Discord Bot は runtime config を定期的に再読込するため、Bot起動後に追加した待機中の配信枠も、次回 refresh 後に VC参加auto-startの候補になります。refresh間隔は Discord Bot の `CONTROL_PANEL_RUNTIME_CONFIG_REFRESH_INTERVAL` で調整できます。
 
 ### よくある確認ポイント
 
@@ -60,8 +58,9 @@ auto-start は保存済みの Stream settings だけを使います。Discord Bo
 | Bot が voice channel に入らない | Bot の招待、Discord 権限、Guild ID、Voice channel ID |
 | Bot は入るが音声が流れない | Enable audio forward、Encoder Recorder 割り当て、Audio Bridge |
 | 接続が何度も切れる | Reconnect attempts、Reconnect delay、Discord 側の network 状態 |
-| 字幕が出ない | Enable captions/STT forwarding、Caption Profile、Worker events |
-| Streams 側で別 channel を使いたい | Streams の Discord override |
+| Chat overlay が出ない | Streams の Text channel ID、Discord Bot の Message Content Intent、Worker event 到達性 |
+| 字幕が出ない | Caption Profile、Worker events |
+| Streams 側で別 channel を使いたい | Streams の Discord Guild ID / VC Channel ID / Chat Channel ID |
 
 ## YouTube Outputs
 

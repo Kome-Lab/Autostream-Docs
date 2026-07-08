@@ -21,7 +21,7 @@ for (const repo of optionalSiblingRepos) {
 
 const extensions = new Set(['.md', '.txt', '.yaml', '.yml', '.json']);
 const includeNames = new Set(['.env.example']);
-const skipDirs = new Set(['node_modules', 'dist', '.vitepress', '.git']);
+const skipDirs = new Set(['node_modules', 'dist', '.vitepress', '.git', '.next', 'out', 'coverage']);
 const skipFiles = new Set(['check-secrets.mjs']);
 
 const detectors = [
