@@ -39,9 +39,19 @@ Node登録で入力する項目は次だけです。
 | `config.yml` | `/etc/autostream-<service>/config.yml` に保存します |
 | Auto Configure command | service binary の `configure` サブコマンドで `config.yml` を取得して保存するコマンド |
 
-Configure Token と Node Runtime Token は作成直後だけ表示します。紛失した場合は Configuration から再生成してください。DB には Configure Token をハッシュで、Node Runtime Token を暗号化して保存します。
+Configure Token と Node Runtime Token は作成直後だけ表示します。紛失した場合や期限切れの場合は、登録済みNodeの操作から再生成してください。DB には Configure Token をハッシュで、Node Runtime Token を暗号化して保存します。
 
 作成した Node は、同じ Node登録画面の「登録済みNode」一覧で確認できます。この一覧は Node登録に必要な情報と、Node が heartbeat で送った安全化済みの capability / 数値 metrics summary を表示します。Auto Configure command を Node 側で実行する前は `pending` / 接続待ちとして表示されます。最新の service binary で Auto Configure command を実行すると version、hostname、OS、arch が報告され、起動後の heartbeat で online、capability、metrics が更新されます。運用監視の詳細値は Service Health と Metrics で確認します。
+
+登録済みNodeの操作列では、次の管理ができます。
+
+| 操作 | 用途 | 注意 |
+| --- | --- | --- |
+| Configuration表示 | `config.yml` と Auto Configure command を確認 | 生の token は通常表示しません |
+| Configure Token再生成 | 期限切れ、紛失、未使用tokenの作り直し | 再生成後の token は一度だけ表示します |
+| Runtime Token再生成 | 漏えい疑い、紛失、Node側token更新 | 既存 Runtime Token は無効になります。対象Nodeの `config.yml` を更新して再起動してください |
+| 編集 | Node名、説明、Host、Port、SSL を変更 | Node ID と Node type は変更できません |
+| 削除 | Node登録、割り当て、Runtime Token を無効化 | 削除後は同じ Node ID で作り直してください |
 
 共通の Node 実行ファイルはありません。Node 側では Worker、Encoder Recorder、Discord Bot、Observability の各サービス binary に `configure` サブコマンドがあります。Panel が表示する Auto Configure command は正規の `autostream-<service>` コマンドを使う 1 行のコマンドです。
 
