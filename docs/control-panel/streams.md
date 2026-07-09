@@ -10,7 +10,7 @@ Streams では、次の作業を行います。
 - 既存配信を選ぶ
 - Discord、YouTube、Encoder、Archive 保存先などの設定を配信に紐づける
 - Discord guild / voice channel / chat channel を配信ごとに指定する
-- 予定開始、予定終了を保存して Dashboard の本日の配信予定へ反映する
+- 予定開始、予定終了を保存して Streams 上で確認する
 - Encoder input URL を指定する
 - 必要サービスを primary / standby として割り当てる
 - 開始前チェックを実行する
@@ -20,7 +20,7 @@ Streams では、次の作業を行います。
 ## 配信を新規作成する
 
 1. `配信枠名` に番組名や案件名を入れます。
-2. `予定開始` と `予定終了` を入れます。Dashboard の本日の配信予定はこの日時を使います。
+2. `予定開始` と `予定終了` を入れます。Streams の一覧や詳細ではこの日時を使います。
 3. 先に使う予定の `Discord BOT設定`、`YouTube Output`、`Encoder Profile` などを選びます。
 4. `Primary Encoder Node` と `Primary Worker Node` を選びます。Nodeが1つだけなら自動選択されます。
 5. ローカル保持日数を決めます。Google Driveへ保存する場合は、Archive OAuth account、Drive Folder ID、必要に応じて共有ドライブIDと保存ファイル名も入れます。
@@ -33,8 +33,8 @@ Streams では、次の作業を行います。
 
 | 項目 | 入れるもの | 空欄にした場合 | よくある使い方 |
 | --- | --- | --- | --- |
-| 配信枠名 | 番組名、案件名、イベント名 | 作成できません | Dashboard、通知、監査ログで探しやすい名前にします |
-| 予定開始 | 配信を開始する予定日時 | Dashboard の予定に出ません | 今日の配信予定や待機枠の確認に使います |
+| 配信枠名 | 番組名、案件名、イベント名 | 作成できません | Streams、通知、監査ログで探しやすい名前にします |
+| 予定開始 | 配信を開始する予定日時 | 予定時刻なし | 配信予定や待機枠の確認に使います |
 | 予定終了 | 配信を終了する予定日時 | 終了予定なし | 長時間枠や議会中継などの見通しに使います |
 | Discord Config | Discord Bot 設定 | Discord 連携なし、または開始前チェックで不足になります | 通常は必須です |
 | Discord Guild ID | Bot が入る Discord server の ID | Discord 音声なし、または readiness 不足 | 配信枠ごとに必ず指定します |

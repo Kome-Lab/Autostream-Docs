@@ -29,14 +29,13 @@ Control Panel は設定を保存するだけでなく、各サービスへ配信
 
 ## Dashboard
 
-Dashboard は、配信枠と監視状態を最初に見る画面です。ここでは本番前チェックや設定変更は行わず、「今動いている配信」「今日動く予定の配信」「今すぐ見るべき異常」を判断します。
+Dashboard は、配信枠とNode接続状態を最初に見る画面です。ここでは本番前チェックや設定変更は行わず、「今動いている配信」「待機中の配信枠」「今すぐ見るべき異常」を判断します。
 
 | 操作 | 見る場所 | 判断 |
 | --- | --- | --- |
-| 配信枠の確認 | 本日の配信予定 | 今日の scheduled stream、または待機中の配信枠が見えること |
-| 配信状態の確認 | 配信状態 | live、予約・準備、要確認の配信がある時だけグラフを見る |
-| 配信中の監視 | Metrics | metric が届いている時だけ最新値を見る |
-| 直近操作の確認 | 最近の操作 | 誰が Start / Stop / 設定変更をしたか確認する |
+| 待機枠の確認 | 待機中 | `created`、`draft`、`scheduled`、`ready` の待機状態が見えること |
+| 配信状態の確認 | 配信状態 | live、待機中、要確認の配信がある時だけグラフを見る |
+| Nodeの接続確認 | オンラインNode | 必要な Node が online になっていること |
 
 Dashboard の数字だけで原因を決めないでください。原因確認は、Streams、Service Health、Incidents、Metrics の専用画面で行います。
 
@@ -236,8 +235,8 @@ Integrations は、OAuth Provider、OAuth Connected Account、Google Drive Desti
 
 1. provider 側で OAuth application を作ります。
 2. provider 側の redirect URI に `https://<CONTROL_PANEL_HOST>/auth/oauth/callback` を登録します。
-3. YouTube / Drive 用の connected account も使う場合は、同じOAuth applicationに `https://<CONTROL_PANEL_HOST>/integrations/oauth-accounts/callback` も追加登録します。
-4. Control Panel に client ID、client secret、`/auth/oauth/callback` の redirect URI を保存します。
+3. Control Panel に client ID、client secret、`/auth/oauth/callback` の redirect URI を保存します。
+4. YouTube / Drive 用の connected account も同じ redirect URI を使います。
 5. ログイン用 scope は provider 種別ごとに固定されます。手動入力は不要です。
 6. 保存後は secret が raw 表示されないことを確認します。
 
@@ -334,14 +333,14 @@ Settings は、Control Panel の表示名、時刻表示の基準、アカウン
 | 項目 | 使う場所 | 確認すること |
 | --- | --- | --- |
 | App name | サイドバー、ログイン、初期作成画面 | 運用者がどの環境か識別できる名前にする |
-| タイムゾーン | Dashboard、Streams、Audit Logs、Account | 番組表や現場運用で使う地域の IANA timezone を選ぶ |
+| タイムゾーン | Streams、Audit Logs、Account | 番組表や現場運用で使う地域の IANA timezone を選ぶ |
 | メールサーバー | Users の登録完了メール | SMTP host、port、From、STARTTLS、認証情報を保存し、テスト送信で確認する |
 | Cloudflare Turnstile | login、メール変更承認 | Site key と Secret key を保存する。secret は再表示されない |
 
 SMTP password は保存後に再表示されません。テスト送信は保存済みのメールサーバー設定を使います。SMTPを無効化すると、登録完了メールは送信されず、保存済み password も解除されます。
 Turnstile を有効化すると、login ページとメール変更承認ページで Turnstile token が必要になります。Secret key は backend だけが Cloudflare Siteverify に送信し、画面やAPI responseには出しません。
 
-タイムゾーンは env ではなく Control Panel の設定として保存します。変更後は Dashboard の本日の配信予定、Streams の予定時刻、Audit Logs の時刻表示が期待した基準になっているか確認します。
+タイムゾーンは env ではなく Control Panel の設定として保存します。変更後は Streams の予定時刻、Audit Logs の時刻表示が期待した基準になっているか確認します。
 
 ## Node登録とAPI Tokens
 

@@ -75,9 +75,10 @@ sudo systemctl status autostream-discord-bot
 4. Bot token を runtime secret として解決します。
 5. guild / voice channel へ参加します。
 6. 音声packetを Encoder Recorder へ送ります。
-7. active speaker、参加者状態、配信枠に設定した text channel の新規messageを Worker / Control Panel へ渡します。
+7. active speaker、参加者状態、配信枠に設定した text channel の新規messageを、配信枠で primary assigned された Worker へ渡します。
 
 本番では `DISCORD_BOT_TOKEN` env に頼らず、Control Panel 管理の runtime secret を使います。
+Worker 送信用の固定 `WORKER_URL` / `WORKER_TOKEN` env は使いません。Control Panel が配信開始時に Worker assignment から `worker_events_url` と短期 `worker_events_token` を job に入れます。
 
 ## VC参加で自動開始されるか
 
@@ -102,7 +103,7 @@ Discord Bot は runtime config を定期的に再読込します。Bot 起動後
 
 Dockerでは Panel が生成した `config.yml` を `/etc/autostream-discord-bot/config.yml` へ read-only mount し、env には `AUTOSTREAM_NODE_CONFIG` を入れます。Bot token 本体は Control Panel の Discord Settings に登録します。
 
-Bot container から Control Panel と Encoder Recorder へ到達できる network に置いてください。
+Bot container から Control Panel、Encoder Recorder、配信枠で選択される Worker へ到達できる network に置いてください。
 
 ## よくあるトラブル
 
@@ -110,7 +111,7 @@ Bot container から Control Panel と Encoder Recorder へ到達できる netwo
 | --- | --- |
 | Service Health に出ない | `AUTOSTREAM_NODE_CONFIG`、Node ID、Node Runtime Token |
 | Bot がvoice channelに入らない | Discord Bot権限、guild ID、voice channel ID、Bot token |
-| Chat 表示が出ない | text channel ID、Bot の channel閲覧権限、Message Content Intent、Worker event |
+| Chat 表示が出ない | text channel ID、Bot の channel閲覧権限、Message Content Intent、Worker assignment、Worker event署名鍵 |
 | readiness が失敗する | Discord Settings と Streams の Discord Config 選択 |
 | 音声がEncoderに届かない | Encoder assignment、stream ingest token、network、Audio Bridge |
 | standbyなのにstartされない | standbyは待機用です。primaryに昇格してからstart対象になります |

@@ -368,7 +368,11 @@ AUTOSTREAM_ARCHIVE_DIR=/var/lib/autostream/archives
 FFMPEG_BIN=ffmpeg
 ```
 
-Worker では標準構成の追加envはありません。`AUTOSTREAM_NODE_CONFIG` の Node Runtime Token で Control Panel 経由の signal 送信を行います。
+Worker では Discord Bot からの stream-scoped `worker_events` token を検証するため、Control Panel と同じ signing key を設定します。`AUTOSTREAM_NODE_CONFIG` の Node Runtime Token で Control Panel 経由の signal 送信を行います。
+
+```text
+AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
+```
 
 Discord token、YouTube stream key、Google Drive folder、OAuth refresh token、webhook URL、SMTP password は、MVP 標準では Control Panel の Integration / Secret / Notification から登録します。互換 fallback を使う場合だけ service env に入れます。
 

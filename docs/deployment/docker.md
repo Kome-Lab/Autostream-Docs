@@ -221,6 +221,7 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-worker/config.yml
+      AUTOSTREAM_STREAM_INGEST_SIGNING_KEY: ${AUTOSTREAM_STREAM_INGEST_SIGNING_KEY}
       ENCODER_RECORDER_URL: http://encoder-recorder:8080
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
@@ -241,7 +242,6 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-discord-bot/config.yml
-      WORKER_URL: http://worker:8080
       ENCODER_AUDIO_TOKEN: ""
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}

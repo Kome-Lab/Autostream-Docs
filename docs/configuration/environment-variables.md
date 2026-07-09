@@ -33,7 +33,7 @@
 - Google Drive など保存先の認証情報
 - 通知用 Webhook URL
 - 配信ごとのタイトルや説明文
-- Dashboard、Streams、Audit Logs、Account の時刻表示に使うタイムゾーン
+- Streams、Audit Logs、Account の時刻表示に使うタイムゾーン
 
 運用中に変える可能性がある値は、できるだけ Control Panel に寄せると管理しやすくなります。
 

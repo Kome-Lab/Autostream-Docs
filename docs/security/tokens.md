@@ -28,7 +28,7 @@ $rng.GetBytes($bytes)
 | `AUTOSTREAM_SESSION_SECRET` | Control Panel env | random hex | session 保護用。Control Panel だけで使います |
 | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Control Panel env、Observability env | random hex | 保存 secret と Node Runtime Token の暗号化用。環境ごとに固定し、紛失しないでください |
 | `AUTOSTREAM_SETUP_TOKEN` | Control Panel env | random hex | 初回管理者作成用。初回作成後は rotation するか無効値へ変えます |
-| `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Control Panel env、Encoder Recorder env | random hex | Control Panel が stream scoped ingest token を発行し、Encoder Recorder が検証します |
+| `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Control Panel env、Encoder Recorder env、Worker env | random hex | Control Panel が stream scoped token を発行し、Encoder Recorder と Worker が検証します |
 
 ## Node登録で生成される値
 
@@ -47,7 +47,7 @@ Node Runtime Token と Configure Token を紛失した場合は、Control Panel 
 | Control Panel | `AUTOSTREAM_SESSION_SECRET`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_SETUP_TOKEN`、`AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | なし | Google OAuth client secret、Webhook URL、SMTP password、Cloudflare Turnstile secret などを画面から保存 |
 | Observability | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Node Runtime Token を `config.yml` で受け取る | 通知先 webhook などを必要に応じて画面から保存 |
 | Encoder Recorder | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Node Runtime Token を `config.yml` で受け取る | YouTube stream key は標準運用では Control Panel の YouTube Outputs に保存 |
-| Worker | なし | Node Runtime Token を `config.yml` で受け取る | なし |
+| Worker | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Node Runtime Token を `config.yml` で受け取る | なし |
 | Discord Bot | なし | Node Runtime Token を `config.yml` で受け取る | Discord developer portal の Bot token を Control Panel の Discord Settings に保存 |
 
 ## 手入力しないtoken
