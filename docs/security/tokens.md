@@ -44,7 +44,7 @@ Node Runtime Token と Configure Token を紛失した場合は、Control Panel 
 
 | service | 手生成してenvに入れる値 | Control Panel が生成する値 | provider から取得する値 |
 | --- | --- | --- | --- |
-| Control Panel | `AUTOSTREAM_SESSION_SECRET`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_SETUP_TOKEN`、`AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | なし | Google OAuth client secret、Webhook URL、SMTP password などを画面から保存 |
+| Control Panel | `AUTOSTREAM_SESSION_SECRET`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_SETUP_TOKEN`、`AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | なし | Google OAuth client secret、Webhook URL、SMTP password、Cloudflare Turnstile secret などを画面から保存 |
 | Observability | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Node Runtime Token を `config.yml` で受け取る | 通知先 webhook などを必要に応じて画面から保存 |
 | Encoder Recorder | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Node Runtime Token を `config.yml` で受け取る | YouTube stream key は標準運用では Control Panel の YouTube Outputs に保存 |
 | Worker | なし | Node Runtime Token を `config.yml` で受け取る | なし |
@@ -65,4 +65,4 @@ Node Runtime Token と Configure Token を紛失した場合は、Control Panel 
 
 ## Provider から発行するsecret
 
-Discord Bot token、YouTube stream key、Google OAuth client secret、Google Drive credential、Webhook URL、SMTP password は、AutoStream が生成する値ではありません。各 provider で発行し、Control Panel の画面や secret manager に保存します。公開docs、GitHub、チャット、スクリーンショットには載せないでください。
+Discord Bot token、YouTube stream key、Google OAuth client secret、Google Drive credential、Webhook URL、SMTP password、Cloudflare Turnstile secret は、AutoStream が生成する値ではありません。各 provider で発行し、Control Panel の画面や secret manager に保存します。公開docs、GitHub、チャット、スクリーンショットには載せないでください。

@@ -19,7 +19,7 @@ Dashboard より詳しく見たいときに使います。
 
 Metrics は、サービスが送った metric を一覧で見る画面です。
 
-Control Panel の `/observability/metrics` は、登録済みの Observability Node Agent へプロキシした metric と、Control Panel が各 Node heartbeat で受け取った metric を結合して返します。Observability 自身の `/metrics` には `observability.goroutines`、heap、uptime などの自己監視 metric も含まれます。Node登録画面では、各Nodeの heartbeat metrics を要約表示します。
+Control Panel の `/observability/metrics` は、登録済みの Observability Node Agent へプロキシした metric と、Control Panel が各 Node heartbeat で受け取った metric を結合して返します。各サービスの heartbeat には、Node exporter に近い `node.cpu_count`、`node.load1`、`node.memory.used_percent`、`node.filesystem.root.used_percent` と、`process.heap_alloc_bytes`、`process.goroutines`、`process.uptime_seconds` などの process metric が含まれます。Observability 自身の `/metrics` には `observability.goroutines`、heap、uptime などの互換用自己監視 metric も含まれます。Node登録画面では、各Nodeの heartbeat metrics を要約表示します。
 
 Observability Node の公開URLをブラウザで開いた場合、root `/` は安全な状態JSONだけを返します。Metrics の実データは `/metrics` ですが、ここは Node Runtime Token で保護されているため、通常はブラウザから直接開かず Control Panel の Metrics 画面で確認します。
 

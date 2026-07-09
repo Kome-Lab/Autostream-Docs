@@ -94,7 +94,7 @@ Observability は heartbeat、disk、upload retry、packet loss、encoder fps、
 | --- | --- |
 | Service Health | `observability` が online |
 | Signal ingest | Worker / Encoder Recorder のmetricが Control Panel 経由で届く |
-| Metrics | `observability.goroutines`、heap、uptime と各service metricが表示される |
+| Metrics | `node.cpu_count`、`node.memory.used_percent`、`node.filesystem.root.used_percent`、`process.heap_alloc_bytes` と各service metricが表示される |
 | Monitoring Dashboard | incident、metric、deliveryが表示される |
 | Test Channel | 通知が届く |
 | Delivery History | raw URLやpasswordが表示されない |

@@ -84,9 +84,10 @@ compose を使う場合も、考え方は同じです。
 1. database migration が成功していることをログで確認します。
 2. ブラウザで `AUTOSTREAM_PUBLIC_URL` を開きます。
 3. [初回管理者を作る](/runbooks/create-first-admin) の手順で管理者を作ります。
-4. Security Settings で password policy、session、MFA方針を確認します。
-5. Users / Roles で運用担当者の権限を分けます。
-6. Node登録で各サービス用 Node を作り、Configuration から `config.yml` を取得します。
+4. Settings でメールサーバーを保存してテスト送信し、必要なら Cloudflare Turnstile の site key / secret key を保存します。
+5. Security Settings で password policy、session、MFA方針を確認します。
+6. Users / Roles で運用担当者の権限を分けます。
+7. Node登録で各サービス用 Node を作り、Configuration から `config.yml` を取得します。
 
 ## Nodeを作る
 
