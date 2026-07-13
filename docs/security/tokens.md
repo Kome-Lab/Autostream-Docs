@@ -1,6 +1,6 @@
 # 秘密情報とtoken生成
 
-AutoStream の新規構成では、サービス間認証は Control Panel の Node登録に寄せます。Worker、Encoder Recorder、Discord Bot、Observability はサービス間tokenを env に手入力せず、Node登録で生成される `config.yml` の Node Runtime Token を使います。
+AutoStream の新規構成では、サービス間認証は Control Panel の Node登録に寄せます。Worker、Encoder Recorder、Discord Bot、Observability はサービス間tokenを env に手入力せず、Node登録で生成される `config.yml` の Node Runtime Token を使います。Worker と Encoder Recorder の stream ingest signing key も同じ `config.yml` で配布します。
 
 Observability も例外ではありません。Control Panel は登録済み `observability` Node の公開URLと暗号化保存された Node Runtime Tokenを使って、Monitoring、Incidents、Notification Channels、signal転送を呼び出します。Observability用の別admin tokenや直接ingest tokenは作りません。
 
@@ -28,7 +28,7 @@ $rng.GetBytes($bytes)
 | `AUTOSTREAM_SESSION_SECRET` | Control Panel env | random hex | session 保護用。Control Panel だけで使います |
 | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Control Panel env、Observability env | random hex | 保存 secret と Node Runtime Token の暗号化用。環境ごとに固定し、紛失しないでください |
 | `AUTOSTREAM_SETUP_TOKEN` | Control Panel env | random hex | 初回管理者作成用。初回作成後は rotation するか無効値へ変えます |
-| `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Control Panel env、Encoder Recorder env、Worker env | random hex | Control Panel が stream scoped token を発行し、Encoder Recorder と Worker が検証します |
+| `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Control Panel env | random hex | Control Panel が stream scoped token を発行し、Node登録時に Worker / Encoder Recorder の `config.yml` へ配布します |
 
 ## Node登録で生成される値
 
@@ -36,6 +36,7 @@ $rng.GetBytes($bytes)
 | --- | --- |
 | Node Runtime Token | Control Panel の Node登録で生成され、`config.yml` の `auth.token` に入ります。Control Panel 側では暗号化保存されます |
 | Configure Token | Node登録の Configuration で短期tokenとして表示され、`autostream-<service> configure` が `config.yml` を取得するために使います |
+| Stream ingest signing key | Worker / Encoder Recorder の `config.yml` の `stream_ingest.signing_key` に入ります。通常のNode参照APIでは再表示されません |
 | `CONTROL_PANEL_TOKEN` | env へ手入力しません。`config.yml` 内の Node Runtime Token として配布されます |
 
 Node Runtime Token と Configure Token を紛失した場合は、Control Panel の Node登録 Configuration から再生成し、対象 service の `config.yml` を更新してください。
@@ -46,8 +47,8 @@ Node Runtime Token と Configure Token を紛失した場合は、Control Panel 
 | --- | --- | --- | --- |
 | Control Panel | `AUTOSTREAM_SESSION_SECRET`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_SETUP_TOKEN`、`AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | なし | Google OAuth client secret、Webhook URL、SMTP password、Cloudflare Turnstile secret などを画面から保存 |
 | Observability | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Node Runtime Token を `config.yml` で受け取る | 通知先 webhook などを必要に応じて画面から保存 |
-| Encoder Recorder | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Node Runtime Token を `config.yml` で受け取る | YouTube stream key は標準運用では Control Panel の YouTube Outputs に保存 |
-| Worker | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Node Runtime Token を `config.yml` で受け取る | なし |
+| Encoder Recorder | なし | Node Runtime Token と stream ingest signing key を `config.yml` で受け取る | YouTube stream key は標準運用では Control Panel の YouTube Outputs に保存 |
+| Worker | なし | Node Runtime Token と stream ingest signing key を `config.yml` で受け取る | なし |
 | Discord Bot | なし | Node Runtime Token を `config.yml` で受け取る | Discord developer portal の Bot token を Control Panel の Discord Settings に保存 |
 
 ## 手入力しないtoken

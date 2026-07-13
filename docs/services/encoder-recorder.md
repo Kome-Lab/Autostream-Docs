@@ -25,10 +25,11 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 
 ## envで設定するもの
 
+stream ingest signing key は env ではなく、Control Panel の Node登録で生成される `config.yml` の `stream_ingest.signing_key` から読み込みます。
+
 | 項目 | 目的 |
 | --- | --- |
 | `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Encoder Recorder 用 `config.yml` |
-| `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | stream scoped token の署名 |
 | `AUTOSTREAM_DATA_DIR` | 作業データ保存先 |
 | `AUTOSTREAM_ARCHIVE_DIR` | 録画保存先 |
 | `FFMPEG_BIN` | FFmpeg 実行ファイル |

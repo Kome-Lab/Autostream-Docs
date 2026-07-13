@@ -50,16 +50,24 @@ SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS=<SERVICE_HOSTS>
 AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS=true
-# 任意。Control Panel は未指定時に Kome-Lab/Autostream-ControlPanel GitHub Releases を確認します。
+# 任意。Control Panel と各Nodeサービスは、それぞれ対応する Kome-Lab GitHub Releases を確認します。
 # private repo の release 確認には AUTOSTREAM_UPDATE_CHECK_TOKEN が必要です。
-# 固定値を使う場合は AUTOSTREAM_LATEST_VERSION、ネットワーク確認を止める場合は AUTOSTREAM_UPDATE_CHECK_URL=off を設定します。
+# 固定値を使う場合は *_LATEST_VERSION、ネットワーク確認を止める場合は *_UPDATE_CHECK_URL=off を設定します。
 AUTOSTREAM_LATEST_VERSION=
 AUTOSTREAM_UPDATE_CHECK_URL=
+AUTOSTREAM_WORKER_LATEST_VERSION=
+AUTOSTREAM_WORKER_UPDATE_CHECK_URL=
+AUTOSTREAM_ENCODER_RECORDER_LATEST_VERSION=
+AUTOSTREAM_ENCODER_RECORDER_UPDATE_CHECK_URL=
+AUTOSTREAM_DISCORD_BOT_LATEST_VERSION=
+AUTOSTREAM_DISCORD_BOT_UPDATE_CHECK_URL=
+AUTOSTREAM_OBSERVABILITY_LATEST_VERSION=
+AUTOSTREAM_OBSERVABILITY_UPDATE_CHECK_URL=
 AUTOSTREAM_UPDATE_CHECK_TOKEN=
 TZ=Asia/Tokyo
 ```
 
-Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。新しい version の通知は、未指定時に `Kome-Lab/Autostream-ControlPanel` の GitHub Releases API から確認します。private repo のため、本番では release を読める GitHub token を `AUTOSTREAM_UPDATE_CHECK_TOKEN` に設定してください。固定値なら `AUTOSTREAM_LATEST_VERSION=v1.3.6`、別の endpoint から確認するなら `AUTOSTREAM_UPDATE_CHECK_URL` を設定します。URL は HTTPS を使います。
+Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。新しい version の通知は、Control Panel、Worker、Encoder/Recorder、Discord Bot、ObservabilityそれぞれのGitHub Releases APIから確認し、Nodeの報告versionは同じサービスの最新releaseとのみ比較します。private repo のため、本番ではreleaseを読めるGitHub tokenを `AUTOSTREAM_UPDATE_CHECK_TOKEN` に設定してください。固定値や別endpointを使う場合は、上記のサービス別環境変数を設定します。URLはHTTPSを使います。
 
 起動します。
 

@@ -91,7 +91,7 @@ AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 SERVICE_CONFIG_ROOT=/opt/autostream/config
 ```
 
-初回は Node Agent 用 `config.yml` がまだないため、Control Panel 起動後に Node登録で各Nodeを作り、Configuration から `config.yml` を `SERVICE_CONFIG_ROOT` 配下のサービス別 directory に保存してから各 service container を起動します。`CONTROL_PANEL_TOKEN` を `.env` に手入力しません。
+初回は Node Agent 用 `config.yml` がまだないため、Control Panel 起動後に Node登録で各Nodeを作り、Configuration から `config.yml` を `SERVICE_CONFIG_ROOT` 配下のサービス別 directory に保存してから各 service container を起動します。Worker / Encoder Recorder の stream ingest signing key もこのファイルへ入るため、`CONTROL_PANEL_TOKEN` やNode側の `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` を `.env` に手入力しません。
 
 DB URL は Control Panel と Observability だけに必要です。Encoder/Recorder、Worker、Discord Bot は個別 database を持たず、Control Panel から runtime config を取得します。
 
@@ -197,7 +197,6 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-encoder-recorder/config.yml
-      AUTOSTREAM_STREAM_INGEST_SIGNING_KEY: ${AUTOSTREAM_STREAM_INGEST_SIGNING_KEY}
       AUTOSTREAM_REQUIRE_SIGNED_INGEST_TOKENS: "true"
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       AUTOSTREAM_DATA_DIR: /var/lib/autostream/encoder-recorder
@@ -221,7 +220,6 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-worker/config.yml
-      AUTOSTREAM_STREAM_INGEST_SIGNING_KEY: ${AUTOSTREAM_STREAM_INGEST_SIGNING_KEY}
       ENCODER_RECORDER_URL: http://encoder-recorder:8080
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}

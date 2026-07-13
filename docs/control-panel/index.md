@@ -66,20 +66,20 @@ AutoStream では、値の置き場所を分けると運用しやすくなりま
 | Google Drive folder ID、OAuth refresh token | Integrations / Drive destination | 保存先変更を Control Panel から管理する |
 | 通知先 webhook、通知チャンネルSMTP password | Notification Channels | incident通知の追加、停止、test を画面で行う |
 | アカウント登録完了メール用SMTP | Settings | Users で welcome email を送る前に設定する |
-| Cloudflare Turnstile site key / secret key | Settings | login とメール変更承認のBOT確認に使う |
+| Cloudflare Turnstile site key / secret key | Settings | password、Passkey、OAuth login とメール変更承認のBOT確認に使う |
 | 配信ごとの Discord Guild / VC / Chat channel、profile 選択 | Streams | 配信単位で変える値として扱う |
 
 ## 日常運用でよく使う流れ
 
-### 配信前
+### 配信枠の準備と待機
 
 1. Dashboard で配信中、待機中、要確認の数を確認します。
-2. Streams で対象配信と予定時刻を確認します。
+2. Streams で対象配信のDiscord VC、配信経路、録画保存先を確認します。
 3. Service Health で Discord Bot、Worker、Encoder Recorder が online か確認します。
 4. Discord Config、YouTube Output、Archive Profile、Encoder Profile を確認します。
 5. Stream assignment planner で必須サービスがそろっているか確認します。
-6. 自動開始する配信枠は `created`、`scheduled`、`ready` の待機状態にします。
-7. 手動開始する場合だけ、Streams で設定と割り当てを確認して Start を押します。
+6. 配信枠を作成し、`created` または `ready` の待機状態になったことを確認します。
+7. 自動開始する枠では、対象VCへのユーザー参加を検知するとDiscord Botが参加し、通常の開始処理がWorkerとEncoder Recorderへ送られます。手動開始する場合だけStreamsでStartを押します。
 
 ### 配信中
 

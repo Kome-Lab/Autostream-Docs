@@ -107,7 +107,7 @@ openssl rand -hex 32   # AUTOSTREAM_STREAM_INGEST_SIGNING_KEY
 
 Observability 用の別admin tokenや直接ingest tokenは作りません。Control Panel は登録済み Observability Node の公開URLと Node Runtime Token で Observability API を呼びます。詳しい対応表と PowerShell での生成方法は [秘密情報とtoken生成](../security/tokens.md) を参照してください。
 
-新方式では、各サービスの登録、heartbeat、Panel から Node への操作に使う token は Node登録後の `config.yml` で配布します。`SERVICE_CALL_TOKEN` は古い構成からの移行用 fallback としてだけ使います。
+新方式では、各サービスの登録、heartbeat、Panel から Node への操作に使う token は Node登録後の `config.yml` で配布します。Worker / Encoder Recorder の stream ingest signing key も同じファイルへ入ります。`SERVICE_CALL_TOKEN` とNode側の署名鍵envは古い構成からの移行用 fallback としてだけ使います。
 
 ## 5. release artifact を配置する
 
@@ -350,7 +350,7 @@ sudoedit /etc/autostream/observability.env
 AUTOSTREAM_NODE_CONFIG=/etc/autostream-<SERVICE>/config.yml
 ```
 
-`config.yml` の中に Node ID、Node API URL、Control Panel URL、Node Runtime Token が入ります。`CONTROL_PANEL_TOKEN`、`SERVICE_ID`、`SERVICE_PUBLIC_URL` を手でそろえる運用にはしません。
+`config.yml` の中に Node ID、Node API URL、Control Panel URL、Node Runtime Token が入ります。Worker / Encoder Recorder では `stream_ingest.signing_key` も入ります。`CONTROL_PANEL_TOKEN`、`SERVICE_ID`、`SERVICE_PUBLIC_URL`、Node側の `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` を手でそろえる運用にはしません。
 
 Observability だけは DB を直接使うため、追加で次を設定します。Control Panel の `DATABASE_URL` は手順 6 で設定済みです。
 
@@ -363,16 +363,11 @@ OBSERVABILITY_BIND_ADDR=127.0.0.1:8080
 Encoder/Recorder では archive path と FFmpeg も確認します。
 
 ```text
-AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 AUTOSTREAM_ARCHIVE_DIR=/var/lib/autostream/archives
 FFMPEG_BIN=ffmpeg
 ```
 
-Worker では Discord Bot からの stream-scoped `worker_events` token を検証するため、Control Panel と同じ signing key を設定します。`AUTOSTREAM_NODE_CONFIG` の Node Runtime Token で Control Panel 経由の signal 送信を行います。
-
-```text
-AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
-```
+Worker は `config.yml` の stream ingest signing key で Discord Bot からの stream-scoped `worker_events` token を検証し、同じファイルの Node Runtime Token で Control Panel 経由の signal 送信を行います。
 
 Discord token、YouTube stream key、Google Drive folder、OAuth refresh token、webhook URL、SMTP password は、MVP 標準では Control Panel の Integration / Secret / Notification から登録します。互換 fallback を使う場合だけ service env に入れます。
 

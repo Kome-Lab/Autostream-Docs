@@ -12,11 +12,11 @@
 | env ファイル | `.env.example` を元に `/etc/autostream/<service>.env` を作ります |
 | systemd unit | `systemd/*.service.example` を元に `/etc/systemd/system/` へ置きます |
 | Node ID | Control Panel と各サービスを対応させる固定 ID です |
-| Node Agent config | Panel が生成する `/etc/autostream-<service>/config.yml` です |
+| Node Agent config | Panel が生成する `/etc/autostream-<service>/config.yml` です。Worker / Encoder Recorder では stream ingest signing key も含みます |
 | Node Runtime Token | `config.yml` に入る token です。登録、heartbeat、runtime config、Panel から Node への操作に使います |
 | Node Agent API | Host、Port、SSL から Panel が組み立てる API URL です |
 
-新規構成では `SERVICE_ID`、`SERVICE_PUBLIC_URL`、`CONTROL_PANEL_TOKEN` を env に手入力しません。Control Panel の Node登録で `config.yml` を生成し、各サービスは `AUTOSTREAM_NODE_CONFIG` でそのファイルを読みます。古い `SERVICE_CALL_TOKEN` / `SERVICE_CONTROL_TOKEN_SHA256` は移行中の fallback としてだけ使います。
+新規構成では `SERVICE_ID`、`SERVICE_PUBLIC_URL`、`CONTROL_PANEL_TOKEN`、Node側の `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` を env に手入力しません。Control Panel の Node登録で `config.yml` を生成し、各サービスは `AUTOSTREAM_NODE_CONFIG` でそのファイルを読みます。古い `SERVICE_CALL_TOKEN` / `SERVICE_CONTROL_TOKEN_SHA256` とNode側の署名鍵envは移行中の fallback としてだけ使います。
 
 ## token の生成と入力先
 
@@ -26,8 +26,8 @@
 | --- | --- | --- |
 | Control Panel | `AUTOSTREAM_SESSION_SECRET`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_SETUP_TOKEN`、`AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Control Panel env |
 | Observability | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Observability env。Control Panel からの API 呼び出しは登録済み Observability Node の Runtime Token を使います |
-| Encoder Recorder | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Encoder Recorder env。signing key は Control Panel と同じ値にします |
-| Worker | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Worker env。Discord Bot からの stream-scoped `worker_events` token を検証します |
+| Encoder Recorder | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
+| Worker | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Discord Bot | なし | Node Runtime Token は `config.yml`、Discord Bot token は Control Panel の Discord Settings に保存します |
 
 Node Runtime Token と Configure Token は Node登録で生成されます。紛失した場合は Control Panel の Node登録 Configuration から再生成し、対象 service の `config.yml` を更新してください。
@@ -44,7 +44,7 @@ Node Runtime Token と Configure Token は Node登録で生成されます。紛
 | Control Panel web assets | `/usr/share/autostream-control-panel` |
 | systemd unit | `/etc/systemd/system/autostream-<service>.service` |
 
-env ファイルには実値が入るため、権限は `0640` 程度にし、Git 管理しないでください。
+env ファイルと Node Agent の `config.yml` には実値が入るため、権限は `0640` 程度にし、Git 管理しないでください。
 
 ## 最初に作るOSユーザー
 
