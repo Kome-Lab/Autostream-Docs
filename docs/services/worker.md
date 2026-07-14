@@ -62,6 +62,8 @@ Worker だけを入れ替えるなら Worker Management、Discord Bot や Encode
 
 Worker は配信中の `overlay.*` と `caption.*` event を受け付け、Encoder Recorder へ転送します。`overlay.*` は互換用の内部event namespaceで、画面上のウォーターマーク設定そのものではありません。
 
+Caption Profileが選択された配信では、Discord BotがVCから受けたOpus packetを`caption_audio`用のstream-scoped tokenでWorkerへ送ります。Workerは話者SSRCごとにDeepgram Nova-3のlive WebSocketを管理し、中間結果を`caption.telop`、確定結果を`caption.final`として映像生成へ渡します。Deepgram APIキーは対象`stream_id`とprimary Workerの割り当てをControl Panelで検証したruntime secretからjob開始時にだけ取得し、Workerのenv、profile JSON、status、logには保存しません。
+
 | event type | 主な送信元 | payload |
 | --- | --- | --- |
 | `overlay.current_time` | Worker event test | 現在時刻 |
@@ -69,6 +71,7 @@ Worker は配信中の `overlay.*` と `caption.*` event を受け付け、Encod
 | `overlay.active_speaker` | Discord Bot | `user_id`, `display_name` |
 | `overlay.discord_chat` | Discord Bot | `message_id`, `user_id`, `display_name`, `text`, `text_channel_id`, `created_at` |
 | `caption.telop` | Worker event test / caption連携 | `text`, `speaker_user_id` |
+| `caption.final` | Deepgram確定結果 | `text`, `speaker_user_id` |
 
 Streams の Chat Channel ID が設定されている配信では、開始後に Discord Bot が対象 text channel の新規messageだけを `overlay.discord_chat` として Worker へ送ります。Worker event API は Authorization header の stream-scoped `worker_events` token を検証しますが、payload 内の token や secret は要求しません。
 
@@ -79,6 +82,8 @@ Streams の Chat Channel ID が設定されている配信では、開始後に 
 | `worker.scene_updates_total` | 配信中に必要に応じて増える |
 | `worker.overlay_events_total` | chat、参加者状態、sceneなどの映像生成eventで増える |
 | `worker.caption_events_total` | caption を使う配信で増える |
+| `worker.deepgram_sessions_active` | 発話中の話者数に応じて増減する |
+| `worker.caption_audio_packets_total` | Discord VCの音声受信中に増える |
 | `worker.event_send_failures_total` | 0 付近 |
 
 ## 確認手順

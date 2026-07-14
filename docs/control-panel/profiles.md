@@ -40,15 +40,20 @@ Encoder Profile は、Encoder Recorder が FFmpeg 処理を行う時の設定で
 
 ## Caption/STT Settings
 
-Caption/STT Settings は、字幕や文字起こしを使う場合に作ります。使わない場合は Streams で未選択のままで問題ありません。
+Caption/STT Settings は、Deepgramで字幕や文字起こしを行う場合に作ります。使わない場合は Streams で未選択のままで問題ありません。手動字幕はproviderとして選択できません。
 
 | 項目 | 意味 |
 | --- | --- |
-| 言語 | 主な音声言語 |
-| プロバイダ | STT provider または手動字幕 |
+| Deepgram APIキー | Control Panelのsecret `deepgram_api_key`として保存する認証情報。profile JSONには保存しない |
+| 言語 | `日本語` または `英語` |
+| モデル | `Nova-3` 固定 |
+| 発話区切り | 無音を発話終了と判断するまでの ms |
+| 中間結果 / Smart Format | 途中字幕と読みやすい整形を有効にする |
 | 遅延補正 | 音声と字幕のずれを調整する ms |
 
-字幕は配信に直接出るため、最初は test stream で確認してください。
+配信開始時、Control Panelは選択されたprimary WorkerだけにAPIキーを短命なruntime secretとして渡します。Discord BotはVCのOpus音声をEncoderとWorkerへ独立して転送し、WorkerはDeepgramの結果を`caption.telop`と`caption.final`として映像生成へ渡します。APIキーやjob tokenはstatus、log、監査metadataへ出しません。
+
+字幕は配信に直接出るため、最初はtest streamで話者ごとの認識、途中字幕、確定字幕、遅延を確認してください。
 
 ## Watermark Settings
 

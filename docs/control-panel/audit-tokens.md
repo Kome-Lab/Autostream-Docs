@@ -1,34 +1,29 @@
 # 監査ログとAPIトークン
 
-Audit Logs と API Tokens は、運用の安全性を保つための画面です。誰が何をしたかを確認し、旧構成や移行時の service token を管理します。新規構成でサービスを登録する場合は、先に [Node Agent登録](/control-panel/node-agent-registration) を使います。
+監査ログと API Tokens は、運用の安全性を保つための画面です。誰が何をしたかを確認し、旧構成や移行時の service token を管理します。新規構成でサービスを登録する場合は、先に [Node Agent登録](/control-panel/node-agent-registration) を使います。
 
-## Audit Logs
+## 監査ログ
 
-Audit Logs では、操作履歴を検索し、必要に応じて CSV export できます。
+監査ログは、サイドバーの `監視・対応` から開きます。配信ログとは別ページで、表示中の履歴を検索し、必要に応じて CSV export できます。
 
-### filter項目
+### 表示タブ
 
 | 項目 | 説明 |
 | --- | --- |
-| Action group | 操作の種類 |
-| Result | success / failure / all |
-| Search | service ID、stream ID、action、actor など |
+| 操作履歴 | 担当者やシステムによる変更・操作を表示します。`services.runtime_config.read` は除外されます |
+| Node設定参照 | Nodeが実行設定を取得した `services.runtime_config.read` だけを表示します |
 
-### action group
+### 絞り込み項目
 
-| group | 含まれる操作の例 |
+| 項目 | 説明 |
 | --- | --- |
-| Service assignment | services.assign、services.unassign、workers.assign |
-| Service runtime | services.register、services.heartbeat、archive artifact report |
-| Stream lifecycle | streams.create、streams.start、streams.stop、streams.retry_upload |
-| Security / users / roles | login、logout、user update、role update |
-| Secrets / tokens / settings | secrets.update、api_tokens.create、api_tokens.revoke |
-| Notification channels | notification channel create / update / delete / test |
-| All actions | すべて |
+| Search | service ID、stream ID、action、actor など |
+| 開始日時 / 終了日時 | 表示する期間 |
+| 結果 | 成功 / 失敗 / すべての結果 |
 
 ## Audit CSV export
 
-`Export CSV` は、現在の filter に近い条件で CSV を出力します。secret value や password hash は含めません。
+`CSV` は、選択中のタブと現在の絞り込み条件で履歴を出力します。secret value や password hash は含めません。
 
 使う場面:
 

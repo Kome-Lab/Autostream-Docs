@@ -84,13 +84,13 @@ Security Settings は、password、session、MFA、Passkey、secret 更新を扱
 
 | 項目 | 説明 | 推奨 |
 | --- | --- | --- |
-| Password min length | password の最低文字数 | 12 以上 |
+| Password min length | password の最低文字数 | 最低8、運用推奨12以上 |
 | Login lockout threshold | 何回失敗で lockout するか | 5 前後 |
 | Session idle timeout minutes | 操作なし session の timeout | 30 分前後 |
 | Session absolute lifetime hours | session の最大寿命 | 12 時間前後 |
 | Password hash | password hash 方式 | `argon2id` 固定表示 |
 
-sessionのidle timeoutまたは最大寿命を過ぎると、Control Panelは認証状態を自動確認してlogin画面へ移動します。タブをバックグラウンドにしていた場合も、画面へ戻った時点で再確認します。
+Control Panelを操作している間は、browserが明示的なsession refreshを最大1分に1回送ってidle期限を延長します。定期的な`/auth/me`確認や画面の再描画だけではidle期限を延長しません。操作がないままidle timeoutを過ぎた場合、または操作中でもabsolute lifetimeを過ぎた場合は、自動的にlogin画面へ移動します。タブをバックグラウンドにしていた場合も、画面へ戻った時点で再確認します。
 
 ### MFA mode
 
