@@ -130,7 +130,7 @@ source checkout から build する例:
 ```yaml
 services:
   mariadb:
-    image: mariadb:11
+    image: mariadb:11.8
     restart: unless-stopped
     environment:
       MARIADB_DATABASE: autostream_control_panel
