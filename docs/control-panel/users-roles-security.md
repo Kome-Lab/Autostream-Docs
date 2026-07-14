@@ -10,7 +10,7 @@ Users では、ユーザー作成、ロール付与、lock、disable、password 
 
 | 項目 | 説明 |
 | --- | --- |
-| Existing user | 編集対象。空欄なら新規作成 |
+| 編集対象 | 一覧右端の鉛筆ボタンから対象ユーザーを開く |
 | Username | login に使う名前 |
 | Email | 登録完了メールと本人連絡先に使うメールアドレス。新規作成時は必須 |
 | Temporary password | 新規作成時、または password reset 時に使う一時 password |
@@ -22,7 +22,7 @@ Users では、ユーザー作成、ロール付与、lock、disable、password 
 | ボタン | 使う場面 |
 | --- | --- |
 | Create User | 新しいユーザーを作る |
-| Update User | username と role を更新する |
+| Update User | username、email、role を更新する |
 | Force Password Change | 次回 login 時に password 変更を求める |
 | Reset Password | 一時 password を設定し、変更を強制する |
 | Unlock | lockout されたユーザーを解除する |
@@ -31,6 +31,8 @@ Users では、ユーザー作成、ロール付与、lock、disable、password 
 | Delete | 退職や担当変更で不要になったユーザーを削除する |
 
 新しいユーザーには email と temporary password を設定し、初回 login 後に本人が password を変更する運用にします。登録完了メールには一時 password を入れません。メール送信を使う場合は、先に Settings のメールサーバーを設定してテスト送信で疎通を確認し、password は別経路で渡してください。
+
+編集画面は現在の username、email、role を初期表示します。role を変更しない更新では既存割り当てを保持します。role の変更には `roles.assign` が必要で、ログイン中の自分自身の role は変更できません。自分自身でも username と email は更新できます。
 
 Delete は不可逆操作です。ログイン中の自分自身は削除できません。super_admin ユーザーを削除できるのは super_admin だけで、最後の有効な super_admin は削除できません。削除すると対象ユーザーの session、MFA、Passkey、OAuth login link などの認証関連データも無効化されます。
 
