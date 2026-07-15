@@ -10,6 +10,7 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 - Discord 音声の ingest
 - Worker event の保存
 - FFmpeg による live output
+- Control PanelとVLC向けのHLS Encoderプレビュー
 - MKV 録画と MP4 化
 - Google Drive など保存先への upload
 - Control Panel からの local archive download / rename / delete
@@ -45,13 +46,17 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 | YouTube Outputs | RTMPS URL、stream key、Live API 設定 |
 | Integrations | Google OAuth connected account、生成済みDrive destinationの確認 |
 | Archive Settings | 互換用のupload、dry-run、retention、Drive destination |
-| Streams | Encoder Profile、Archive OAuth account、Drive Folder ID、YouTube Output、input URL、preflight |
+| Streams | Encoder Profile、Archive OAuth account、Drive Folder ID、YouTube Output、input URL、preflight、Encoderプレビュー |
 | Archive | local artifact の download、rename、delete、Drive upload 結果の確認 |
 | Metrics / Incidents | FFmpeg、録画、upload、audio bridge の状態 |
 
 ## 本番での注意
 
 本番では FFmpeg のコマンドラインに YouTube stream key を直接出さない構成にします。FFmpeg は local relay にだけ出力し、relay 側で外部配信先へ送ります。
+
+Encoderプレビューは本配信、録画と同じencodeを3-way teeし、約2秒のHLS segmentを6個だけrolling保持します。preview出力は有限FIFOと`onfail=ignore`で分離され、previewの遅延やplayer切断で本配信と録画を停止しません。playlistはControl Panelが検証してproxyし、ブラウザへEncoderのNode tokenを渡しません。
+
+preview fileは`AUTOSTREAM_ARCHIVE_DIR/tmp/<stream_id>/preview/`に置かれます。active stream内ではsegment数が制限されますが、現時点のfinal artifact retentionは終了済みstreamの`tmp` directoryを削除する保証を持ちません。disk監視では`final`だけでなく`tmp`も確認し、手動整理は対象streamが停止済みでEncoder Recorderが使用していないことを確認してから行います。
 
 ## 確認手順
 
@@ -60,9 +65,10 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 3. Encoder Recorder を起動します。
 4. Control Panel で online を確認します。
 5. 短いテスト配信を行います。
-6. `final.mkv` と `final.mp4` が作られるか確認します。
-7. Control Panel の Archive で local artifact を download できるか確認します。
-8. 保存先への upload 結果を確認します。
+6. StreamsのEncoderプレビューとVLC用ネットワーク再生URLで映像を確認します。
+7. `final.mkv` と `final.mp4` が作られるか確認します。
+8. Control Panel の Archive で local artifact を download できるか確認します。
+9. 保存先への upload 結果を確認します。
 
 ## Streamsで見る項目
 
@@ -74,6 +80,7 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 | Encoder host preflight | ffmpeg、archive dir、output 設定の準備状態 |
 | Audio Bridge | Discord Bot から音声 packet が届いているか |
 | Archive / upload | final MKV / MP4、local artifact、upload status、retry 状態 |
+| Encoderプレビュー | YouTube送信前の最終映像。starting / live / stoppingだけ利用可能 |
 
 ## metricの見方
 

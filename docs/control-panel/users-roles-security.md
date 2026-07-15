@@ -94,6 +94,8 @@ Security Settings は、password、session、MFA、Passkey、secret 更新を扱
 
 Control Panelを操作している間は、browserが明示的なsession refreshを最大1分に1回送ってidle期限を延長します。定期的な`/auth/me`確認や画面の再描画だけではidle期限を延長しません。操作がないままidle timeoutを過ぎた場合、または操作中でもabsolute lifetimeを過ぎた場合は、自動的にlogin画面へ移動します。タブをバックグラウンドにしていた場合も、画面へ戻った時点で再確認します。
 
+セッション期限切れによる自動ログアウト後は、再ログインに成功すると期限切れ時に開いていた管理画面へ戻ります。戻り先はControl Panel内の管理画面に限定されます。
+
 ### MFA mode
 
 | mode | 動き |

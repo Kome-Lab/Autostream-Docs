@@ -255,6 +255,8 @@ volumes:
   archives:
 ```
 
+Encoderプレビューは既存のEncoder Recorder API portと`archives` volumeを使います。追加port、追加env、追加volumeは不要です。Encoder imageのDebian `ffmpeg` packageがHLSを生成し、`archives` volume内の`tmp/<stream_id>/preview/`へrolling segmentを置きます。final artifactの保持設定だけでは終了済み`tmp` directoryの削除を保証しないため、volume容量監視には`tmp`も含めます。
+
 production で registry image を使う場合は、各 `build:` を次のような `image:` に置き換えます。
 
 ```yaml
@@ -349,6 +351,15 @@ server {
     ssl_certificate /etc/letsencrypt/live/control.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/control.example.com/privkey.pem;
 
+    # The path contains a signed bearer capability for VLC/HLS playback.
+    location ^~ /stream-previews/ {
+        access_log off;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
@@ -359,6 +370,8 @@ server {
 ```
 
 `AUTOSTREAM_PUBLIC_URL` はブラウザで開く URL と一致させます。
+
+`/stream-previews/` のpathには署名tokenが含まれます。nginxだけでなく、前段のCDN、WAF、load balancer、APMでもfull pathを記録しないかredactしてください。previewのplaylistとsegmentはControl Panelを通るため、同時preview数に応じたControl Panelの帯域も監視します。Encoder Recorderのportをinternetへ追加公開する必要はありません。
 
 ## 10. 外部 provider を登録する
 
