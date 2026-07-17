@@ -97,8 +97,9 @@ cd "/opt/autostream/releases/${SERVICE_ARTIFACT%.tar.gz}"
 1. `bin/` の実行ファイルを `/usr/local/bin/` に配置します。Node Agent は `autostream-<service>` が正規コマンド名です。
 2. `.env.example` を `/etc/autostream/<service>.env` にコピーします。
 3. `systemd/*.service.example` を `/etc/systemd/system/` にコピーし、必要ならパスを調整します。
-4. env の placeholder を実運用値に置き換えます。
-5. `systemctl daemon-reload` 後に起動します。
+4. Control Panelの場合は、artifact同梱の`README.install.md`に従い、database、session、暗号化、setup、stream ingest署名鍵などのbootstrap envを設定します。
+5. Node Agentの場合は、envの待受address、local保存先などhost固有値だけを確認します。Observabilityだけはこれに加えて`DATABASE_URL`と`AUTOSTREAM_SECRET_ENCRYPTION_KEY`が必要です。Node ID、Control Panel URL、Node Runtime Token、stream ingest署名鍵は入力せず、Control Panelが表示するAuto Configureコマンドを対象hostで一度実行します。
+6. `systemctl daemon-reload` 後に対象serviceを起動します。
 
 2026-06-29 時点では `Kome-Lab/Autostream-Worker` の GitHub Release asset は未公開です。Worker は source checkout から `go build -o bin/autostream-worker ./cmd/worker` で build するか、Worker repo の Host Release workflow で artifact を作成してから同じ配置手順を使ってください。
 

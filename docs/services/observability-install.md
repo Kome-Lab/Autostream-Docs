@@ -35,7 +35,7 @@ sudo install -o root -g root -m 0640 .env.example /etc/autostream/observability.
 AUTOSTREAM_NODE_CONFIG=/etc/autostream-observability/config.yml
 DATABASE_URL=mysql://<DB_USER>:<DB_PASSWORD>@tcp(<DB_HOST>:3306)/autostream_observability?parseTime=true
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
-OBSERVABILITY_BIND_ADDR=127.0.0.1:8080
+OBSERVABILITY_BIND_ADDR=127.0.0.1:8082
 REMEDIATION_MODE=suggest_only
 TZ=Asia/Tokyo
 ```

@@ -9,8 +9,8 @@
 ## 最初に設定する値
 
 - サービスが使う database の接続情報
-- Control Panel の公開 URL
-- サービス間通信に使う内部 URL
+- Control Panel自身の公開URLとdatabase接続
+- Node host固有の待受address、local保存先、output relay
 - 初回管理者を作るための設定
 - 保存先ディレクトリや一時ファイル置き場
 
@@ -19,11 +19,14 @@
 | 種類 | 置く場所 |
 | --- | --- |
 | 起動に必要な database URL | env ファイル |
-| サービス間の内部 URL | env ファイル |
+| Control Panelのbootstrap URL / database | Control Panelのenvファイル |
+| Node ID / Panel URL / Node Runtime Token / ingest署名鍵 | Panel生成のNode `config.yml` |
+| streamごとのservice route / provider値 | Control Panel runtime config |
 | Discord Bot token | Control Panel または secret store |
 | 配信先の stream key | Control Panel |
 | 通知用 Webhook URL | Control Panel |
-| 録画保存先 | env ファイルまたは Control Panel |
+| 録画ファイルのlocal path（既定値から変える場合） | Encoder Recorderのenvファイル |
+| Google Drive destination / OAuth | Control Panel |
 | 管理画面のタイムゾーン | Control Panel |
 
 ## Control Panel で管理する値

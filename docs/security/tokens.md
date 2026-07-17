@@ -26,9 +26,9 @@ $rng.GetBytes($bytes)
 | 管理名 | 入力先 | 生成方法 | 注意 |
 | --- | --- | --- | --- |
 | `AUTOSTREAM_SESSION_SECRET` | Control Panel env | random hex | session 保護用。Control Panel だけで使います |
-| `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Control Panel env、Observability env | random hex | 保存 secret と Node Runtime Token の暗号化用。環境ごとに固定し、紛失しないでください |
+| `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | Control Panel env、Observability env | 32 byte以上のrandom hex | 保存 secret と Node Runtime Token の暗号化用。32 byte以上を運用要件とし、Control PanelのNode操作はplaceholderや短い値を拒否します。環境ごとに固定し、紛失しないでください |
 | `AUTOSTREAM_SETUP_TOKEN` | Control Panel env | random hex | 初回管理者作成用。初回作成後は rotation するか無効値へ変えます |
-| `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Control Panel env | random hex | Control Panel が stream scoped token を発行し、Node登録時に Worker / Encoder Recorder の `config.yml` へ配布します |
+| `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | Control Panel env | 32 byte以上のrandom hex | Control Panel が stream scoped token を発行し、Node登録時に Worker / Encoder Recorder の `config.yml` へ配布します。`CHANGE_ME`等のplaceholderは拒否します |
 
 ## Node登録で生成される値
 

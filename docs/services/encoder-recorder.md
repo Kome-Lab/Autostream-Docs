@@ -31,10 +31,11 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 | 項目 | 目的 |
 | --- | --- |
 | `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Encoder Recorder 用 `config.yml` |
-| `AUTOSTREAM_DATA_DIR` | 作業データ保存先 |
 | `AUTOSTREAM_ARCHIVE_DIR` | 録画保存先 |
 | `FFMPEG_BIN` | FFmpeg 実行ファイル |
 | `AUTOSTREAM_OUTPUT_RELAY_URL` | 本番用 output relay |
+
+`AUTOSTREAM_ARCHIVE_DIR`は未指定なら`/var/lib/autostream/archives`、`FFMPEG_BIN`は未指定なら`ffmpeg`です。標準envでは既定値を重ねず、hostで変更が必要な場合だけ設定します。`AUTOSTREAM_DATA_DIR`はEncoder Recorderでは使用しません。
 
 ## Control Panelで管理するもの
 

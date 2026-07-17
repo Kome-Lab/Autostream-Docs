@@ -197,18 +197,24 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-encoder-recorder/config.yml
-      AUTOSTREAM_REQUIRE_SIGNED_INGEST_TOKENS: "true"
+      AUTOSTREAM_ENV: production
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
-      AUTOSTREAM_DATA_DIR: /var/lib/autostream/encoder-recorder
-      AUTOSTREAM_ARCHIVE_DIR: /var/lib/autostream/archives
-      FFMPEG_BIN: ffmpeg
-      TZ: ${TZ}
+      AUTOSTREAM_OUTPUT_RELAY_URL: rtmp://127.0.0.1/autostream/{stream_id}
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
       - ${SERVICE_CONFIG_ROOT}/encoder-recorder/config.yml:/etc/autostream-encoder-recorder/config.yml:ro
-      - encoder-data:/var/lib/autostream/encoder-recorder
       - archives:/var/lib/autostream/archives
+
+  output-relay:
+    image: tiangolo/nginx-rtmp:latest
+    restart: unless-stopped
+    depends_on:
+      encoder-recorder:
+        condition: service_started
+    network_mode: "service:encoder-recorder"
+    volumes:
+      - ./relay/nginx-rtmp.conf:/etc/nginx/nginx.conf:ro
 
   worker:
     build: ./src/autostream-worker
@@ -220,7 +226,6 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-worker/config.yml
-      ENCODER_RECORDER_URL: http://encoder-recorder:8080
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
     ports:
@@ -240,7 +245,6 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-discord-bot/config.yml
-      ENCODER_AUDIO_TOKEN: ""
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
     ports:
@@ -251,11 +255,18 @@ services:
 volumes:
   mariadb:
   control-panel-data:
-  encoder-data:
   archives:
 ```
 
-Encoderプレビューは既存のEncoder Recorder API portと`archives` volumeを使います。追加port、追加env、追加volumeは不要です。Encoder imageのDebian `ffmpeg` packageがHLSを生成し、`archives` volume内の`tmp/<stream_id>/preview/`へrolling segmentを置きます。final artifactの保持設定だけでは終了済み`tmp` directoryの削除を保証しないため、volume容量監視には`tmp`も含めます。
+Encoderプレビューは既存のEncoder Recorder API portと`archives` volumeを使います。プレビュー専用の追加port、追加env、追加volumeは不要です。Encoder imageのDebian `ffmpeg` packageがHLSを生成し、`archives` volume内の`tmp/<stream_id>/preview/`へrolling segmentを置きます。final artifactの保持設定だけでは終了済み`tmp` directoryの削除を保証しないため、volume容量監視には`tmp`も含めます。
+
+本番の配信出力は、YouTubeのstream keyをFFmpeg引数へ出さないため`output-relay`を経由します。全サービスを起動する前にEncoder Recorder repositoryの`relay/nginx-rtmp.conf.example`を`/opt/autostream/relay/nginx-rtmp.conf`へコピーし、upstreamを設定してください。この実値入りファイルはGit管理しません。
+
+```bash
+sudo install -d -m 0750 /opt/autostream/relay
+sudo install -m 0640 /opt/autostream/src/autostream-encoder-recorder/relay/nginx-rtmp.conf.example /opt/autostream/relay/nginx-rtmp.conf
+sudoedit /opt/autostream/relay/nginx-rtmp.conf
+```
 
 production で registry image を使う場合は、各 `build:` を次のような `image:` に置き換えます。
 
@@ -291,6 +302,17 @@ curl -fsS -X POST http://127.0.0.1:8080/setup/first-admin \
 ## 7. Nodeを作って `config.yml` を保存する
 
 Control Panel にログインし、Node登録で Encoder/Recorder、Worker、Discord Bot、Observability を作ります。入力するのは Node名、Host、Port、SSL、説明です。バージョンやCapabilityは入力しません。
+
+同じCompose network内では、Control Panel containerから到達できるservice名とcontainer portを登録します。
+
+| Node type | Host | Port | SSL |
+| --- | --- | ---: | --- |
+| Encoder/Recorder | `encoder-recorder` | `8080` | OFF |
+| Worker | `worker` | `8080` | OFF |
+| Discord Bot | `discord-bot` | `8080` | OFF |
+| Observability | `observability` | `8080` | OFF |
+
+host側へ公開する`127.0.0.1:8081`〜`8084`は、hostからのhealth確認やreverse proxy用です。Control Panel containerからNodeへ接続するHost / Portには指定しません。
 
 各Nodeの Configuration から `config.yml` を取得し、次のように保存します。Node service container は nonroot で起動するため、bind mount する `config.yml` は container 側の group `65532` が読める権限にします。
 
