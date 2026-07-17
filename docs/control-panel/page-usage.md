@@ -350,12 +350,12 @@ Settings は、Control Panel の表示名、時刻表示の基準、アカウン
 | タイムゾーン | Streams、Audit Logs、Account | 更新日時や操作時刻の表示に使う地域の IANA timezone を選ぶ |
 | メールサーバー | Users の登録完了メール | SMTP host、port、From、STARTTLS、認証情報を保存し、テスト送信で確認する |
 | Cloudflare Turnstile | password、Passkey、OAuth login、メール変更承認 | Site key と Secret key を保存する。secret は再表示されない |
-| Google Analytics | 管理画面の利用状況 | toggleをONにし、GA4の `G-` で始まるMeasurement IDを保存する |
+| Google Analytics | ログイン画面と管理画面の利用状況 | toggleをONにし、GA4の `G-` で始まるMeasurement IDを保存する |
 
 SMTP password は保存後に再表示されません。テスト送信は保存済みのメールサーバー設定を使います。SMTPを無効化すると、登録完了メールは送信されず、保存済み password も解除されます。
 Turnstile を有効化すると、password、Passkey、OAuthのいずれでloginする場合も、認証処理を開始する前にTurnstile tokenが必要になります。メール変更承認でも同様です。Secret keyはbackendだけがCloudflare Siteverifyへ送信し、画面やAPI responseには出しません。
 
-Google Analyticsは有効かつMeasurement IDが妥当な場合だけ読み込まれます。page viewにはoriginとpathnameだけを使い、query、hash、ログインユーザーID、選択stream IDを送信しません。Google signalsと広告パーソナライズも無効です。外部計測を許可しない環境ではtoggleをOFFのままにします。
+Google Analyticsは有効かつMeasurement IDが妥当な場合だけログイン画面と `/admin` 配下で読み込まれます。page viewにはoriginとpathnameだけを使い、query、hash、ログインユーザーID、選択stream IDを送信しません。セットアップ、メール確認、アーカイブ共有、tokenページは計測対象外です。Google signalsと広告パーソナライズも無効です。GA4データストリーム側の「拡張計測機能」はOFFにします。ONのままでは、browser historyによるpage viewとControl Panelの手動page viewが重複し、サイト内検索などの追加イベントからquery parameterが送信される可能性があります。外部計測を許可しない環境ではtoggleをOFFのままにします。
 
 タイムゾーンは env ではなく Control Panel の設定として保存します。変更後は Streams の更新日時、Audit Logs の時刻表示が期待した基準になっているか確認します。
 

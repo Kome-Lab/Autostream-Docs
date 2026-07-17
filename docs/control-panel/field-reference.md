@@ -41,13 +41,13 @@ Settings は、Control Panel 全体の表示名、時刻表示、アカウント
 | SMTP Username / Password | SMTP認証情報 | 認証が必要なSMTP | password は保存後に再表示されない |
 | テスト送信先 | 受信確認できるメールアドレス | SMTP設定の疎通確認 | Settings のテスト送信結果 |
 | Cloudflare Turnstile | Site key と Secret key | password、Passkey、OAuth login、メール変更承認のBOT確認 | secret は保存後に再表示されない |
-| Google Analytics | 有効化toggleと `G-` で始まるGA4 Measurement ID | 管理画面のページ閲覧数を確認するとき | 有効化後にGA4のリアルタイム表示で確認 |
+| Google Analytics | 有効化toggleと `G-` で始まるGA4 Measurement ID | ログイン画面と管理画面のページ閲覧数を確認するとき | 有効化後にGA4のリアルタイム表示で確認 |
 
 タイムゾーンを変えても service の起動時刻やログの保存時刻は変わりません。Control Panel の時刻表示に使います。
 SMTP password は secret store に保存され、API response、Audit Logs、Docs には raw value を出しません。テスト送信の response と Audit Logs には送信先を masked target として残します。remote SMTP では STARTTLS を有効にします。
 Turnstile secret も secret store に保存され、ブラウザへ返るのは site key と configured 状態だけです。Secret key は Cloudflare の Siteverify にControl Panel backendから送信します。
 
-Google Analyticsは、有効化されてMeasurement IDが妥当な場合だけ管理画面内で読み込まれます。送信するページ情報はoriginとpathnameだけで、query、hash、ログインユーザーID、選択中のstream IDをcustom parameterとして送りません。Google signalsと広告パーソナライズも無効です。Measurement IDはtracking scriptを読み込むため公開設定に含まれますが、SMTP設定やsecretは公開設定に含まれません。
+Google Analyticsは、有効化されてMeasurement IDが妥当な場合だけログイン画面と `/admin` 配下で読み込まれます。送信するページ情報はoriginとpathnameだけで、query、hash、ログインユーザーID、選択中のstream IDをcustom parameterとして送りません。セットアップ、メール確認、アーカイブ共有、tokenページでは読み込みません。Google signalsと広告パーソナライズも無効です。Measurement IDはtracking scriptを読み込むため公開設定に含まれますが、SMTP設定やsecretは公開設定に含まれません。GA4データストリーム側では「拡張計測機能」をOFFにします。ONのままでは、browser historyによる自動page viewとControl Panelの手動page viewが重複し、サイト内検索などの追加イベントからquery parameterが送信される可能性があります。
 
 ## Streams
 

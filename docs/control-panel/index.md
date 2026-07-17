@@ -67,7 +67,7 @@ AutoStream では、値の置き場所を分けると運用しやすくなりま
 | 通知先 webhook、通知チャンネルSMTP password | Notification Channels | incident通知の追加、停止、test を画面で行う |
 | アカウント登録完了メール用SMTP | Settings | Users で welcome email を送る前に設定する |
 | Cloudflare Turnstile site key / secret key | Settings | password、Passkey、OAuth login とメール変更承認のBOT確認に使う |
-| Google Analytics有効化 / GA4 Measurement ID | Settings | 管理画面のpage view計測を許可する環境だけで設定する |
+| Google Analytics有効化 / GA4 Measurement ID | Settings | ログイン画面と管理画面のpage view計測を許可し、GA4側の拡張計測機能をOFFにした環境だけで設定する |
 | 配信ごとの Discord Guild / VC / Chat channel、profile 選択 | Streams | 配信単位で変える値として扱う |
 
 ## 日常運用でよく使う流れ
