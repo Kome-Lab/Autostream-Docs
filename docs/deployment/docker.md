@@ -89,6 +89,8 @@ AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
 SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 SERVICE_CONFIG_ROOT=/opt/autostream/config
+AUTOSTREAM_IMAGE_REGISTRY=ghcr.io/kome-lab/autostream-docker
+AUTOSTREAM_DOCKER_VERSION=<PUBLISHED_BUNDLE_TAG>
 ```
 
 初回は Node Agent 用 `config.yml` がまだないため、Control Panel 起動後に Node登録で各Nodeを作り、Configuration から `config.yml` を `SERVICE_CONFIG_ROOT` 配下のサービス別 directory に保存してから各 service container を起動します。Worker / Encoder Recorder の stream ingest signing key もこのファイルへ入るため、`CONTROL_PANEL_TOKEN` やNode側の `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` を `.env` に手入力しません。
@@ -199,7 +201,7 @@ services:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-encoder-recorder/config.yml
       AUTOSTREAM_ENV: production
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
-      AUTOSTREAM_OUTPUT_RELAY_URL: rtmp://127.0.0.1/autostream/{stream_id}
+      AUTOSTREAM_OUTPUT_RELAY_URL: rtmp://output-relay:1935/autostream/{stream_id}
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
@@ -212,7 +214,6 @@ services:
     depends_on:
       encoder-recorder:
         condition: service_started
-    network_mode: "service:encoder-recorder"
     volumes:
       - ./relay/nginx-rtmp.conf:/etc/nginx/nginx.conf:ro
 
@@ -260,7 +261,7 @@ volumes:
 
 Encoderプレビューは既存のEncoder Recorder API portと`archives` volumeを使います。プレビュー専用の追加port、追加env、追加volumeは不要です。Encoder imageのDebian `ffmpeg` packageがHLSを生成し、`archives` volume内の`tmp/<stream_id>/preview/`へrolling segmentを置きます。final artifactの保持設定だけでは終了済み`tmp` directoryの削除を保証しないため、volume容量監視には`tmp`も含めます。
 
-本番の配信出力は、YouTubeのstream keyをFFmpeg引数へ出さないため`output-relay`を経由します。全サービスを起動する前にEncoder Recorder repositoryの`relay/nginx-rtmp.conf.example`を`/opt/autostream/relay/nginx-rtmp.conf`へコピーし、upstreamを設定してください。この実値入りファイルはGit管理しません。
+本番の配信出力は、YouTubeのstream keyをFFmpeg引数へ出さないため`output-relay`を経由します。Encoder Recorderとrelayは通常のCompose networkへ接続し、Encoder Recorderからservice DNS名`output-relay:1935`へ送ります。network namespaceは共有しません。全サービスを起動する前にEncoder Recorder repositoryの`relay/nginx-rtmp.conf.example`を`/opt/autostream/relay/nginx-rtmp.conf`へコピーし、upstreamを設定してください。この実値入りファイルはGit管理しません。
 
 ```bash
 sudo install -d -m 0750 /opt/autostream/relay
@@ -268,11 +269,15 @@ sudo install -m 0640 /opt/autostream/src/autostream-encoder-recorder/relay/nginx
 sudoedit /opt/autostream/relay/nginx-rtmp.conf
 ```
 
-production で registry image を使う場合は、各 `build:` を次のような `image:` に置き換えます。
+production でregistry imageを使う場合は、5サービスすべてで同じDocker bundle tagを使い、各`build:`を次のcanonical形式の`image:`へ置き換えます。
 
 ```yaml
-image: ghcr.io/<ORG>/autostream-control-panel:<VERSION>
+image: ${AUTOSTREAM_IMAGE_REGISTRY:-ghcr.io/kome-lab/autostream-docker}/control-panel:${AUTOSTREAM_DOCKER_VERSION:-latest}
 ```
+
+service名は`control-panel`、`discord-bot`、`encoder-recorder`、`observability`、`worker`です。本番の`.env`では`latest`ではなく、`release-manifest.json`が付いた公開済みbundle tagを固定します。Docker bundle versionと各serviceのsource versionは別管理であり、表示差は異常ではありません。
+
+Control Panelから更新する場合、各hostの非常駐`autostream-update-host` helperだけがrootとしてDocker CLIを使います。中央Updater、Control Panel、各service containerへ`/var/run/docker.sock`をmountしないでください。helperはroot所有`/etc/autostream/update-host.json`の固定policyに従い、共有`.env`を更新せず、service targetごとのroot-owned `version_env_file`を`--env-file`で指定して`<bundle tag>@sha256:<verified multiarch digest>`を永続化します。Updater管理serviceへ手動でComposeを実行する場合も同じtarget専用fileが必要です。設定とDocker target例は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
 
 ## 6. Control Panel だけ先に起動する
 
@@ -407,7 +412,7 @@ Control Panel UI で登録します。compose `.env` に直接入れないでく
 | webhook URL | Notification channel |
 | SMTP password | Email notification channel |
 
-Google Drive の archive upload は Service Account fallback を使いません。Control Panel の配信枠設定で OAuth account、folder ID、必要に応じて shared drive ID と archive file name を指定します。
+Google Drive の archive upload は Service Account fallback を使いません。Control Panel のArchive画面で OAuth account、folder ID、必要に応じてshared drive設定を持つDrive保存先と録画プロファイルを作り、配信枠で選択します。
 
 Encoder/Recorder の container へ Google credential JSON を mount しないでください。Drive folder ID、OAuth client secret、refresh token は Control Panel の runtime secret lease で Encoder/Recorder へ渡され、request body、env、logs、docs には残しません。
 

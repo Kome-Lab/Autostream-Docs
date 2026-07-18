@@ -76,6 +76,7 @@ export default {
         items: [
           { text: '共通の導入と運用', link: '/services/host-operations' },
           { text: 'Control Panelを導入する', link: '/services/control-panel-install' },
+          { text: '中央Updaterとシステム更新', link: '/operations/system-updates' },
           { text: 'Discord Botを導入する', link: '/services/discord-bot-install' },
           { text: 'Workerを導入する', link: '/services/worker-install' },
           { text: 'Encoder Recorderを導入する', link: '/services/encoder-recorder-install' },
@@ -90,6 +91,7 @@ export default {
           { text: '録画と保存', link: '/operations/archive-flow' },
           { text: '状態を確認する', link: '/operations/monitoring' },
           { text: 'インシデントと通知', link: '/operations/incidents-notifications' },
+          { text: 'サービスを更新する', link: '/operations/system-updates' },
           { text: 'バックアップと復元', link: '/operations/backup-restore' },
         ],
       },

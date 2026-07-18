@@ -29,13 +29,13 @@ Encoder Recorder は `AUTOSTREAM_ARCHIVE_DIR/final/<stream_id>/` に final artif
 
 rename は安全な basename のみ許可されます。`/`、`\`、`..` を含む名前、archive root 外を指す path、symlink、想定外の拡張子は拒否されます。運用上の対象は `.mp4`、`.mkv`、`.json`、`.jsonl`、`.vtt` です。
 
-Streamsで指定したローカル保持日数は archive profile の `retention_days` として Encoder Recorder へ配布されます。Encoder Recorder は package 完了後、現在処理中の配信枠を除き、`AUTOSTREAM_ARCHIVE_DIR/final/<stream_id>/` 配下の安全な stream ID ディレクトリだけを対象に期限切れ artifact を整理します。
+Streamsで選択した録画プロファイルの `retention_days` は Encoder Recorder へ配布されます。Encoder Recorder は package 完了後、現在処理中の配信枠を除き、`AUTOSTREAM_ARCHIVE_DIR/final/<stream_id>/` 配下の安全な stream ID ディレクトリだけを対象に期限切れ artifact を整理します。
 
 ## ディスク容量
 
 録画は想定より大きくなることがあります。長時間配信の前には、空き容量と古い録画の整理ルールを確認してください。
 
-Google Drive へ upload 済みでも、retention 期間中は Encoder Recorder の local archive に残る場合があります。disk 容量が厳しい場合は、Archive 画面から不要な local artifact を削除するか、配信枠のローカル保持日数を短くしてください。
+Google Drive へ upload 済みでも、retention 期間中は Encoder Recorder の local archive に残る場合があります。disk 容量が厳しい場合は、Archive 画面から不要な local artifact を削除するか、録画プロファイルの保持日数を短くしてください。
 
 ## 失敗時の切り分け
 

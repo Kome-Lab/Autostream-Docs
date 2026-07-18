@@ -78,6 +78,15 @@ Roles では、role 名と権限を管理します。
 
 権限は server-side で enforcement されます。画面でボタンが見えても、権限が足りなければ API 側で失敗します。
 
+システム更新は通常の配信操作と分けて付与します。
+
+| permission | 用途 |
+| --- | --- |
+| `system_updates.read` | Application Infoの更新対象、中央Updater状態、host到達状態、更新履歴を見る |
+| `system_updates.execute` | 更新jobの作成、queued jobのcancel、中央Update Agent tokenの必要scope発行 |
+
+`system_updates.execute`はservice停止、Control Panel再起動、Docker image切替につながるため、メンテナンス担当だけに付与します。中央Update Agent Nodeを作成するuserには`api_tokens.create`に加えて、scope escalationを防ぐため`system_updates.execute`も必要です。管理対象hostごとのUpdate Agent Nodeは作成しません。
+
 ## Security Settings
 
 Security Settings は、password、session、MFA、Passkey、secret 更新を扱います。

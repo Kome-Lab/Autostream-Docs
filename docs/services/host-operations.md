@@ -8,7 +8,7 @@
 
 | 項目 | 使い方 |
 | --- | --- |
-| 実行ファイル | Control Panel は `bin/control-panel`、Node Agent は release artifact に入っている `bin/autostream-<service>` を配置します |
+| 実行ファイル | release内ではControl Panelは`bin/control-panel`、Node Agentは`bin/autostream-<service>`です。systemdは`/opt/autostream/<service>/current/bin/...`から実行します |
 | env ファイル | `.env.example` を元に `/etc/autostream/<service>.env` を作ります |
 | systemd unit | `systemd/*.service.example` を元に `/etc/systemd/system/` へ置きます |
 | Node ID | Control Panel と各サービスを対応させる固定 ID です |
@@ -29,20 +29,26 @@
 | Encoder Recorder | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Worker | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Discord Bot | なし | Node Runtime Token は `config.yml`、Discord Bot token は Control Panel の Discord Settings に保存します |
+| 中央Update Agent | なし | 1つのNode Runtime Tokenとprivate release用GitHub tokenを中央`/etc/autostream/updater.json`だけに保存します |
+| 管理対象host helper | なし | Runtime Tokenなし。release tokenと90秒のmutation grantはSSH RPCで一時受信し、保存しません |
 
-Node Runtime Token と Configure Token は Node登録で生成されます。紛失した場合は Control Panel の Node登録 Configuration から再生成し、対象 service の `config.yml` を更新してください。
+Node Runtime Token と Configure Token は Node登録で生成されます。紛失した場合は Control Panel の Node登録 Configuration から再生成し、通常serviceは`config.yml`、中央Update Agentは中央`updater.json`の`runtime_token`を更新してください。管理対象host helperには再生成対象のtokenがありません。
 
 ## 推奨ディレクトリ
 
 | 用途 | 例 |
 | --- | --- |
-| 実行ファイル | Control Panel は `/usr/local/bin/control-panel`、Node Agent は `/usr/local/bin/autostream-<service>` |
+| 検証済みrelease | `/opt/autostream/<service>/releases/<version>-<digest12>` |
+| 現在release | `/opt/autostream/<service>/current`から検証済みreleaseへのsymlink |
+| 互換コマンド | `/usr/local/bin/control-panel`または`/usr/local/bin/autostream-<service>`から`current/bin/...`へのsymlink |
 | env | `/etc/autostream/<service>.env` |
 | Node config | `/etc/autostream-<service>/config.yml` |
 | service作業領域 | `/var/lib/autostream/<service>` |
 | 録画保存先 | `/var/lib/autostream/archives` |
-| Control Panel web assets | `/usr/share/autostream-control-panel` |
+| Control Panel web assets | `/opt/autostream/control-panel/current/share/autostream-control-panel` |
 | systemd unit | `/etc/systemd/system/autostream-<service>.service` |
+| 中央Updater設定 / state | `/etc/autostream/updater.json` / `/var/lib/autostream-updater` |
+| remote helper / root policy / state | `/usr/local/libexec/autostream-update-host` / `/etc/autostream/update-host.json` / `/var/lib/autostream-update-host` |
 
 env ファイルと Node Agent の `config.yml` には実値が入るため、権限は `0640` 程度にし、Git 管理しないでください。
 
@@ -63,8 +69,9 @@ sudo install -d -o root -g root /etc/autostream
 GitHub Release の host artifact は、archive の中に `bin/` が直接入るのではなく、archive 名と同じ top-level directory を 1 つ含みます。たとえば Control Panel の amd64 版は次の形です。
 
 ```text
-autostream-control-panel_v1.0.0_linux_amd64/
+autostream-control-panel_vX.Y.Z_linux_amd64/
   bin/control-panel
+  bin/autostream-updater
   systemd/autostream-control-panel.service.example
   .env.example
   checksums.txt
@@ -72,10 +79,12 @@ autostream-control-panel_v1.0.0_linux_amd64/
   share/autostream-control-panel/
 ```
 
-GitHub Release に添付されている `.sha256` は `artifacts/<asset>.tar.gz` というパスを含むため、download した archive と checksum file は `artifacts/` directory に置いてから確認してください。private repo の release asset は生の URL では `Not Found` になりやすいので、`gh auth login` 済みの GitHub CLI で取得します。
+GitHub Releaseに添付されているarchiveの`.sha256`は、pathを含まないarchive basenameだけを1行で記録します。downloadしたarchiveとchecksum fileを同じ`artifacts/` directoryに置き、そこでstrict検証します。自動更新対応releaseでは、さらに`release-manifest.json`と`release-manifest.json.sha256`を取得し、manifest sidecar、manifest内のartifact digest、archive内`checksums.txt`の3段階を検証します。private repoのrelease assetは生のURLでは`Not Found`になりやすいため、`gh auth login`済みのGitHub CLIを使います。
+
+Worker `v1.0.16`など既存のmanual-only releaseでsidecarが`artifacts/<asset>`を記録している場合は、fileを書き換えず`/opt/autostream/releases`から検証します。この旧形式はUpdater対象にせず、canonical basename sidecarとimmutable manifestを持つ新releaseへ移行します。
 
 ```bash
-AUTOSTREAM_VERSION=v1.0.0
+AUTOSTREAM_VERSION=vX.Y.Z
 AUTOSTREAM_ARCH=amd64   # arm64 server では arm64 に変更
 SERVICE_ARTIFACT=autostream-control-panel_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}.tar.gz
 
@@ -85,23 +94,27 @@ gh release download "${AUTOSTREAM_VERSION}" \
   --repo Kome-Lab/Autostream-ControlPanel \
   --pattern "${SERVICE_ARTIFACT}" \
   --pattern "${SERVICE_ARTIFACT}.sha256" \
+  --pattern release-manifest.json \
+  --pattern release-manifest.json.sha256 \
   --dir artifacts \
   --clobber
-sha256sum -c "artifacts/${SERVICE_ARTIFACT}.sha256"
+(cd artifacts && sha256sum --check --strict "${SERVICE_ARTIFACT}.sha256")
+(cd artifacts && sha256sum --check --strict release-manifest.json.sha256)
 tar -xzf "artifacts/${SERVICE_ARTIFACT}" -C /opt/autostream/releases
 cd "/opt/autostream/releases/${SERVICE_ARTIFACT%.tar.gz}"
 ```
 
-その後、展開後 directory の中で次を実行します。
+その後はarchive同梱の`README.install.md`に従います。READMEはmanifest内のservice、source version、asset名、digestを照合し、次を一続きで行います。
 
-1. `bin/` の実行ファイルを `/usr/local/bin/` に配置します。Node Agent は `autostream-<service>` が正規コマンド名です。
-2. `.env.example` を `/etc/autostream/<service>.env` にコピーします。
-3. `systemd/*.service.example` を `/etc/systemd/system/` にコピーし、必要ならパスを調整します。
-4. Control Panelの場合は、artifact同梱の`README.install.md`に従い、database、session、暗号化、setup、stream ingest署名鍵などのbootstrap envを設定します。
-5. Node Agentの場合は、envの待受address、local保存先などhost固有値だけを確認します。Observabilityだけはこれに加えて`DATABASE_URL`と`AUTOSTREAM_SECRET_ENCRYPTION_KEY`が必要です。Node ID、Control Panel URL、Node Runtime Token、stream ingest署名鍵は入力せず、Control Panelが表示するAuto Configureコマンドを対象hostで一度実行します。
-6. `systemctl daemon-reload` 後に対象serviceを起動します。
+1. archive外側、manifest、archive内fileのchecksumを検証します。
+2. `/opt/autostream/<service>/releases/<version>-<digest12>`へroot所有で展開し、`.artifact-sha256`と`.version`を作ります。
+3. binaryの`--version`を実際のservice userで確認し、`current` symlinkを原子的に切り替えます。
+4. `.env.example`とsystemd unitを配置します。unitは`current/bin/...`、Control Panelのweb directoryは`current/share/...`を参照します。
+5. 起動後にsystemdの`MainPID`が`current`配下のbinaryを実行していることを確認します。
 
-2026-06-29 時点では `Kome-Lab/Autostream-Worker` の GitHub Release asset は未公開です。Worker は source checkout から `go build -o bin/autostream-worker ./cmd/worker` で build するか、Worker repo の Host Release workflow で artifact を作成してから同じ配置手順を使ってください。
+Node Agentでは、envの待受address、local保存先などhost固有値だけを確認します。Observabilityだけはこれに加えて`DATABASE_URL`と`AUTOSTREAM_SECRET_ENCRYPTION_KEY`が必要です。Node ID、Control Panel URL、Node Runtime Token、stream ingest署名鍵はenvへ入力せず、Control Panelが表示するAuto Configureコマンドを対象hostで一度実行します。
+
+WorkerもGitHub Release assetが公開されています。`v1.0.16`ではLinux amd64/arm64 archiveを手動導入に利用できますが、immutableなmanifestがないためUpdater管理には使いません。自動更新を有効にする初期releaseには、新しく公開されたmanifest付きreleaseを選びます。各repositoryのsource versionは独立しているため、ほかのserviceと同じtagがあると仮定せず、対象repositoryのrelease tagを指定してください。
 
 ```bash
 sudo systemctl daemon-reload
@@ -125,22 +138,21 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 
 ## 更新方法
 
+中央管理ホストへ常駐`autostream-updater`を1つ配置し、各hostへ非常駐`autostream-update-host` helperを一度だけbootstrapした環境では、Application Infoからbackup、checksum検証、停止、適用、health確認、rollbackを一続きで実行できます。host helperはdaemonではなく、portやRuntime Tokenも不要です。導入方法は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
+
+中央Updaterまたは対象hostのhelperを配置していない場合も、manifest付きreleaseに同梱された`README.install.md`を使って手動更新できます。Application Infoの更新候補表示だけは引き続き利用できます。
+
 1. 現在の version と設定を控えます。Node Agent は `autostream-<service> --version`、Control Panel は `control-panel --version` で build version / commit / build date を確認できます。
 2. 新しい release artifact を取得します。
 3. env に新しい必須項目が増えていないか `.env.example` と比較します。
-4. 対象サービスを停止します。
-5. 実行ファイルを置き換えます。
-6. 起動します。
-7. Service Health と短いテスト配信で確認します。
+4. Control PanelまたはObservabilityではdatabaseをbackupします。
+5. READMEのchecksum、marker、`current` symlink切替手順を実行します。symlink切替だけでは起動中の旧processは変わりません。
+6. `systemctl daemon-reload`後に対象serviceを明示的にrestartします。
+7. `MainPID`、`/health`、`/version`、Service Health、短いテスト配信を確認します。
 
-```bash
-sudo systemctl stop autostream-<service>
-sudo install -o root -g root -m 0755 bin/autostream-<service> /usr/local/bin/autostream-<service>
-sudo systemctl start autostream-<service>
-sudo systemctl status autostream-<service>
-```
+`/usr/local/bin`へbinaryを直接上書きする旧手順は、旧unitを使うmanual-only構成の互換手順です。`current`を参照する新unitはそのcopyを実行しません。既存releaseにmanifestやmarkerを後付けせず、新しいmanifest付きreleaseを初期managed releaseとして導入してください。
 
-Control Panel、Observability のように database を使うサービスは、更新前にバックアップを取ってください。
+新processの起動に失敗した場合は旧releaseへ`current`を戻してrestartし、旧versionのhealthまで確認します。
 
 ## よくある失敗
 

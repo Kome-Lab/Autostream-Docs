@@ -47,7 +47,7 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 | YouTube Outputs | RTMPS URL、stream key、Live API 設定 |
 | Integrations | Google OAuth connected account、生成済みDrive destinationの確認 |
 | Archive Settings | 互換用のupload、dry-run、retention、Drive destination |
-| Streams | Encoder Profile、Archive OAuth account、Drive Folder ID、YouTube Output、input URL、preflight、Encoderプレビュー |
+| Streams | Encoder Profile、録画プロファイル、YouTube Output、preflight、Encoderプレビュー |
 | Archive | local artifact の download、rename、delete、Drive upload 結果の確認 |
 | Metrics / Incidents | FFmpeg、録画、upload、audio bridge の状態 |
 

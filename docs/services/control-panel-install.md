@@ -20,27 +20,16 @@ secret と token の生成方法は [秘密情報とtoken生成](/security/token
 
 ## host直接起動
 
-release archive を展開したら、次の順で配置します。
+自動更新対応の新しいhost releaseからarchive、archive sidecar、`release-manifest.json`、manifest sidecarを取得し、archive同梱の`README.install.md`に従って導入します。READMEはchecksumとmanifest identityを検証し、root所有の`/opt/autostream/control-panel/releases/<version>-<digest12>`を作り、`/opt/autostream/control-panel/current`を原子的に切り替えます。systemd unitは`current/bin/control-panel`、web assetは`current/share/autostream-control-panel`を参照します。詳しい検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
 
-```bash
-AUTOSTREAM_VERSION=v1.0.0
-AUTOSTREAM_ARCH=amd64   # arm64 server では arm64 に変更
-cd "/opt/autostream/releases/autostream-control-panel_${AUTOSTREAM_VERSION}_linux_${AUTOSTREAM_ARCH}"
-sudo install -o root -g root -m 0755 bin/control-panel /usr/local/bin/control-panel
-sudo install -d -o autostream -g autostream /var/lib/autostream/control-panel
-sudo install -d -o root -g root /usr/share/autostream-control-panel
-sudo cp -a share/autostream-control-panel/. /usr/share/autostream-control-panel/
-sudo install -o root -g root -m 0644 systemd/autostream-control-panel.service.example /etc/systemd/system/autostream-control-panel.service
-sudo install -d -o root -g root -m 0750 /etc/autostream
-sudo install -o root -g root -m 0640 .env.example /etc/autostream/control-panel.env
-```
+既存のmanifestなしreleaseを`/usr/local/bin`と`/usr/share`へ直接copyする配置はmanual-onlyです。既存releaseへmanifestを後付けせず、manifest付きの新しいreleaseを初期managed releaseとして導入します。
 
 `/etc/autostream/control-panel.env` を編集します。
 
 ```text
 AUTOSTREAM_BIND_ADDR=127.0.0.1:8080
 AUTOSTREAM_PUBLIC_URL=https://<CONTROL_PANEL_HOST>
-AUTOSTREAM_WEB_DIR=/usr/share/autostream-control-panel
+AUTOSTREAM_WEB_DIR=/opt/autostream/control-panel/current/share/autostream-control-panel
 DATABASE_URL=mysql://<DB_USER>:<DB_PASSWORD>@tcp(<DB_HOST>:3306)/autostream_control_panel?parseTime=true
 AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
@@ -63,11 +52,15 @@ AUTOSTREAM_DISCORD_BOT_LATEST_VERSION=
 AUTOSTREAM_DISCORD_BOT_UPDATE_CHECK_URL=
 AUTOSTREAM_OBSERVABILITY_LATEST_VERSION=
 AUTOSTREAM_OBSERVABILITY_UPDATE_CHECK_URL=
+AUTOSTREAM_DOCKER_LATEST_VERSION=
+AUTOSTREAM_DOCKER_UPDATE_CHECK_URL=
 AUTOSTREAM_UPDATE_CHECK_TOKEN=
 TZ=Asia/Tokyo
 ```
 
-Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。新しい version の通知は、Control Panel、Worker、Encoder/Recorder、Discord Bot、ObservabilityそれぞれのGitHub Releases APIから確認し、Nodeの報告versionは同じサービスの最新releaseとのみ比較します。private repo のため、本番ではreleaseを読めるGitHub tokenを `AUTOSTREAM_UPDATE_CHECK_TOKEN` に設定してください。固定値や別endpointを使う場合は、上記のサービス別環境変数を設定します。URLはHTTPSを使います。
+Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。systemd配備はControl Panel、Worker、Encoder/Recorder、Discord Bot、ObservabilityそれぞれのGitHub Releases API、Docker配備は`Autostream-Docker`のbundle releaseを確認します。private repo のため、本番ではreleaseを読めるGitHub tokenを `AUTOSTREAM_UPDATE_CHECK_TOKEN` に設定してください。固定値や別endpointを使う場合は、上記のサービス別環境変数を設定します。URLはHTTPSを使います。固定latest-version値やcustom endpointは検出・表示専用です。GitHub Releaseの`release-manifest.json` assetを検証できないため、Application Infoからの自動更新は`manifest_unverified`として無効になります。
+
+Application Infoから実際に更新するには、中央管理ホストで常駐する`autostream-updater`が1つ必要です。各管理対象hostにはdaemonではなく、一度だけbootstrapする非常駐`autostream-update-host` helperを置きます。Control Panel自身の更新を含む構成は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
 
 起動します。
 
@@ -109,8 +102,9 @@ Control Panel の [Node Agent登録](/control-panel/node-agent-registration) で
 | Worker | `worker` | `config.yml`、Configure Token、Node Runtime Token |
 | Encoder Recorder | `encoder_recorder` | `config.yml`、Configure Token、Node Runtime Token |
 | Observability | `observability` | `config.yml`、Configure Token、Node Runtime Token |
+| 中央Update Agent | `update_agent` | 1つのNode Runtime Tokenを中央のroot所有`updater.json`へ設定。管理対象hostには配布しない |
 
-Configure Token と Node Runtime Token は作成時だけ表示されます。紛失した場合は Configuration から再生成し、対象サービスの `config.yml` を更新してください。
+Configure Token と Node Runtime Token は作成時だけ表示されます。紛失した場合は Configuration から再生成し、通常serviceは`config.yml`、中央Update Agentは中央`updater.json`の`runtime_token`を更新してください。
 
 ## 他サービスを許可する
 

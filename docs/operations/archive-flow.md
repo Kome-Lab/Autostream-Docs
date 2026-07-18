@@ -26,7 +26,7 @@ Archive 画面では、配信枠を選ぶと Encoder Recorder に残っている
 
 ファイル名は `.mp4`、`.mkv`、`.json`、`.jsonl`、`.vtt` の安全な basename にしてください。path 区切り、`..`、symlink、archive root 外を指す操作は拒否されます。
 
-Streamsで設定したローカル保持日数を過ぎた artifact は、Encoder Recorder の package 完了後に整理されます。現在処理中の配信枠は cleanup 対象から除外されるため、進行中の録画を保持期間だけで削除することはありません。
+Streamsで選択した録画プロファイルの保持日数を過ぎた artifact は、Encoder Recorder の package 完了後に整理されます。現在処理中の配信枠は cleanup 対象から除外されるため、進行中の録画を保持期間だけで削除することはありません。
 
 ## よくある問題
 

@@ -20,7 +20,7 @@
 | --- | --- |
 | 起動に必要な database URL | env ファイル |
 | Control Panelのbootstrap URL / database | Control Panelのenvファイル |
-| Node ID / Panel URL / Node Runtime Token / ingest署名鍵 | Panel生成のNode `config.yml` |
+| 通常NodeのNode ID / Panel URL / Node Runtime Token / ingest署名鍵 | Panel生成のNode `config.yml` |
 | streamごとのservice route / provider値 | Control Panel runtime config |
 | Discord Bot token | Control Panel または secret store |
 | 配信先の stream key | Control Panel |
@@ -28,6 +28,8 @@
 | 録画ファイルのlocal path（既定値から変える場合） | Encoder Recorderのenvファイル |
 | Google Drive destination / OAuth | Control Panel |
 | 管理画面のタイムゾーン | Control Panel |
+| 中央Update AgentのNode Runtime Token、GitHub token、SSH host inventory、target identity | 中央管理ホストのroot所有`/etc/autostream/updater.json` |
+| 更新対象のunit、path、backup command、Compose policy、image repository | 各管理対象ホストのroot所有`/etc/autostream/update-host.json` |
 
 ## Control Panel で管理する値
 
@@ -39,6 +41,8 @@
 - Streams、Audit Logs、Account の時刻表示に使うタイムゾーン
 
 運用中に変える可能性がある値は、できるだけ Control Panel に寄せると管理しやすくなります。
+
+ただしhost更新のprivileged targetはControl Panelや中央設定で変更しません。中央`updater.json`はroot所有、group `autostream-updater`、mode `0640`にし、各hostの`update-host.json`はroot所有`0600`にします。中央にはSSH routingとtarget identityだけ、privileged commandやpathはremote root設定だけに置き、画面や更新jobから任意commandやpathを渡せない境界を保ちます。詳細は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
 
 ## 設定後の確認
 

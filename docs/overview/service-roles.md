@@ -9,6 +9,7 @@ AutoStream は 1 つの大きなアプリではなく、役割ごとに分かれ
 3. Worker が配信ジョブの進行、表示イベント、状態イベントを扱います。
 4. Encoder Recorder が音声、イベント、外部映像入力を受け取り、FFmpeg で配信と録画を行います。
 5. Observability が heartbeat、metric、エラー、通知を集約します。
+6. 中央Update AgentがControl Panelから更新jobを取り、host-key-pinned SSHで各hostの非常駐helperを呼び出します。
 
 ## サービスごとの役割
 
@@ -19,6 +20,7 @@ AutoStream は 1 つの大きなアプリではなく、役割ごとに分かれ
 | Worker | ジョブ制御、字幕/chat/参加者event 生成 | 基本しない |
 | Encoder Recorder | FFmpeg、配信、録画、保存処理 | する |
 | Observability | 監視、通知、診断、インシデント | しない |
+| 中央Update Agent / host helper | release検証、host別job制御 / service更新、health確認、rollback | 中央は常駐、host helperは更新時だけ起動 |
 
 ## 設定の考え方
 
@@ -26,7 +28,8 @@ AutoStream は 1 つの大きなアプリではなく、役割ごとに分かれ
 - 運用中に変える provider 値は Control Panel で管理します。
 - Discord token、YouTube stream key、Google Drive 認証、Webhook URL は raw のまま公開しません。
 - サービス間 token は、送信用と受信用を混同しないでください。
+- Update Agentは配信処理のNodeではありません。常駐`autostream-updater`は中央管理ホストに1つだけ置きます。各hostはdaemon、port、Runtime Tokenを持たず、root所有policyとforced-command SSHで制限した非常駐`autostream-update-host`だけを置きます。Control Panelや各serviceへDocker socketやroot権限を渡しません。
 
 ## 次に読むページ
 
-各サービスの詳しい設定は、[Control Panel](/services/control-panel)、[Discord Bot](/services/discord-bot)、[Worker](/services/worker)、[Encoder Recorder](/services/encoder-recorder)、[Observability](/services/observability) を確認してください。
+各サービスの詳しい設定は、[Control Panel](/services/control-panel)、[Discord Bot](/services/discord-bot)、[Worker](/services/worker)、[Encoder Recorder](/services/encoder-recorder)、[Observability](/services/observability) を確認してください。更新の構成は[Control Panelからサービスを更新する](/operations/system-updates)にまとめています。
