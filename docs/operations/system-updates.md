@@ -248,7 +248,10 @@ systemd targetの例です。
       "deployment_mode": "systemd",
       "health_url": "http://127.0.0.1:8080/health",
       "version_url": "http://127.0.0.1:8080/updater/version",
-      "backup_argv": ["/usr/local/sbin/autostream-backup-control-panel"],
+      "backup_argv": [
+        "/usr/local/sbin/autostream-backup-control-panel",
+        "replace-with-control-panel-database-name"
+      ],
       "systemd": {
         "systemctl_path": "/usr/bin/systemctl",
         "runuser_path": "/usr/sbin/runuser",
@@ -264,7 +267,7 @@ systemd targetの例です。
 }
 ```
 
-top-levelと全targetの`host_id`は一致させます。`arch`はhelper artifactと実hostに一致させます。`health_url`と`version_url`は同じhostのloopbackだけを指定し、`version_url`のpathは全serviceで`/updater/version`を使います。Control PanelとObservabilityではroot所有`backup_argv`が必須です。
+top-levelと全targetの`host_id`は一致させます。`arch`はhelper artifactと実hostに一致させます。`health_url`と`version_url`は同じhostのloopbackだけを指定し、`version_url`のpathは全serviceで`/updater/version`を使います。Control PanelとObservabilityではroot所有`backup_argv`が必須です。配布スクリプトの標準DB名と実際の`DATABASE_URL`のDB名が異なる場合は、上の例のように実DB名を固定第2引数へ指定します。MariaDBの`GRANT`対象、事前の実dump、`backup_argv`の固定第2引数には、`DATABASE_URL`で確認した同一のDB名を必ず使います。DB名は英数字で始まる1〜64文字のASCII英数字・underscore・hyphenだけを許可し、ブラウザやupdate jobから渡しません。
 
 標準systemd targetの対応は次のとおりです。Node serviceの`target_id`はControl Panelに登録したNode IDに合わせます。
 
@@ -288,7 +291,10 @@ Docker targetも中央設定にはidentityだけを置き、次のfull policyは
   "deployment_mode": "docker",
   "health_url": "http://127.0.0.1:8080/health",
   "version_url": "http://127.0.0.1:8080/updater/version",
-  "backup_argv": ["/usr/local/sbin/autostream-backup-control-panel"],
+  "backup_argv": [
+    "/usr/local/sbin/autostream-backup-control-panel",
+    "replace-with-control-panel-database-name"
+  ],
   "docker": {
     "docker_path": "/usr/bin/docker",
     "compose_project": "autostream",
