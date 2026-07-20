@@ -7,7 +7,8 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs --host 127.0.0.1",
     "docs:check-secrets": "node scripts/check-secrets.mjs",
-    "docs:check": "npm run docs:check-secrets"
+    "docs:check-release-workflow": "node scripts/check-release-workflow.mjs",
+    "docs:check": "npm run docs:check-secrets && npm run docs:check-release-workflow"
   },
   "devDependencies": {
     "esbuild": "0.25.12",

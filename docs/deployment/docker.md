@@ -378,6 +378,11 @@ server {
     ssl_certificate /etc/letsencrypt/live/control.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/control.example.com/privkey.pem;
 
+    # The update helper calls this endpoint directly on loopback.
+    location = /updater/version {
+        return 404;
+    }
+
     # The path contains a signed bearer capability for VLC/HLS playback.
     location ^~ /stream-previews/ {
         access_log off;

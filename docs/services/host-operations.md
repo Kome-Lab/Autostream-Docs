@@ -148,7 +148,7 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 4. Control PanelまたはObservabilityではdatabaseをbackupします。
 5. READMEのchecksum、marker、`current` symlink切替手順を実行します。symlink切替だけでは起動中の旧processは変わりません。
 6. `systemctl daemon-reload`後に対象serviceを明示的にrestartします。
-7. `MainPID`、`/health`、`/version`、Service Health、短いテスト配信を確認します。
+7. `MainPID`、`/health`、`/updater/version`、Service Health、短いテスト配信を確認します。
 
 `/usr/local/bin`へbinaryを直接上書きする旧手順は、旧unitを使うmanual-only構成の互換手順です。`current`を参照する新unitはそのcopyを実行しません。既存releaseにmanifestやmarkerを後付けせず、新しいmanifest付きreleaseを初期managed releaseとして導入してください。
 

@@ -60,7 +60,7 @@ WorkerもGitHub Release assetが公開されています。`v1.0.16`ではLinux 
 4. root所有の`/opt/autostream/<service>/releases/<version>-<digest12>`へ展開し、markerを作って`current` symlinkを切り替えます。
 5. `.env.example`を参考にenvを作り、`current/bin/...`を参照するsystemd unitを配置します。
 6. `systemctl daemon-reload`後にserviceを起動します。
-7. `MainPID`の実行file、`/health`、`/version`、Control PanelのService Healthを確認します。
+7. `MainPID`の実行file、`/health`、`/updater/version`、Control PanelのService Healthを確認します。
 
 ## ディレクトリ例
 
@@ -104,7 +104,7 @@ WorkerもGitHub Release assetが公開されています。`v1.0.16`ではLinux 
 3. env fileに新しい必須項目がないか確認し、databaseを持つserviceはbackupします。
 4. markerを確認して`current`を原子的に切り替えます。この時点では起動中の旧processは変わりません。
 5. `systemctl daemon-reload`後にserviceを明示的にrestartします。
-6. `MainPID`、`/health`、`/version`、Control Panelで確認します。失敗時は旧linkへ戻してrestartし、旧versionのhealthも確認します。
+6. `MainPID`、`/health`、`/updater/version`、Control Panelで確認します。失敗時は旧linkへ戻してrestartし、旧versionのhealthも確認します。
 
 ## Dockerとの使い分け
 
