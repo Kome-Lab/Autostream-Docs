@@ -65,15 +65,16 @@ Updater helperがtargetの稼働version確認に使う共通endpointは`/updater
 
 ## 中央Update Agentを1つ登録する
 
-1. Control Panelの **Node登録** でNode typeに`Update Agent`を選びます。
-2. 中央Updater用の固定Node IDを決めます。例: `central-updater`。
-3. Host、Port、SSLは中央`updater.json`の`api`と一致させます。同じホストなら`127.0.0.1:8090`、別ホストならTLSを有効にした管理network endpointにします。
-4. 作成直後に一度だけ表示されるNode Runtime Tokenを中央管理ホストだけへ渡します。
-5. Tokenを中央`/etc/autostream/updater.json`の`runtime_token`へ設定します。
+1. 後述の手順で各管理対象hostへ非常駐helperをbootstrapし、target policyを配置します。
+2. sampleを中央`/etc/autostream/updater.json`へinstallし、GitHub token、API、host inventory、target identity、SSH pathを先に完成させます。
+3. Control Panelの **Node登録** でNode typeに`Update Agent`を選び、中央Updater用の固定Node IDを決めます。例: `central-updater`。
+4. Host、Port、SSLは完成済み`updater.json`の`api`と一致させます。同じホストなら`127.0.0.1:8090`、別ホストならTLSを有効にした管理network endpointにします。Auto Configureはこのlocal API設定を変更しません。
+5. 作成後のConfigurationに表示されるAuto Configure commandを中央管理ホストで実行し、promptへConfigure Tokenを貼り付けます。commandやprocess argvへTokenを含めず、Node Runtime Tokenも手でJSONへ貼り付けません。
+6. activation完了後に`validate-config`を通し、成功してから`autostream-updater`を再起動します。
 
 管理対象hostごとにUpdate Agent Nodeを作成しません。`autostream-update-host`には`config.yml`、Configure Token、Runtime Tokenがありません。
 
-Update Agent tokenには`updates.claim`、`updates.report`、`updates.authorize`が必要です。対応前に発行したtokenは、対応Control Panelをdeployした後に再生成して中央設定へ反映します。
+Update Agent tokenには`updates.claim`、`updates.report`、`updates.authorize`が必要です。対応前に発行したtokenは、対応Control Panelをdeployした後にConfigure Tokenを再生成し、同じtoken-free Auto Configure command形へ新しいTokenを入力して中央設定へ反映します。
 
 ## 旧per-host Updaterから移行する
 
@@ -83,7 +84,7 @@ Update Agent tokenには`updates.claim`、`updates.report`、`updates.authorize`
 2. 新しいControl Panelとmigration `039`〜`041`をdeployします。旧`/services/update-jobs/{id}/authorize`はHTTP 410になり、host mappingを報告しない旧Updaterは新しいjobをclaimできません。新しい`autostream-updater` binaryも`hosts`のない旧configでは起動しません。
 3. 各管理対象hostへ、この文書の手順で非常駐`autostream-update-host`、forced SSH key、exact sudoers、root policyをbootstrapします。
 4. 中央にするhostを1台決め、そこを含む全hostの旧`autostream-updater.service`を停止・disableします。旧configとstateは移行確認が終わるまでrootだけが読める場所へ保全し、旧daemonと中央Updaterを同時稼働させません。
-5. 選んだ中央hostへ新しいbinary、`hosts`を含む中央config、1つのUpdate Agent Node Runtime Tokenを配置します。`validate-config`で全hostのrestricted probeを通してから中央serviceを開始し、reachabilityと現在versionがControl Panelに表示されることを確認します。
+5. 選んだ中央hostへ新しいbinaryと`hosts`を含む中央configを配置し、Update AgentのAuto Configure commandを初回実行します。失敗または結果不確定の場合はUpdaterを再起動せず、新しいConfigure Tokenを発行して同じtoken-free commandへ入力し直します。activation成功後に`validate-config`で全hostのrestricted probeを通してから中央serviceを開始します。reachabilityと現在versionがControl Panelに表示されることを確認します。
 6. 影響の小さいtargetで試験更新と必要ならreconcileまで確認した後、旧per-host Update Agent NodeのRuntime Tokenを失効させ、旧Node登録、config、unitを撤去します。旧stateは監査・ロールバックに必要な保持期間を過ぎてから削除します。remote helperのroot policy、state、rollback baselineは削除しません。
 7. 各管理対象hostで`systemctl list-unit-files 'autostream-update*'`を確認します。常駐してよいのは中央hostの`autostream-updater.service`だけで、`autostream-update-host.service`はどのhostにも存在してはいけません。
 
@@ -109,9 +110,10 @@ sudo install -d -o root -g autostream-updater -m 0750 \
   /etc/autostream/updater /etc/autostream/updater/ssh
 sudo install -o root -g root -m 0755 \
   "$RELEASE_DIR/bin/autostream-updater" /usr/local/bin/autostream-updater
-sudo test ! -e /etc/autostream/updater.json
-sudo install -o root -g autostream-updater -m 0640 \
-  "$RELEASE_DIR/autostream-updater.json.example" /etc/autostream/updater.json
+if ! sudo test -e /etc/autostream/updater.json; then
+  sudo install -o root -g autostream-updater -m 0640 \
+    "$RELEASE_DIR/autostream-updater.json.example" /etc/autostream/updater.json
+fi
 sudo test ! -e /etc/autostream/updater/ssh/known_hosts
 sudo install -o root -g autostream-updater -m 0640 /dev/null \
   /etc/autostream/updater/ssh/known_hosts
@@ -120,7 +122,7 @@ sudo install -o root -g root -m 0644 \
   /etc/systemd/system/autostream-updater.service
 ```
 
-既存`updater.json`、SSH key、`known_hosts`をrelease更新で上書きしません。sampleとの差分を確認して明示的に変更します。
+既存`updater.json`、SSH key、`known_hosts`をrelease更新で上書きしません。sampleとの差分を確認し、local設定だけを明示的に変更します。Auto Configureが更新するのは`panel_url`、`node_id`、`runtime_token`、`service_name`だけです。`github_token`、`api`、`state_dir`、interval、`hosts`、`targets`、SSH pathなどのlocal policyは変更しません。
 
 ### host別SSH keyを作る
 
@@ -414,7 +416,7 @@ sudo stat -c '%U:%G:%a %n' \
 
 ## 中央inventoryを設定する
 
-中央`/etc/autostream/updater.json`は次の形です。
+中央`/etc/autostream/updater.json`は次の形です。sampleをinstallした後、`github_token`、`api`、`state_dir`、interval、`hosts`、`targets`、SSH pathをこのhostの実値へ変更します。先頭の`panel_url`、`node_id`、`runtime_token`、`service_name`は後続のAuto Configureが設定するため、Node Runtime Tokenを手で貼り付けません。
 
 ```json
 {
@@ -474,6 +476,19 @@ sudo find /etc/autostream/updater/ssh -type f -name '*_ed25519' \
   -exec chmod 0640 {} \;
 ```
 
+helper bootstrap、local inventory、file権限を完成させた後、Control Panelで中央Update Agentを1つ作成します。登録済みの場合はConfigure Tokenを再生成し、Configurationに表示されたAuto Configure commandを中央hostで初回実行します。表示されるcommandは次の形です。
+
+```bash
+sudo autostream-updater configure \
+  --panel-url "https://control.example.com" \
+  --node "central-updater" \
+  --config "/etc/autostream/updater.json"
+```
+
+command自体にはConfigure Tokenを含めません。初回実行時にTTY promptへ貼り付けるか、権限を制限した標準入力から渡します。Configure Tokenを1回だけ消費し、`panel_url`、`node_id`、`runtime_token`、`service_name`だけを原子的に更新します。`github_token`、`api`、`hosts`、`targets`、SSH設定、その他のlocal policyは保持されます。
+
+stageしたRuntime Tokenはactivation成功まではinactiveで、旧Runtime Tokenがactiveのままです。ただしactivationの応答を受け取れず結果不確定になった場合は、CLIだけではどちらのRuntime Tokenがactiveか判断できません。local atomic commit後にreload、validation、activationが失敗した場合、disk上の`updater.json`にはstage済みidentityが残ることがあります。CLIはactivation用のTokenやstateを永続化しないため、Updaterを再起動せず、Configurationで必ず新しいConfigure Tokenを発行し、同じtoken-free command形へその新しいTokenを入力して再実行します。activation成功を確認するまで`validate-config`やUpdater起動へ進みません。
+
 ## 全hostをprobeして中央Updaterを起動する
 
 中央の`validate-config`はstatic validationだけではありません。全hostへ並列に接続し、各host最大15秒でrestricted probeを行います。OSがLinuxであること、host ID、architecture、remote target集合、service type、deployment modeが中央inventoryと完全一致しない場合は失敗します。probeはroot所有のhelper設定全体のSHA-256と、targetごとの現在版も返します。
@@ -485,7 +500,8 @@ sudo /usr/local/bin/autostream-updater validate-config \
   --config /etc/autostream/updater.json
 sudo systemd-analyze verify /etc/systemd/system/autostream-updater.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now autostream-updater
+sudo systemctl enable autostream-updater
+sudo systemctl restart autostream-updater
 sudo systemctl status autostream-updater
 sudo journalctl -u autostream-updater -n 100 --no-pager
 ```

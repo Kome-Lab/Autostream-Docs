@@ -28,7 +28,7 @@
 | 録画ファイルのlocal path（既定値から変える場合） | Encoder Recorderのenvファイル |
 | Google Drive destination / OAuth | Control Panel |
 | 管理画面のタイムゾーン | Control Panel |
-| 中央Update AgentのNode Runtime Token、GitHub token、SSH host inventory、target identity | 中央管理ホストのroot所有`/etc/autostream/updater.json` |
+| 中央Update Agentの接続identity、GitHub token、API、SSH host inventory、target identity | 中央管理ホストのroot所有`/etc/autostream/updater.json`。接続identityだけAuto Configure、その他はlocal設定 |
 | 更新対象のunit、path、backup command、Compose policy、image repository | 各管理対象ホストのroot所有`/etc/autostream/update-host.json` |
 
 ## Control Panel で管理する値

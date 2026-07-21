@@ -1,6 +1,6 @@
 # 秘密情報とtoken生成
 
-AutoStream の新規構成では、サービス間認証は Control Panel の Node登録に寄せます。Worker、Encoder Recorder、Discord Bot、Observability はサービス間tokenを env に手入力せず、Node登録で生成される `config.yml` の Node Runtime Token を使います。Worker と Encoder Recorder の stream ingest signing key も同じ `config.yml` で配布します。Update AgentもNode Runtime Tokenを使いますが、中央管理ホストに1つだけ登録し、通常Nodeの`config.yml`ではなく中央のroot所有`/etc/autostream/updater.json`へ設定します。
+AutoStream の新規構成では、サービス間認証は Control Panel の Node登録に寄せます。Worker、Encoder Recorder、Discord Bot、Observability はサービス間tokenを env に手入力せず、Node登録で生成される `config.yml` の Node Runtime Token を使います。Worker と Encoder Recorder の stream ingest signing key も同じ `config.yml` で配布します。Update Agentも中央管理ホストに1つだけ登録し、sampleとlocal inventoryを準備したroot所有`/etc/autostream/updater.json`へAuto Configureで接続identityを設定します。
 
 Observability も例外ではありません。Control Panel は登録済み `observability` Node の公開URLと暗号化保存された Node Runtime Tokenを使って、Monitoring、Incidents、Notification Channels、signal転送を呼び出します。Observability用の別admin tokenや直接ingest tokenは作りません。
 
@@ -35,11 +35,11 @@ $rng.GetBytes($bytes)
 | token | 扱い |
 | --- | --- |
 | Node Runtime Token | Control Panel の Node登録で生成され、`config.yml` の `auth.token` に入ります。Control Panel 側では暗号化保存されます |
-| Configure Token | Node登録の Configuration で短期tokenとして表示され、`autostream-<service> configure` が `config.yml` を取得するために使います |
+| Configure Token | Node登録のConfigurationで短期tokenとして表示され、`autostream-<service> configure`が通常Nodeの`config.yml`またはUpdate Agentの接続identityを取得するために使います。Update Agentではcommandやprocess argvへ含めず、TTYまたは標準入力から渡します |
 | Stream ingest signing key | Worker / Encoder Recorder の `config.yml` の `stream_ingest.signing_key` に入ります。通常のNode参照APIでは再表示されません |
 | `CONTROL_PANEL_TOKEN` | env へ手入力しません。`config.yml` 内の Node Runtime Token として配布されます |
 
-Node Runtime Token と Configure Token を紛失した場合は、Control Panel の Node登録 Configuration から再生成します。通常serviceは`config.yml`、中央Update Agentは中央`updater.json`の`runtime_token`を更新します。管理対象host helperにはRuntime Tokenがありません。
+Node Runtime TokenとConfigure Tokenを紛失した場合は、Control PanelのNode登録Configurationから再生成します。通常serviceは`config.yml`を更新し、中央Update Agentは新しいAuto Configure commandで`updater.json`の接続identityだけを更新してから再起動します。管理対象host helperにはRuntime Tokenがありません。
 
 ## サービス別の入力一覧
 
@@ -50,10 +50,10 @@ Node Runtime Token と Configure Token を紛失した場合は、Control Panel 
 | Encoder Recorder | なし | Node Runtime Token と stream ingest signing key を `config.yml` で受け取る | YouTube stream key は標準運用では Control Panel の YouTube Outputs に保存 |
 | Worker | なし | Node Runtime Token と stream ingest signing key を `config.yml` で受け取る | なし |
 | Discord Bot | なし | Node Runtime Token を `config.yml` で受け取る | Discord developer portal の Bot token を Control Panel の Discord Settings に保存 |
-| 中央Update Agent | なし | 共通service scopeと`updates.claim` / `updates.report` / `updates.authorize`を持つNode Runtime Tokenを1つ受け取り、中央のroot所有`updater.json`へ設定 | private GitHub Releasesを読むtokenを中央の`updater.json`だけに設定 |
+| 中央Update Agent | なし | 共通service scopeと`updates.claim` / `updates.report` / `updates.authorize`を持つNode Runtime TokenをAuto Configureで中央のroot所有`updater.json`へ設定 | private GitHub Releasesを読むtokenを中央の`updater.json`だけにlocal設定 |
 | 管理対象host helper | なし | Node Runtime Tokenなし。root変更時だけ90秒のone-time mutation grantをSSH RPCで受け取る | release tokenはstage中だけSSH stdinで受け取り、保存しない |
 
-Update Agent用のNode Runtime TokenとGitHub tokenは中央`updater.json`へ直接入り、通常Nodeより強い更新権限の境界にあります。fileをroot所有、group `autostream-updater`、mode `0640`にし、管理対象host、Control Panel container、service containerへcopyしないでください。private release tokenはremote stageのbounded SSH stdinだけで一時送信され、remote config、state、logへ永続化しません。`updates.authorize`追加前のtokenは、対応Control Panelのdeploy後にNode登録で再生成します。
+Update Agent用のNode Runtime TokenとGitHub tokenは中央`updater.json`へ入り、通常Nodeより強い更新権限の境界にあります。fileをroot所有、group `autostream-updater`、mode `0640`にし、管理対象host、Control Panel container、service containerへcopyしないでください。Auto Configureは`panel_url`、`node_id`、`runtime_token`、`service_name`だけを更新し、localのGitHub token、API、host/target inventory、SSH設定は変更しません。private release tokenはremote stageのbounded SSH stdinだけで一時送信され、remote config、state、logへ永続化しません。`updates.authorize`追加前のtokenは、対応Control Panelのdeploy後にConfigure Tokenを再生成して新しいAuto Configure commandで反映します。
 
 ## 手入力しないtoken
 

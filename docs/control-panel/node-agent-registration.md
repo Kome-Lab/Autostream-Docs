@@ -38,10 +38,10 @@ Worker / Encoder Recorderの設定にはstream ingest署名鍵を含むため、
 
 | 生成物 | 扱い |
 | --- | --- |
-| Configure Token | `/api/node-agent/configure` で `config.yml` を取得するための短期 token |
+| Configure Token | 通常Nodeでは`POST /api/node-agent/configure`、Update Agentでは`POST /api/node-agent/configure/stage`へ渡す短期token。Update Agentではcommandへ埋め込まずTTYまたは標準入力から渡します |
 | Node Runtime Token | register、heartbeat、report、runtime config、Panel から Node への dispatch に使う token |
 | `config.yml` | 通常Nodeでは`/etc/autostream-<service>/config.yml`に保存します |
-| Auto Configure command | 通常Nodeではservice binaryの`configure`サブコマンドで`config.yml`を取得して保存します |
+| Auto Configure command | service binaryの`configure`サブコマンドで設定を取得し、通常Nodeは`config.yml`、Update Agentは中央`updater.json`の接続identityを更新します |
 
 Configure Token と Node Runtime Token は作成直後だけ表示します。紛失した場合や期限切れの場合は、登録済みNodeの操作から再生成してください。DB には Configure Token をハッシュで、Node Runtime Token を暗号化して保存します。
 
@@ -55,11 +55,11 @@ Worker / Encoder Recorderを作成する前に、Control Panel envの`AUTOSTREAM
 | --- | --- | --- |
 | Configuration表示 | `config.yml` と Auto Configure command を確認 | 生の token は通常表示しません |
 | Configure Token再生成 | 期限切れ、紛失、未使用tokenの作り直し | `api_tokens.create`、`api_tokens.revoke`、既存scope権限が必要。再生成後のtokenは一度だけ表示します |
-| Runtime Token再生成 | 漏えい疑い、紛失、Node側token更新 | 同じ権限を要求します。既存Runtime Tokenは無効になるため、対象Nodeの`config.yml`を更新して再起動します |
+| Runtime Token再生成 | 漏えい疑い、紛失、Node側token更新 | 同じ権限を要求します。通常Nodeではrotation時に旧Runtime Tokenが直ちに無効になります。Update Agentでは新しいConfigure TokenでAuto Configure commandを実行し、activation成功後にだけ旧Runtime Tokenが無効になります。成功を確認してから再起動します |
 | 編集 | Node名、説明、Host、Port、SSL を変更 | Node ID と Node type は変更できません |
 | 削除 | Node登録、割り当て、Runtime Token を無効化 | 削除後は同じ Node ID で作り直してください |
 
-共通の Node 実行ファイルはありません。通常Nodeでは Worker、Encoder Recorder、Discord Bot、Observability の各サービス binary に `configure` サブコマンドがあります。Panel が表示する Auto Configure command は正規の `autostream-<service>` コマンドを使う 1 行のコマンドです。
+共通の Node 実行ファイルはありません。Worker、Encoder Recorder、Discord Bot、Observability、中央Update Agentの各service binaryに`configure`サブコマンドがあります。Panelが表示するAuto Configure commandは正規の`autostream-<service>`コマンドを使う1行のコマンドです。
 
 ```bash
 sudo autostream-worker configure --panel-url "https://control.example.com" --token "<CONFIGURE_TOKEN>" --node "worker-01" --config "/etc/autostream-worker/config.yml"
@@ -73,23 +73,36 @@ service type ごとの binary 名は次の通りです。
 | `encoder_recorder` | `autostream-encoder-recorder` |
 | `discord_bot` | `autostream-discord-bot` |
 | `observability` | `autostream-observability` |
-| `update_agent` | 中央管理ホストの`autostream-updater`。`configure`サブコマンドは使いません |
+| `update_agent` | 中央管理ホストの`autostream-updater` |
 
 `sudo: autostream-observability: command not found`のように出る場合は、`/usr/local/bin/autostream-observability`互換symlinkが`/opt/autostream/observability/current/bin/autostream-observability`を指しているか確認します。壊れている場合は、manifest付きhost releaseに同梱された`README.install.md`で検証済み`current` linkと互換symlinkを配置し直してください。local binaryを直接copyしてmarkerだけ作る方法は使いません。
 
-Auto Configure command は、発行直後の Configure Token を使って次の処理を行うための一度きりのコマンドです。
+Update AgentのAuto Configure commandはTokenを含まないため、失敗または結果不確定の後も同じcommand形を使えます。ただしCLIはactivation用のTokenやstateを永続化しません。再実行するたびにConfigurationで新しいConfigure Tokenを発行し、その新しいTokenを入力します。通常Nodeのcommandは上記のとおりConfigure Tokenを引数に含むため、一度だけ実行します。
 
-1. 対象 service binary が `POST /api/node-agent/configure` を呼び出します。
-2. Configure Tokenを一度だけ消費し、Node Runtime Tokenを原子的に更新します。
-3. レスポンス JSON の新しいRuntime Tokenと必要な署名鍵を含む`config_yml`を取り出します。
-4. `sudo` 実行かつ `/etc/autostream-<service>` 配下へ保存する場合は、directory を `root:autostream 0750`、`config.yml` を `root:autostream 0640` で保存します。
-5. 取得した `node.type` が実行した service binary と違う場合は保存前に拒否します。
+Auto Configureの通信とRuntime Token rotationはNode typeによって異なります。
 
-Configuration画面から手動で`config.yml`を配置する方法とAuto Configure commandは代替手段です。両方を実行すると、Auto ConfigureがRuntime Tokenを差し替えて先に配置したconfigを無効にするため、どちらか一方だけを使います。通常はAuto Configureを推奨します。
+通常Nodeでは次の順序です。
 
-## 中央Update Agentだけ異なる設定
+1. 対象service binaryがConfigure Tokenを使って`POST /api/node-agent/configure`を呼び出します。
+2. Configure Tokenを一度だけ消費し、新しいRuntime Tokenを直ちに有効化して旧Runtime Tokenを無効化します。
+3. レスポンスJSONから新しいRuntime Tokenと必要な署名鍵を含む`config_yml`を取り出します。
+4. `config.yml`を安全なowner/modeで保存します。取得したNode typeが実行したservice binaryと違う場合は保存前に拒否します。
 
-Update Agentを1つ作成したら、作成直後に一度だけ表示されるNode Runtime Tokenを中央管理ホストの`/etc/autostream/updater.json`に設定します。`autostream-updater`には`configure`サブコマンドがなく、通常Node用の`config.yml`やAuto Configure commandは使いません。
+Update Agentでは、通常Nodeの即時rotation endpointを使わず、次の二段階で切り替えます。
+
+1. token-free commandが実行時にConfigure TokenをTTYまたは標準入力から読み取り、`POST /api/node-agent/configure/stage`を呼び出します。`update_agent`がlegacyの`POST /api/node-agent/configure`を呼び出した場合、PanelはHTTP `409`で拒否します。
+2. Panelは新しい接続identityをstageします。新しくstageされたRuntime Tokenはまだinactiveで、旧Runtime Tokenは引き続きactiveです。
+3. `autostream-updater`は既存`/etc/autostream/updater.json`の安全性を通信前に確認し、`panel_url`、`node_id`、`runtime_token`、`service_name`だけを原子的にcommitして、設定をreload・validationします。
+4. local commit、reload、validationがすべて成功した場合だけ、`POST /api/node-agent/configure/activate`を呼び出します。
+5. activation成功後にだけ旧Runtime Tokenを無効化し、stageしたRuntime Tokenをactiveにします。
+
+Update Agentの`github_token`、`api`、`state_dir`、interval、`hosts`、`targets`、SSH pathなどのlocal policyは変更しません。取得したNode typeが`update_agent`と違う場合はlocal commit前に拒否します。
+
+通常Nodeでは、Configuration画面から手動で`config.yml`を配置する方法とAuto Configure commandは代替手段です。両方を実行すると、Auto ConfigureがRuntime Tokenを差し替えて先に配置したconfigを無効にするため、どちらか一方だけを使います。通常はAuto Configureを推奨します。Update Agentは下記のsample/local inventoryを用意してからAuto Configure commandを実行します。
+
+## 中央Update Agentのlocal inventoryとAuto Configure
+
+Update Agent Nodeを作成する前に、Control Panel host releaseの`autostream-updater.json.example`を中央管理ホストの`/etc/autostream/updater.json`へ`root:autostream-updater 0640`でinstallします。各hostのhelperをbootstrapし、`github_token`、`api`、`state_dir`、interval、`hosts`、`targets`、SSH pathをlocal inventoryに合わせて設定します。Node Runtime Tokenは手で貼り付けません。
 
 ```json
 {
@@ -128,9 +141,21 @@ Update Agentを1つ作成したら、作成直後に一度だけ表示されるN
 }
 ```
 
+helper bootstrap、local inventory、file権限を完成させた後、中央Update Agentを1つ作成します。登録済みの場合はConfigure Tokenを再生成し、Configurationに表示された次の形のcommandを中央hostで初回実行します。
+
+```bash
+sudo autostream-updater configure --panel-url "https://control.example.com" --node "central-updater" --config "/etc/autostream/updater.json"
+```
+
+初回実行では、promptにConfigure Tokenを貼り付けます。Tokenはprocess argvや表示commandに含まれません。Auto Configureが更新するのは`panel_url`、`node_id`、`runtime_token`、`service_name`だけです。`github_token`、`api`、`hosts`、`targets`、SSH設定などのlocal policyは保持されます。
+
+stageしたRuntime Tokenはactivation成功まではinactiveで、旧Runtime Tokenがactiveのままです。ただしactivationの応答を受け取れず結果不確定になった場合は、Panel側でactivationが成功済みの可能性があるため、CLIだけではどちらのRuntime Tokenがactiveか判断できません。またlocal atomic commit後にreload、validation、activationが失敗した場合、disk上の`updater.json`にはstage済みidentityが残ることがあります。
+
+CLIはactivation用のTokenやstateを永続化しないため、stage、commit、validation、activationの失敗または結果不確定時はUpdaterを再起動せず、Configurationで必ず新しいConfigure Tokenを発行し、同じtoken-free command形へその新しいTokenを入力して再実行します。activation成功を確認した後にだけ、`sudo -u autostream-updater /usr/local/bin/autostream-updater validate-config --config /etc/autostream/updater.json`を実行し、成功後に`sudo systemctl restart autostream-updater`で反映します。
+
 中央設定はroot所有、group `autostream-updater`、mode `0640`にし、Node Runtime Token、private release用GitHub token、ホスト別SSH秘密鍵を中央管理ホストの外へコピーしません。`hosts`にはSSH接続先とホスト別identityだけ、`targets`には`target_id`、`host_id`、service type、deployment modeだけを置きます。unit、path、backup command、Compose設定、image repositoryは各管理対象ホストのroot所有`/etc/autostream/update-host.json`だけに固定します。
 
-Update Agentには`updates.claim`、`updates.report`、`updates.authorize` scopeが付与されます。`updates.authorize`は90秒のone-time mutation grantを発行するために使います。対応前に発行したUpdate Agent tokenは、対応Control Panelをdeployした後に再生成して中央JSONへ反映します。各ホストの一度きりのSSH/bootstrap、root helper設定、systemd/Docker例、起動方法は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
+Update Agentには`updates.claim`、`updates.report`、`updates.authorize` scopeが付与されます。`updates.authorize`は90秒のone-time mutation grantを発行するために使います。対応前に発行したUpdate Agent tokenは、対応Control Panelをdeployした後にConfigure Tokenを再生成し、同じtoken-free Auto Configure command形へ新しいTokenを入力して中央JSONへ反映します。各ホストの一度きりのSSH/bootstrap、root helper設定、systemd/Docker例、起動方法は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
 
 保存後は対象サービスの env に `AUTOSTREAM_NODE_CONFIG=/etc/autostream-<service>/config.yml` を設定して、サービス本体を起動します。サービスを先に起動していた場合、`config.yml` 未作成中は `node config pending` として待機します。Auto Configure コマンドで `config.yml` を作成した後、Worker、Encoder Recorder、Discord Bot は `sudo systemctl restart autostream-<service>` で登録と runtime config の初期読込をそろえます。Observability は起動中に再読込して登録を開始します。
 
@@ -179,7 +204,9 @@ Node Agent は次の Panel API を使います。
 
 | API | 用途 |
 | --- | --- |
-| `POST /api/node-agent/configure` | Configure Token で `config.yml` 相当の設定を取得 |
+| `POST /api/node-agent/configure` | 通常NodeのConfigure Tokenを消費し、新しいRuntime Tokenへ即時rotationして`config.yml`相当の設定を取得。`update_agent`からの利用はHTTP `409`で拒否 |
+| `POST /api/node-agent/configure/stage` | Update AgentのConfigure Tokenを消費し、inactiveな新Runtime Tokenと接続identityをstage。旧Runtime Tokenはactiveのまま維持 |
+| `POST /api/node-agent/configure/activate` | Update Agentのlocal atomic commit・reload・validation成功後にstaged Runtime Tokenをactive化し、この成功時だけ旧Runtime Tokenを無効化 |
 | `POST /api/node-agent/heartbeat` | 稼働状態、version、capability、metrics を報告 |
 | `POST /api/node-agent/report` | hostname、OS、arch、capability などを明示報告 |
 | `POST /api/node-agent/events` | Node から stream event を送信 |

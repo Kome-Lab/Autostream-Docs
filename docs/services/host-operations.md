@@ -29,10 +29,10 @@
 | Encoder Recorder | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Worker | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Discord Bot | なし | Node Runtime Token は `config.yml`、Discord Bot token は Control Panel の Discord Settings に保存します |
-| 中央Update Agent | なし | 1つのNode Runtime Tokenとprivate release用GitHub tokenを中央`/etc/autostream/updater.json`だけに保存します |
+| 中央Update Agent | なし | Auto Configureで接続identityを、local設定でprivate release用GitHub token、API、host/target inventory、SSH pathを中央`/etc/autostream/updater.json`だけに保存します |
 | 管理対象host helper | なし | Runtime Tokenなし。release tokenと90秒のmutation grantはSSH RPCで一時受信し、保存しません |
 
-Node Runtime Token と Configure Token は Node登録で生成されます。紛失した場合は Control Panel の Node登録 Configuration から再生成し、通常serviceは`config.yml`、中央Update Agentは中央`updater.json`の`runtime_token`を更新してください。管理対象host helperには再生成対象のtokenがありません。
+Node Runtime TokenとConfigure TokenはNode登録で生成されます。紛失した場合はControl PanelのNode登録Configurationから再生成し、通常serviceは`config.yml`を更新してください。中央Update Agentは新しいAuto Configure commandを実行し、`validate-config`後に再起動します。管理対象host helperには再生成対象のtokenがありません。
 
 ## 推奨ディレクトリ
 

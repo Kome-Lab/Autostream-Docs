@@ -102,9 +102,9 @@ Control Panel の [Node Agent登録](/control-panel/node-agent-registration) で
 | Worker | `worker` | `config.yml`、Configure Token、Node Runtime Token |
 | Encoder Recorder | `encoder_recorder` | `config.yml`、Configure Token、Node Runtime Token |
 | Observability | `observability` | `config.yml`、Configure Token、Node Runtime Token |
-| 中央Update Agent | `update_agent` | 1つのNode Runtime Tokenを中央のroot所有`updater.json`へ設定。管理対象hostには配布しない |
+| 中央Update Agent | `update_agent` | sample/local inventoryを準備し、Auto Configureで中央のroot所有`updater.json`の接続identityだけを更新。管理対象hostには配布しない |
 
-Configure Token と Node Runtime Token は作成時だけ表示されます。紛失した場合は Configuration から再生成し、通常serviceは`config.yml`、中央Update Agentは中央`updater.json`の`runtime_token`を更新してください。
+Configure TokenとNode Runtime Tokenは作成時だけ表示されます。紛失した場合はConfigurationから再生成し、通常serviceは`config.yml`を更新してください。中央Update Agentは新しいAuto Configure commandを実行し、`validate-config`後に再起動します。
 
 ## 他サービスを許可する
 
