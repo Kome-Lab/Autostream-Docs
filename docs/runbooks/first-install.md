@@ -330,7 +330,7 @@ curl -fsS http://127.0.0.1:8084/health  # Worker の local port 例
 3. Services / Assignments で stream 用の primary service を割り当てます。
 4. Integrations で Discord、YouTube、Google Drive、notification channel を登録します。
 5. Start readiness を実行し、不足している設定がないことを確認します。
-6. Control Panelからの更新を使う場合は、配信serviceのhealth確認後に[Control Panelからサービスを更新する](/operations/system-updates)へ進みます。中央Updaterのbinaryとsampleを用意し、各hostへ非常駐helperを一度だけbootstrapしてtargetを対応付け、local inventoryを完成させます。その後、中央Update Agentを1つだけ登録（登録済みならConfigure Tokenを再生成）し、表示されたAuto Configure commandを実行します。`validate-config`に成功してから中央Updaterを再起動し、中央Updaterがonline、各hostが到達可、各targetの現在versionが一致するまで更新jobは実行しません。
+6. Control Panelからの更新を使う場合は、配信serviceのhealth確認後に[Control Panelからサービスを更新する](/operations/system-updates)へ進みます。中央Updaterのbinaryを配置し、各hostへ非常駐helperを一度だけbootstrapしてtargetを対応付けます。中央Update Agentを1つだけ登録（登録済みならConfigure Tokenを再生成）し、表示されたAuto Configure commandを実行すると、未作成の`updater.json`がUpdater本体に内蔵された初期設定から自動生成され、Tokenを消費せず停止します。サンプルファイルの配置は不要です。local inventoryを完成させて同じcommandを再実行します。`validate-config`に成功してから中央Updaterを再起動し、中央Updaterがonline、各hostが到達可、各targetの現在versionが一致するまで更新jobは実行しません。
 
 ## 12. 初回確認コマンド
 

@@ -79,7 +79,7 @@ API Tokens では、互換用途として token 作成と同時に service regis
 | Version | service version |
 | Capabilities | service が対応する機能。カンマ区切り |
 
-pre-createした場合、画面にbootstrap envが一度だけ表示されます。これは旧構成や移行用です。新規構成ではbootstrap envではなくNode登録のAuto Configureを使います。Update Agentはsampleとlocal inventoryを準備した中央`updater.json`へ、Auto Configureで接続identityだけを保存します。
+pre-createした場合、画面にbootstrap envが一度だけ表示されます。これは旧構成や移行用です。新規構成ではbootstrap envではなくNode登録のAuto Configureを使います。Update Agentは中央管理ホストでtoken-free commandを実行し、接続identityだけを中央`updater.json`へ保存します。
 
 ## token作成手順
 
@@ -92,7 +92,9 @@ pre-createした場合、画面にbootstrap envが一度だけ表示されます
 5. service を起動します。
 6. Service Health で online になるか確認します。
 
-この手順の4は通常service用です。`update_agent`では各hostのhelperをbootstrapしてtargetを対応付け、中央管理ホストへsampleをinstallしてGitHub token、API、host/target inventory、SSH pathを完成させます。その後、中央管理ホスト用Nodeを1つだけ作成してAuto Configure commandを初回実行します。stageしたRuntime Tokenはactivation成功まではinactiveで、旧Runtime Tokenがactiveのままです。ただしactivationの応答を受け取れず結果不確定になった場合は、CLIだけではどちらのRuntime Tokenがactiveか判断できません。local atomic commit後に失敗した場合、disk上の`updater.json`にはstage済みidentityが残ることがあります。CLIはactivation用のTokenやstateを永続化しないため、Updaterを再起動せず、新しいConfigure Tokenを発行し、同じtoken-free command形へ新しいTokenを入力して再実行します。activation成功を確認した後に`validate-config`を通してから中央`autostream-updater`を再起動します。
+Auto Configure commandを実行する前に、同じControl Panel release同梱の`autostream-updater` binaryへ更新してください。旧Updaterは`updater.json`を自動生成しません。
+
+この手順の4は通常service用です。`update_agent`では各hostのhelperをbootstrapしてtargetを対応付け、中央管理ホスト用Nodeを1つだけ作成してAuto Configure commandを実行します。`updater.json`が存在しない場合は、Updater本体に内蔵された初期設定から自動生成し、所有者を`root:autostream-updater`、mode `0640`にした後、安全チェックポイントとして意図的に非ゼロ終了します。サンプルファイルの配置や`--init-from`指定は不要です。この初回実行ではConfigure Tokenを要求・消費せず、既存の`updater.json`は上書きしません。GitHub token、API、host/target inventory、SSH pathなどのlocal policyを完成させ、同じtoken-free commandを再実行してConfigure Tokenを入力します。`--init-from PATH`は互換用の明示的なoverrideであり、不正なpathを指定した場合は内蔵設定へfallbackせず失敗します。stageしたRuntime Tokenはactivation成功まではinactiveで、旧Runtime Tokenがactiveのままです。ただしactivationの応答を受け取れず結果不確定になった場合は、CLIだけではどちらのRuntime Tokenがactiveか判断できません。local atomic commit後に失敗した場合、disk上の`updater.json`にはstage済みidentityが残ることがあります。CLIはactivation用のTokenやstateを永続化しないため、Updaterを再起動せず、新しいConfigure Tokenを発行し、同じtoken-free command形へ新しいTokenを入力して再実行します。activation成功を確認した後に`validate-config`を通してから中央`autostream-updater`を再起動します。
 
 API Tokens で token を作るのは、旧構成を維持している場合や移行中に限ります。
 

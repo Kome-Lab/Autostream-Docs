@@ -10,6 +10,13 @@ const relatedGuidePaths = [
   'docs/operations/system-updates.md',
 ];
 const relatedGuides = relatedGuidePaths.map((path) => [path, readFileSync(resolve(path), 'utf8')]);
+const updaterDocumentationPaths = [
+  ...relatedGuidePaths,
+  'docs/runbooks/first-install.md',
+  'docs/security/tokens.md',
+  'docs/services/control-panel-install.md',
+];
+const updaterDocumentation = updaterDocumentationPaths.map((path) => [path, readFileSync(resolve(path), 'utf8')]);
 
 const flowStart = guide.indexOf('Auto Configureの通信とRuntime Token rotationはNode typeによって異なります。');
 const flowEnd = guide.indexOf('## 中央Update Agentのlocal inventoryとAuto Configure');
@@ -85,6 +92,34 @@ const staleFailureMarkers = [
   '新しいAuto Configure command',
 ];
 
+const initializationContractMarkers = [
+  '`updater.json`が存在しない場合',
+  'Updater本体に内蔵された初期設定から自動生成',
+  'サンプルファイルの配置や`--init-from`指定は不要',
+  '`root:autostream-updater`、mode `0640`',
+  'Configure Tokenを要求・消費せず',
+  '非ゼロ',
+  '同じControl Panel release同梱の`autostream-updater` binary',
+  '旧Updaterは`updater.json`を自動生成しません',
+  '`--init-from PATH`は互換用の明示的なoverride',
+  '内蔵設定へfallbackせず失敗',
+  'local policyを完成させ',
+  '同じtoken-free command',
+  '既存の`updater.json`は上書きしません',
+];
+
+const obsoleteManualInitializationMarkers = [
+  'sudo test -e /etc/autostream/updater.json',
+  'if ! sudo test -e /etc/autostream/updater.json; then',
+  '"$RELEASE_DIR/autostream-updater.json.example" /etc/autostream/updater.json',
+  'sampleを中央`/etc/autostream/updater.json`へinstall',
+  'release同梱の`autostream-updater.json.example`から自動生成',
+  'release同梱のsampleから安全に自動生成',
+  'release sampleから自動生成',
+  '/usr/local/share/autostream-updater/autostream-updater.json.example',
+  '/opt/autostream/control-panel/current/autostream-updater.json.example',
+];
+
 for (const [path, contents] of relatedGuides) {
   for (const marker of failureContractMarkers) {
     if (!contents.includes(marker)) {
@@ -94,6 +129,24 @@ for (const [path, contents] of relatedGuides) {
   for (const marker of staleFailureMarkers) {
     if (contents.includes(marker)) {
       throw new Error(`${path} contains obsolete updater failure guidance: ${marker}`);
+    }
+  }
+  for (const marker of initializationContractMarkers) {
+    if (!contents.includes(marker)) {
+      throw new Error(`${path} is missing updater initialization contract marker: ${marker}`);
+    }
+  }
+}
+
+for (const [path, contents] of updaterDocumentation) {
+  for (const marker of staleFailureMarkers) {
+    if (contents.includes(marker)) {
+      throw new Error(`${path} contains obsolete updater failure guidance: ${marker}`);
+    }
+  }
+  for (const marker of obsoleteManualInitializationMarkers) {
+    if (contents.includes(marker)) {
+      throw new Error(`${path} contains obsolete manual updater initialization guidance: ${marker}`);
     }
   }
 }
