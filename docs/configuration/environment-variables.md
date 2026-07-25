@@ -28,7 +28,8 @@
 | 録画ファイルのlocal path（既定値から変える場合） | Encoder Recorderのenvファイル |
 | Google Drive destination / OAuth | Control Panel |
 | 管理画面のタイムゾーン | Control Panel |
-| 中央Update Agentの接続identity、GitHub token、API、SSH host inventory、target identity | 中央管理ホストのroot所有`/etc/autostream/updater.json`。接続identityだけAuto Configure、その他はlocal設定 |
+| 中央Update Agentの接続identity | Auto Configureが中央管理ホストのroot所有`/etc/autostream/updater.json`へ自動生成 |
+| 中央Update AgentのGitHub Release Token、SSH host、target | Control Panelのシステム更新画面。GitHub Release TokenはManaged更新に必須で、画面では書き込み専用、保存後非表示、job時だけ配布 |
 | 更新対象のunit、path、backup command、Compose policy、image repository | 各管理対象ホストのroot所有`/etc/autostream/update-host.json` |
 
 ## Control Panel で管理する値
@@ -39,10 +40,13 @@
 - 通知用 Webhook URL
 - 配信ごとのタイトルや説明文
 - Streams、Audit Logs、Account の時刻表示に使うタイムゾーン
+- 中央Update Agentが使うhost、target、検証済みSSHホスト公開鍵、公開・非公開repositoryのどちらでもManaged更新に必須のGitHub Release Token
 
 運用中に変える可能性がある値は、できるだけ Control Panel に寄せると管理しやすくなります。
 
-ただしhost更新のprivileged targetはControl Panelや中央設定で変更しません。中央`updater.json`はroot所有、group `autostream-updater`、mode `0640`にし、各hostの`update-host.json`はroot所有`0600`にします。中央にはSSH routingとtarget identityだけ、privileged commandやpathはremote root設定だけに置き、画面や更新jobから任意commandやpathを渡せない境界を保ちます。詳細は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
+GitHub Release Tokenはrepositoryの公開状態にかかわらずManaged更新では必須です。保存後は画面へ再表示せず、更新jobを取得した中央Updaterへだけ一度限りで渡します。
+
+ただしhost更新のprivileged policyはControl Panelから変更しません。中央`updater.json`は接続identityだけを保存してroot所有、group `autostream-updater`、mode `0640`にし、各hostの`update-host.json`はroot所有`0600`にします。画面で管理するのはSSH routingとtarget identityまでで、privileged commandやpathはremote root設定だけに置き、画面や更新jobから任意commandやpathを渡せない境界を保ちます。詳細は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
 
 ## 設定後の確認
 

@@ -1,160 +1,210 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
 
-const guidePath = resolve('docs/control-panel/node-agent-registration.md');
-const guide = readFileSync(guidePath, 'utf8');
-const relatedGuidePaths = [
+function markdownFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return markdownFiles(path);
+    }
+    return extname(entry.name) === '.md' ? [path] : [];
+  });
+}
+
+const documentation = markdownFiles(resolve('docs')).map((path) => [
+  path,
+  readFileSync(path, 'utf8'),
+]);
+
+const managedGuidePaths = [
   'docs/control-panel/node-agent-registration.md',
-  'docs/control-panel/audit-tokens.md',
   'docs/control-panel/page-usage.md',
   'docs/operations/system-updates.md',
 ];
-const relatedGuides = relatedGuidePaths.map((path) => [path, readFileSync(resolve(path), 'utf8')]);
-const updaterDocumentationPaths = [
-  ...relatedGuidePaths,
-  'docs/runbooks/first-install.md',
-  'docs/security/tokens.md',
-  'docs/services/control-panel-install.md',
-];
-const updaterDocumentation = updaterDocumentationPaths.map((path) => [path, readFileSync(resolve(path), 'utf8')]);
+const managedGuides = managedGuidePaths.map((path) => [
+  path,
+  readFileSync(resolve(path), 'utf8'),
+]);
 
-const flowStart = guide.indexOf('Auto Configureの通信とRuntime Token rotationはNode typeによって異なります。');
-const flowEnd = guide.indexOf('## 中央Update Agentのlocal inventoryとAuto Configure');
-if (flowStart < 0 || flowEnd <= flowStart) {
-  throw new Error('node-agent-registration.md is missing the separated Auto Configure flow section');
+const requiredAcrossManagedGuides = [
+  'システム更新',
+  'GitHub Release Token',
+  'repositoryの公開状態にかかわらず',
+  'Managed更新では必須',
+  '書き込み専用',
+  '保存後は画面へ再表示しません',
+  '更新jobを取得した中央Updaterへだけ一度限り',
+  'SSHホスト公開鍵',
+  'Configure Token',
+  '標準入力',
+  '/etc/autostream/updater.json',
+  '自動生成',
+  '保存',
+  '自動',
+  '再起動は不要',
+  '反映済み',
+  '反映待ち',
+  '反映失敗',
+];
+
+for (const [path, contents] of managedGuides) {
+  for (const marker of requiredAcrossManagedGuides) {
+    if (!contents.includes(marker)) {
+      throw new Error(`${path} is missing managed updater marker: ${marker}`);
+    }
+  }
 }
 
-const flow = guide.slice(flowStart, flowEnd);
-const orderedMarkers = [
-  '通常Nodeでは次の順序です。',
-  '`POST /api/node-agent/configure`',
-  '新しいRuntime Tokenを直ちに有効化して旧Runtime Tokenを無効化',
-  'Update Agentでは、通常Nodeの即時rotation endpointを使わず',
-  '`POST /api/node-agent/configure/stage`',
-  '新しくstageされたRuntime Tokenはまだinactiveで、旧Runtime Tokenは引き続きactive',
-  '原子的にcommitして、設定をreload・validation',
-  '`POST /api/node-agent/configure/activate`',
-  'activation成功後にだけ旧Runtime Tokenを無効化し、stageしたRuntime Tokenをactive',
+const operationsGuide =
+  managedGuides.find(([path]) => path === 'docs/operations/system-updates.md')?.[1] ?? '';
+const operationsOrderedMarkers = [
+  'sudo /usr/local/bin/autostream-updater configure',
+  'sudo systemctl enable --now autostream-updater',
+  '### システム更新でhostを保存する',
+  'SSH接続とは独立した経路',
+  '**保存** を押すと',
+  '**SSHクライアント公開鍵**',
+  '## managed hostへ一度だけinstallする',
+  '## 保存した設定が反映されたことを確認する',
+  '**反映済み** | 保存したrevisionをUpdaterが受理',
 ];
 
 let previousIndex = -1;
-for (const marker of orderedMarkers) {
-  const index = flow.indexOf(marker);
+for (const marker of operationsOrderedMarkers) {
+  const index = operationsGuide.indexOf(marker);
   if (index < 0) {
-    throw new Error(`node-agent-registration.md is missing updater configure contract marker: ${marker}`);
+    throw new Error(`docs/operations/system-updates.md is missing ordered marker: ${marker}`);
   }
   if (index <= previousIndex) {
-    throw new Error(`node-agent-registration.md has an out-of-order updater configure contract marker: ${marker}`);
+    throw new Error(`docs/operations/system-updates.md has an out-of-order marker: ${marker}`);
   }
   previousIndex = index;
 }
 
-const requiredMarkers = [
-  'legacyの`POST /api/node-agent/configure`を呼び出した場合、PanelはHTTP `409`で拒否',
-  'CLIはactivation用のTokenやstateを永続化しない',
-  'Configurationで必ず新しいConfigure Tokenを発行',
-  '| `POST /api/node-agent/configure/stage` |',
-  '| `POST /api/node-agent/configure/activate` |',
+const requiredOperationsMarkers = [
+  'sudo /usr/local/bin/autostream-updater configure --panel-url "https://control.example.com" --node "central-updater"',
+  'sudo install -d -o root -g root -m 0755 /etc/autostream',
+  'sudo -u autostream-updater test -r /etc/autostream/updater.json',
+  'ホストごとのEd25519鍵を生成',
+  '更新jobの実行中は反映を保留',
+  'APIポート',
+  '更新確認間隔',
+  'Heartbeat間隔',
+  'SSHユーザー',
+  '`updater.json`を手で編集しません',
+  '`ssh-keyscan`の出力だけを信用しない',
+  '**反映済み** | 保存したrevisionをUpdaterが受理',
+  '設定の反映状態とhostの到達状態は別',
+  'helper未導入',
+  '**接続不可**',
+  '中央Updaterを導入するだけなら既存の直接配置を変えません',
+  'Control Panel自身をこの例の自動更新targetに追加する場合',
+  '中央UpdaterのNode登録、Configure Token / Runtime Tokenの再生成',
+  '`system_updates.execute`と`secrets.update`の両方が必要',
+  '## managed hostを削除する',
+  '中央Updaterは削除したhostのSSH秘密鍵を自動廃棄',
+  '同じhost IDを再追加して保存すると新しいSSH鍵',
 ];
-for (const marker of requiredMarkers) {
-  if (!guide.includes(marker)) {
-    throw new Error(`node-agent-registration.md is missing updater safety marker: ${marker}`);
+for (const marker of requiredOperationsMarkers) {
+  if (!operationsGuide.includes(marker)) {
+    throw new Error(`docs/operations/system-updates.md is missing updater operations marker: ${marker}`);
   }
 }
 
 const forbiddenMarkers = [
-  'Update Agentを1つ作成したら、作成直後に一度だけ表示されるNode Runtime Token',
-  '`autostream-updater`には`configure`サブコマンドがなく',
-  '新しいTokenを発行せず同じcommandを再実行',
-  'root管理のactivation stateから反映を再開',
-];
-for (const marker of forbiddenMarkers) {
-  if (guide.includes(marker)) {
-    throw new Error(`node-agent-registration.md contains obsolete updater guidance: ${marker}`);
-  }
-}
-
-const failureContractMarkers = [
-  'activationの応答を受け取れず結果不確定',
-  'CLIだけではどちらのRuntime Tokenがactiveか判断できません',
-  'disk上の`updater.json`にはstage済みidentityが残ることがあります',
-  'CLIはactivation用のTokenやstateを永続化しない',
-  'Updaterを再起動せず',
-  '新しいConfigure Token',
-  '同じtoken-free command形',
-];
-const staleFailureMarkers = [
-  '失敗または結果不確定の場合も旧Runtime Tokenは維持',
-  '設定処理が失敗または結果不確定の場合も旧Runtime Tokenは維持',
-  '失敗した場合や結果不確定の場合も、旧Runtime Tokenと既存設定は維持',
-  '同じコマンドで再開',
-  '再生成を求められた場合だけ',
-  '新しいAuto Configure command',
-];
-
-const initializationContractMarkers = [
-  '`updater.json`が存在しない場合',
-  'Updater本体に内蔵された初期設定から自動生成',
-  'サンプルファイルの配置や`--init-from`指定は不要',
-  '`root:autostream-updater`、mode `0640`',
+  'known_hosts',
+  '--init-from',
+  'autostream-updater.json.example',
+  'sudoedit /etc/autostream/updater.json',
+  'local inventory',
+  'local policy',
+  'GitHub tokenを中央の`updater.json`',
+  'GitHub Tokenを中央の`updater.json`',
+  'GitHub token、API、host/target inventory',
+  'GitHub Token、API、host/target inventory',
+  '同じtoken-free commandを再実行',
+  '同じtoken-free Auto Configure command',
+  '安全チェックポイントとして意図的に非ゼロ終了',
   'Configure Tokenを要求・消費せず',
-  '非ゼロ',
-  '同じControl Panel release同梱の`autostream-updater` binary',
-  '旧Updaterは`updater.json`を自動生成しません',
-  '`--init-from PATH`は互換用の明示的なoverride',
-  '内蔵設定へfallbackせず失敗',
-  'local policyを完成させ',
-  '同じtoken-free command',
-  '既存の`updater.json`は上書きしません',
+  'validate-config`後に再起動',
+  'activation成功と`validate-config`を確認した後に中央Updaterを再起動',
+  'strict `known_hosts`',
+  '**反映済み** | 保存したrevisionで全hostのrestricted probeが成功',
+  'SSHクライアント公開鍵のinstall待ち',
+  'sudo install -d -o root -g root -m 0750 /etc/autostream',
+  'private release用GitHub Token',
+  'private release用GitHub token',
+  'private releaseを読むGitHub Token',
+  'private GitHub Releasesを読むGitHub Token',
+  'private release credential',
+  'private release read token',
 ];
 
-const obsoleteManualInitializationMarkers = [
-  'sudo test -e /etc/autostream/updater.json',
-  'if ! sudo test -e /etc/autostream/updater.json; then',
-  '"$RELEASE_DIR/autostream-updater.json.example" /etc/autostream/updater.json',
-  'sampleを中央`/etc/autostream/updater.json`へinstall',
-  'release同梱の`autostream-updater.json.example`から自動生成',
-  'release同梱のsampleから安全に自動生成',
-  'release sampleから自動生成',
-  '/usr/local/share/autostream-updater/autostream-updater.json.example',
-  '/opt/autostream/control-panel/current/autostream-updater.json.example',
-];
-
-for (const [path, contents] of relatedGuides) {
-  for (const marker of failureContractMarkers) {
-    if (!contents.includes(marker)) {
-      throw new Error(`${path} is missing updater failure contract marker: ${marker}`);
-    }
-  }
-  for (const marker of staleFailureMarkers) {
+for (const [path, contents] of documentation) {
+  for (const marker of forbiddenMarkers) {
     if (contents.includes(marker)) {
-      throw new Error(`${path} contains obsolete updater failure guidance: ${marker}`);
-    }
-  }
-  for (const marker of initializationContractMarkers) {
-    if (!contents.includes(marker)) {
-      throw new Error(`${path} is missing updater initialization contract marker: ${marker}`);
+      throw new Error(`${path} contains obsolete updater guidance: ${marker}`);
     }
   }
 }
 
-for (const [path, contents] of updaterDocumentation) {
-  for (const marker of staleFailureMarkers) {
-    if (contents.includes(marker)) {
-      throw new Error(`${path} contains obsolete updater failure guidance: ${marker}`);
-    }
-  }
-  for (const marker of obsoleteManualInitializationMarkers) {
-    if (contents.includes(marker)) {
-      throw new Error(`${path} contains obsolete manual updater initialization guidance: ${marker}`);
-    }
+const securityGuide = readFileSync(resolve('docs/security/tokens.md'), 'utf8');
+for (const marker of [
+  'GitHub Release Tokenはrepositoryの公開状態にかかわらずManaged更新では必須',
+  'GitHub Release TokenはControl Panelの暗号化済みsecretとして保存',
+  '画面へ再表示しません',
+  '更新jobを取得した中央Updaterへだけ一度限りで渡します',
+  'updater.json',
+  '接続identity',
+]) {
+  if (!securityGuide.includes(marker)) {
+    throw new Error(`docs/security/tokens.md is missing updater secret marker: ${marker}`);
   }
 }
 
-const pageUsage = relatedGuides.find(([path]) => path === 'docs/control-panel/page-usage.md')?.[1] ?? '';
-const initialSuccessMarker = 'activation成功を確認した後に`validate-config`を実行し、成功後にだけ中央Updaterを起動または再起動します';
-if (!pageUsage.includes(initialSuccessMarker)) {
-  throw new Error(`docs/control-panel/page-usage.md is missing the initial updater success contract marker: ${initialSuccessMarker}`);
+const controlPanelInstallGuide = readFileSync(
+  resolve('docs/services/control-panel-install.md'),
+  'utf8',
+);
+for (const marker of [
+  'Control Panel自身を自動更新targetにする場合',
+  '/opt/autostream/control-panel/current',
+  '中央Updaterを追加するだけなら',
+  '/usr/local/bin/control-panel',
+  '/usr/share/autostream-control-panel',
+  '移行する必要はありません',
+]) {
+  if (!controlPanelInstallGuide.includes(marker)) {
+    throw new Error(
+      `docs/services/control-panel-install.md is missing install-mode marker: ${marker}`,
+    );
+  }
 }
 
-console.log('Updater Node registration documentation contract passed.');
+const nodeRegistrationGuide = readFileSync(
+  resolve('docs/control-panel/node-agent-registration.md'),
+  'utf8',
+);
+if (
+  !nodeRegistrationGuide.includes(
+    'Node作成には`api_tokens.create`、`system_updates.execute`、`secrets.update`が必要',
+  )
+) {
+  throw new Error(
+    'docs/control-panel/node-agent-registration.md is missing the Update Agent credential permission boundary',
+  );
+}
+
+const rolesGuide = readFileSync(resolve('docs/control-panel/users-roles-security.md'), 'utf8');
+for (const marker of [
+  'host・SSH鍵・targetを含むUpdater設定の保存',
+  '`system_updates.execute`と`secrets.update`の両方を要求',
+]) {
+  if (!rolesGuide.includes(marker)) {
+    throw new Error(
+      `docs/control-panel/users-roles-security.md is missing updater permission marker: ${marker}`,
+    );
+  }
+}
+
+console.log('Managed central Updater documentation contract passed.');

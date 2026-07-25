@@ -20,7 +20,8 @@ AutoStream をインターネットから使えるようにする場合の基本
 - ログやスクリーンショットに secret が出ていないか確認する
 - `/stream-previews/` の署名token付きpathをreverse proxy、CDN、WAF、APMのaccess logへ残さない
 - バックアップの保存先にもアクセス制限をかける
-- 中央`/etc/autostream/updater.json`はroot所有、group `autostream-updater`、mode `0640`、host別SSH秘密鍵は`0600`、strict `known_hosts`は`0640`にする
+- 中央`/etc/autostream/updater.json`は接続identityだけを保存してroot所有、group `autostream-updater`、mode `0640`にし、Updaterが生成するhost別SSH秘密鍵は中央state内で`0600`にする
+- 完全なSSHホスト公開鍵は独立した経路でfingerprintを確認してからシステム更新画面へ保存し、Managed更新に必須のGitHub Release Tokenは画面では書き込み専用、保存後非表示、job時だけ配布されるsecretとして扱う
 - 各hostの`/etc/autostream/update-host.json`はroot所有`0600`とし、unit、path、command、image repositoryを中央設定やControl Panelから変更できない状態を保つ
 - helperのSSH userはpassword lock、1host 1 Ed25519 key、source CIDR、forced command、exact sudoersで制限し、daemon、待受port、Runtime Tokenを追加しない
 

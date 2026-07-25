@@ -8,7 +8,7 @@
 
 | 項目 | 使い方 |
 | --- | --- |
-| 実行ファイル | release内ではControl Panelは`bin/control-panel`、Node Agentは`bin/autostream-<service>`です。systemdは`/opt/autostream/<service>/current/bin/...`から実行します |
+| 実行ファイル | release内ではControl Panelは`bin/control-panel`、Node Agentは`bin/autostream-<service>`です。managed targetのsystemdは`/opt/autostream/<service>/current/bin/...`から実行します |
 | env ファイル | `.env.example` を元に `/etc/autostream/<service>.env` を作ります |
 | systemd unit | `systemd/*.service.example` を元に `/etc/systemd/system/` へ置きます |
 | Node ID | Control Panel と各サービスを対応させる固定 ID です |
@@ -29,10 +29,10 @@
 | Encoder Recorder | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Worker | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Discord Bot | なし | Node Runtime Token は `config.yml`、Discord Bot token は Control Panel の Discord Settings に保存します |
-| 中央Update Agent | なし | Auto Configureで接続identityを、local設定でprivate release用GitHub token、API、host/target inventory、SSH pathを中央`/etc/autostream/updater.json`だけに保存します |
-| 管理対象host helper | なし | Runtime Tokenなし。release tokenと90秒のmutation grantはSSH RPCで一時受信し、保存しません |
+| 中央Update Agent | なし | Auto Configureで接続identityだけを中央`/etc/autostream/updater.json`へ自動生成します。公開・非公開repositoryのどちらでもManaged更新に必須のGitHub Release Token、host、target、SSHホスト公開鍵はシステム更新画面へ保存します。Tokenは保存後非表示でjob時だけ配布します |
+| 管理対象host helper | なし | Runtime Tokenなし。GitHub Release Tokenと90秒のmutation grantはSSH RPCでjob中だけ一時受信し、保存しません |
 
-Node Runtime TokenとConfigure TokenはNode登録で生成されます。紛失した場合はControl PanelのNode登録Configurationから再生成し、通常serviceは`config.yml`を更新してください。中央Update Agentは新しいAuto Configure commandを実行し、`validate-config`後に再起動します。管理対象host helperには再生成対象のtokenがありません。
+Node Runtime TokenとConfigure TokenはNode登録で生成されます。紛失した場合はControl PanelのNode登録Configurationから再生成し、通常serviceは`config.yml`を更新してください。中央Update Agentはidentity rotationが必要な場合だけ新しいConfigure TokenでAuto Configure commandを実行し、activation成功後に再起動します。システム更新画面の管理設定は保存後に自動反映され、こちらの変更では再起動は不要です。管理対象host helperには再生成対象のtokenがありません。
 
 ## 推奨ディレクトリ
 
@@ -50,6 +50,8 @@ Node Runtime TokenとConfigure TokenはNode登録で生成されます。紛失�
 | 中央Updater設定 / state | `/etc/autostream/updater.json` / `/var/lib/autostream-updater` |
 | remote helper / root policy / state | `/usr/local/libexec/autostream-update-host` / `/etc/autostream/update-host.json` / `/var/lib/autostream-update-host` |
 
+このrelease treeは、そのservice自身を自動更新targetにする場合の配置です。中央Updaterを追加するだけなら、既存Control Panelの`/usr/local/bin/control-panel`と`/usr/share/autostream-control-panel`を移行しません。
+
 env ファイルと Node Agent の `config.yml` には実値が入るため、権限は `0640` 程度にし、Git 管理しないでください。
 
 ## 最初に作るOSユーザー
@@ -59,7 +61,7 @@ env ファイルと Node Agent の `config.yml` には実値が入るため、�
 ```bash
 sudo useradd --system --home /var/lib/autostream --shell /usr/sbin/nologin autostream
 sudo install -d -o autostream -g autostream /var/lib/autostream
-sudo install -d -o root -g root /etc/autostream
+sudo install -d -o root -g root -m 0755 /etc/autostream
 ```
 
 既に同等のユーザーを作っている場合は作り直す必要はありません。
@@ -150,7 +152,7 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 6. `systemctl daemon-reload`後に対象serviceを明示的にrestartします。
 7. `MainPID`、`/health`、`/updater/version`、Service Health、短いテスト配信を確認します。
 
-`/usr/local/bin`へbinaryを直接上書きする旧手順は、旧unitを使うmanual-only構成の互換手順です。`current`を参照する新unitはそのcopyを実行しません。既存releaseにmanifestやmarkerを後付けせず、新しいmanifest付きreleaseを初期managed releaseとして導入してください。
+`/usr/local/bin`へbinaryを直接上書きする旧手順は、旧unitを使うmanual-only構成の互換手順です。`current`を参照する新unitはそのcopyを実行しません。中央Updaterを追加するだけなら既存の直接配置を変える必要はありませんが、Control Panel自身を自動更新targetにする場合は、新しいmanifest付きreleaseを初期managed releaseとして導入してください。既存releaseにmanifestやmarkerを後付けしません。
 
 新processの起動に失敗した場合は旧releaseへ`current`を戻してrestartし、旧versionのhealthまで確認します。
 

@@ -2,7 +2,7 @@
 
 AutoStreamは、Control Panelの **Application Info** からControl Panel自身と各サービスの更新を依頼できます。常駐するUpdaterは中央管理ホストの`autostream-updater` 1つだけです。各管理対象ホストにUpdater daemonを置く必要はありません。
 
-各ホストでは、最初に一度だけ`autostream-update-host`をbootstrapします。これはprobe、stage、apply、reconcile中だけ動く非常駐helperです。常駐systemd unit、待受port、Node登録、Node Runtime Token、GitHub tokenの保存はありません。applyはSSH切断でも中途半端に終了しないよう、一時的なsystemd workerとして継続する場合があります。
+各ホストでは、最初に一度だけ`autostream-update-host`をbootstrapします。これはprobe、stage、apply、reconcile中だけ動く非常駐helperです。常駐systemd unit、待受port、Node登録、Node Runtime Token、GitHub Release Tokenの保存はありません。applyはSSH切断でも中途半端に終了しないよう、一時的なsystemd workerとして継続する場合があります。
 
 Updaterを導入しない環境でも最新releaseと現在versionの比較はできますが、更新jobは実行できません。
 
@@ -10,8 +10,8 @@ Updaterを導入しない環境でも最新releaseと現在versionの比較は�
 
 | 場所 | 配置するもの | 配置しないもの |
 | --- | --- | --- |
-| 中央管理ホスト | 常駐`autostream-updater`、Update Agent Node Runtime Token、private release用GitHub token、host別SSH秘密鍵、strict `known_hosts` | root helper、Docker socket、各hostのprivileged path |
-| 各管理対象ホスト | 非常駐`autostream-update-host`、root所有target policy、専用SSH user、forced key、exact sudoers、rollback state | Updater daemon、HTTP listener、Node登録、Runtime Token、長期GitHub token |
+| 中央管理ホスト | 常駐`autostream-updater`、接続identity、Updaterが生成するhost別SSH秘密鍵 | root helper、GitHub Release Tokenの永続保存、各hostのprivileged path |
+| 各管理対象ホスト | 非常駐`autostream-update-host`、root所有target policy、専用SSH user、forced key、exact sudoers、rollback state | Updater daemon、HTTP listener、Node登録、Runtime Token、GitHub Release Tokenの永続保存 |
 
 中央UpdaterとControl Panelを同じホストに置くこともできます。そのホスト自身を更新対象にする場合も、ほかのhostと同じSSH/helper境界を使います。
 
@@ -19,8 +19,8 @@ Updaterを導入しない環境でも最新releaseと現在versionの比較は�
 
 ```text
 Browser
-  -> Control Panel: 更新jobを作成、leaseと90秒grantを発行
-       <- 中央autostream-updater: register / heartbeat / host別claim / report
+  -> Control Panel: Updater設定を保存、更新jobを作成、leaseと90秒grantを発行
+       <- 中央autostream-updater: 設定取得 / heartbeat / host別claim / report
              -> GitHub Release / GHCR: versionとdigestを検証
              -> host-key-pinned SSH: host別key + fixed RPC
                   -> forced command + exact sudoers
@@ -31,8 +31,8 @@ Browser
 - Control Panelと各serviceはroot権限、Docker socket、`systemctl`権限を持ちません。
 - 中央UpdaterはControl Panelへ外向きにpollし、管理対象hostへ外向きSSH接続します。Control PanelからUpdaterへ更新commandをpushしません。
 - 更新jobが指定できるのは登録済み`target_id`、公開済みversion、`maintenance`または`when_idle`だけです。任意command、unit、path、URL、image repositoryは指定できません。
-- 中央`/etc/autostream/updater.json`のhostはSSH identity、targetはidentity fieldだけです。privileged policyは各hostのroot所有`/etc/autostream/update-host.json`だけに置きます。
-- SSHはhostごとに異なるEd25519 keyを使い、server host keyを事前に確認してstrict `known_hosts`へ固定します。password、SSH agent、PTY、port forwarding、SCP、SFTP、対話shellは使いません。
+- 中央`/etc/autostream/updater.json`にはControl Panelへ接続するidentityだけを保存します。hostとtargetの管理設定はControl Panelの **システム更新** が所有し、privileged policyは各hostのroot所有`/etc/autostream/update-host.json`だけに置きます。
+- SSHはhostごとに異なるEd25519 keyをUpdaterが生成します。serverの完全なSSHホスト公開鍵は事前に独立した経路で確認してControl Panelへ保存します。password、SSH agent、PTY、port forwarding、SCP、SFTP、対話shellは使いません。
 - forced commandは次の1つだけです。
 
   ```text
@@ -40,14 +40,14 @@ Browser
   ```
 
 - `SSH_ORIGINAL_COMMAND`はprotocol marker `autostream-update-rpc-v1`との完全一致が必要です。
-- private release用GitHub tokenは中央だけに保存します。remote stage中にbounded SSH stdinで一時送信しますが、remote config、state、process引数、logへ保存しません。
+- GitHub Release Tokenはrepositoryの公開状態にかかわらずManaged更新では必須です。Control Panelへ画面では書き込み専用のsecretとして暗号化保存し、保存後は画面へ再表示しません。更新jobを取得した中央Updaterへだけ一度限りで渡し、必要なremote stageへそのjob中だけ転送します。中央・remoteのconfig、state、process引数、logへ保存しません。
 - root変更には、job、host、target、現在版、更新先版、remote root policyのconfig digest、deployment mode、operation、plan digest、session、active leaseへ結び付いた有効期間90秒のone-time mutation grantが必要です。helperはservice変更の直前に消費します。
 - Control Panelや各service containerへ`/var/run/docker.sock`をmountしません。Docker CLIを使うのは対象hostで実行中のroot helperだけです。
 
 ## 事前条件
 
-1. Control Panelがproduction databaseを使用し、system update migration `039`〜`041`が適用済みである。
-2. 操作者に`system_updates.read`があり、実行者には`system_updates.execute`もある。
+1. Control Panelがproduction databaseを使用し、同じreleaseに含まれるmigrationがすべて適用済みである。
+2. 閲覧者に`system_updates.read`、更新jobの作成・取消担当者に`system_updates.execute`がある。中央UpdaterのNode登録、Configure Token / Runtime Tokenの再生成、host・SSH鍵・targetを含むUpdater設定の保存には、secretの配送先も変更できるため`system_updates.execute`と`secrets.update`の両方が必要。
 3. Control Panelがprivate releaseを確認する必要がある場合は`AUTOSTREAM_UPDATE_CHECK_TOKEN`を設定している。
 4. 中央管理ホストからControl Panel HTTPS、GitHub API、release asset、GHCR、各hostのSSH portへ到達できる。
 5. 各管理対象hostからControl Panel HTTPS、GitHub API、release asset、必要ならGHCRへ到達できる。helperはgrant消費とartifact再検証をhost側でも行う。
@@ -65,42 +65,42 @@ Updater helperがtargetの稼働version確認に使う共通endpointは`/updater
 
 ## 中央Update Agentを1つ登録する
 
-Auto Configure commandを実行する前に、同じControl Panel release同梱の`autostream-updater` binaryへ更新してください。旧Updaterは`updater.json`を自動生成しません。
+1. Control Panel host releaseと`autostream-updater` binaryを中央管理ホストへ配置します。
+2. Control Panelの **Node登録** でNode typeに`Update Agent`を選び、中央Updater用の固定Node IDを決めます。例: `central-updater`。
+3. Node作成後のConfigurationに表示されるコマンドを中央管理ホストで1回実行します。
 
-1. 後述の手順で各管理対象hostへ非常駐helperをbootstrapし、target policyを配置します。
-2. Control Panel host releaseと`autostream-updater` binaryを中央管理ホストへ配置します。初期設定はUpdater本体に内蔵されているため、サンプルファイルを手動copyする必要はありません。
-3. Control Panelの **Node登録** でNode typeに`Update Agent`を選び、中央Updater用の固定Node IDを決めます。例: `central-updater`。
-4. Host、Port、SSLはこれから設定する`updater.json`の`api`と一致させます。同じホストなら`127.0.0.1:8090`、別ホストならTLSを有効にした管理network endpointにします。Auto Configureはこのlocal API設定を変更しません。
-5. 作成後のConfigurationに表示されるAuto Configure commandを中央管理ホストで実行します。`updater.json`が存在しない場合は、Updater本体に内蔵された初期設定から自動生成し、安全チェックポイントとして意図的に非ゼロ終了します。サンプルファイルの配置や`--init-from`指定は不要です。この時点ではConfigure Tokenを要求・消費しません。`--init-from PATH`は互換用の明示的なoverrideであり、不正なpathを指定した場合は内蔵設定へfallbackせず失敗します。
-6. 生成された設定のGitHub token、API、host inventory、target identity、SSH pathなどのlocal policyを完成させ、同じtoken-free commandを再実行します。promptへConfigure Tokenを貼り付けますが、commandやprocess argvへTokenを含めず、Node Runtime Tokenも手でJSONへ貼り付けません。
-7. activation完了後に`validate-config`を通し、成功してから`autostream-updater`を再起動します。
+   ```bash
+   sudo /usr/local/bin/autostream-updater configure --panel-url "https://control.example.com" --node "central-updater"
+   ```
+
+4. promptへConfigure Tokenを貼り付けます。標準入力から非表示で読み取られるため、コマンド、process argv、shell historyには残りません。
+5. UpdaterはControl Panelへの接続identityだけを含む`/etc/autostream/updater.json`を自動生成し、root所有、group `autostream-updater`、mode `0640`で保存します。`updater.json`を手で編集しません。
+6. `sudo -u autostream-updater test -r /etc/autostream/updater.json`で、service userから設定を読めることを確認します。
+7. `sudo systemctl enable --now autostream-updater`で中央Updaterを起動します。
 
 管理対象hostごとにUpdate Agent Nodeを作成しません。`autostream-update-host`には`config.yml`、Configure Token、Runtime Tokenがありません。
 
-Update Agent tokenには`updates.claim`、`updates.report`、`updates.authorize`が必要です。対応前に発行したtokenは、対応Control Panelをdeployした後にConfigure Tokenを再生成し、同じtoken-free Auto Configure command形へ新しいTokenを入力して中央設定へ反映します。
+Update Agent tokenには`updates.claim`、`updates.report`、`updates.authorize`が必要です。漏えい対応などでRuntime Tokenをrotationする場合だけ、Configurationで新しいConfigure Tokenを発行してAuto Configure commandを実行し、activation成功後に中央Updaterを再起動します。通常の設定変更はシステム更新画面で保存するだけで、configureの再実行やserviceの再起動は不要です。
 
 ## 旧per-host Updaterから移行する
 
 旧構成ですでに各hostへ`autostream-updater`を置いている場合は、中央方式と同時稼働させません。次の順序で一度だけ移行します。
 
 1. 既存のqueued jobをcancelし、実行中jobを完了させます。reconcile待ちを含むactive jobが1件もないことを確認します。
-2. 新しいControl Panelとmigration `039`〜`041`をdeployします。旧`/services/update-jobs/{id}/authorize`はHTTP 410になり、host mappingを報告しない旧Updaterは新しいjobをclaimできません。新しい`autostream-updater` binaryも`hosts`のない旧configでは起動しません。
+2. 新しいControl Panelと同梱migrationをdeployします。旧`/services/update-jobs/{id}/authorize`はHTTP 410になり、host mappingを報告しない旧Updaterは新しいjobをclaimできません。旧per-host JSONを中央設定として再利用せず、Auto Configureで新しい接続identityを生成します。
 3. 各管理対象hostへ、この文書の手順で非常駐`autostream-update-host`、forced SSH key、exact sudoers、root policyをbootstrapします。
 4. 中央にするhostを1台決め、そこを含む全hostの旧`autostream-updater.service`を停止・disableします。旧configとstateは移行確認が終わるまでrootだけが読める場所へ保全し、旧daemonと中央Updaterを同時稼働させません。
-5. 選んだ中央hostへ新しいbinaryを配置し、Update AgentのAuto Configure commandで中央configを自動生成します。local policyへ`hosts`を設定した後、同じtoken-free commandを再実行します。失敗または結果不確定の場合はUpdaterを再起動せず、新しいConfigure Tokenを発行して同じtoken-free commandへ入力し直します。activation成功後に`validate-config`で全hostのrestricted probeを通してから中央serviceを開始します。reachabilityと現在versionがControl Panelに表示されることを確認します。
+5. 選んだ中央hostへ新しいbinaryを配置し、Update AgentのAuto Configure commandを1回実行して中央configを自動生成し、serviceを開始します。システム更新画面でhostとtargetを保存し、reachabilityと現在versionがControl Panelに表示されることを確認します。
 6. 影響の小さいtargetで試験更新と必要ならreconcileまで確認した後、旧per-host Update Agent NodeのRuntime Tokenを失効させ、旧Node登録、config、unitを撤去します。旧stateは監査・ロールバックに必要な保持期間を過ぎてから削除します。remote helperのroot policy、state、rollback baselineは削除しません。
 7. 各管理対象hostで`systemctl list-unit-files 'autostream-update*'`を確認します。常駐してよいのは中央hostの`autostream-updater.service`だけで、`autostream-update-host.service`はどのhostにも存在してはいけません。
 
-移行後、管理対象hostにControl PanelのRuntime Tokenやprivate release用GitHub tokenを残しません。問題が起きた場合も旧per-host Updaterを再起動せず、中央Updaterを停止してから中央の`validate-config`によるrestricted probeとremote root policyを確認します。
+移行後、管理対象hostにControl PanelのRuntime TokenやGitHub Release Tokenを残しません。問題が起きた場合も旧per-host Updaterを再起動せず、システム更新画面の反映状態とremote root policyを確認します。
 
 ## 中央Updaterを配置する
 
-Control Panel host releaseの`README.install.md`には中央Updaterの配置手順が入っています。archive、`release-manifest.json`、sidecar、archive内`checksums.txt`を検証した後に実行してください。
+Control Panel host releaseの`README.install.md`には中央Updaterの配置手順が入っています。archive、`release-manifest.json`、sidecar、archive内`checksums.txt`を検証・展開した後に実行してください。次はamd64 archiveを`/opt/autostream/releases/artifacts`へ展開済みの例です。`vX.Y.Z`は実際のversionへ置き換えます。
 
 ```bash
-set -euo pipefail
-RELEASE_DIR="$(readlink -f /opt/autostream/control-panel/current)"
-
 getent group autostream-updater >/dev/null 2>&1 || \
   sudo groupadd --system autostream-updater
 id -u autostream-updater >/dev/null 2>&1 || \
@@ -109,40 +109,33 @@ id -u autostream-updater >/dev/null 2>&1 || \
     autostream-updater
 sudo install -d -o autostream-updater -g autostream-updater -m 0700 \
   /var/lib/autostream-updater
-sudo install -d -o root -g autostream-updater -m 0750 \
-  /etc/autostream/updater /etc/autostream/updater/ssh
+sudo install -d -o root -g root -m 0755 /etc/autostream
+cd /opt/autostream/releases/artifacts/autostream-control-panel_vX.Y.Z_linux_amd64
 sudo install -o root -g root -m 0755 \
-  "$RELEASE_DIR/bin/autostream-updater" /usr/local/bin/autostream-updater
-sudo test ! -e /etc/autostream/updater/ssh/known_hosts
-sudo install -o root -g autostream-updater -m 0640 /dev/null \
-  /etc/autostream/updater/ssh/known_hosts
+  bin/autostream-updater /usr/local/bin/autostream-updater
 sudo install -o root -g root -m 0644 \
-  "$RELEASE_DIR/systemd/autostream-updater.service.example" \
+  systemd/autostream-updater.service.example \
   /etc/systemd/system/autostream-updater.service
+sudo systemctl daemon-reload
 ```
 
-この配置手順では`updater.json`をcopyしません。後述のtoken-free commandが、ファイル未作成時だけUpdater本体に内蔵された初期設定から安全に自動生成します。既存`updater.json`、SSH key、`known_hosts`はrelease更新でもAuto Configureでも上書きしません。自動生成された内容を確認し、local設定だけを明示的に変更します。Auto Configureが更新するのは`panel_url`、`node_id`、`runtime_token`、`service_name`だけです。`github_token`、`api`、`state_dir`、interval、`hosts`、`targets`、SSH pathなどのlocal policyは変更しません。
+`/usr/local/bin/autostream-updater`と`/usr/share/autostream-control-panel`を使う既存の直接配置に対応します。`/opt/autostream/control-panel/current/bin`は前提にしません。JSON sample、空のSSH trust file、SSH client keyを手作業で作る必要はありません。
 
-### host別SSH keyを作る
+`/etc/autostream`は`root:root 0755`にします。`updater.json`自体は`root:autostream-updater 0640`のため内容を他userへ公開せず、`autostream-updater`には親directoryをtraverseして設定を開く権限だけを与えます。configure後は起動前に`sudo -u autostream-updater test -r /etc/autostream/updater.json`を実行してください。
 
-管理対象hostごとに別のkeyを作ります。個人用keyやfleet共通keyを流用しません。
+### システム更新でhostを保存する
 
-```bash
-HOST_ID=host-tokyo-01
-sudo test ! -e "/etc/autostream/updater/ssh/${HOST_ID}_ed25519"
-sudo test ! -e "/etc/autostream/updater/ssh/${HOST_ID}_ed25519.pub"
-sudo ssh-keygen -t ed25519 -N '' \
-  -C "autostream-update:${HOST_ID}" \
-  -f "/etc/autostream/updater/ssh/${HOST_ID}_ed25519"
-sudo chown root:autostream-updater \
-  "/etc/autostream/updater/ssh/${HOST_ID}_ed25519"
-sudo chmod 0640 "/etc/autostream/updater/ssh/${HOST_ID}_ed25519"
-sudo chown root:root \
-  "/etc/autostream/updater/ssh/${HOST_ID}_ed25519.pub"
-sudo chmod 0644 "/etc/autostream/updater/ssh/${HOST_ID}_ed25519.pub"
-```
+中央Updaterを起動した後、Control Panelの **Application Info > システム更新** で中央Updaterを選び、次を入力します。
 
-managed hostのSSH server keyはconsoleや独立したinventoryでfingerprintを確認してから、中央の`/etc/autostream/updater/ssh/known_hosts`へ追加します。`ssh-keyscan`の結果を未確認のまま信用したり、`StrictHostKeyChecking=accept-new`を使ったりしないでください。
+1. loopbackで待ち受けるAPIポート、更新確認間隔、Heartbeat間隔。通常は初期値のまま使います。
+2. GitHub Release Token。repositoryがpublic/privateのどちらでもManaged更新には必須です。画面では書き込み専用で、保存後は画面へ再表示しません。
+3. host ID、表示名、address、SSH port、SSHユーザー、architecture。
+4. managed hostの完全なSSHホスト公開鍵。server consoleや契約先の管理画面など、SSH接続とは独立した経路でfingerprintを確認してから入力します。
+5. hostに対応付けるtargetとdeployment mode。
+
+`ssh-keyscan`は公開鍵候補の取得には使えますが、`ssh-keyscan`の出力だけを信用しないでください。未確認の鍵を保存したり、初回接続の鍵を自動受諾したりしません。
+
+**保存** を押すと、Updaterが設定を自動取得し、ホストごとのEd25519鍵を生成して **SSHクライアント公開鍵**を画面へ報告します。秘密鍵は中央Updaterのstate directoryだけに保存されます。この時点でhelperが未導入でも、設定revisionの受理に成功すれば設定は **反映済み** になります。表示された公開鍵を次のhelper installで使います。
 
 ### managed hostのSSH認証を専用userだけに制限する
 
@@ -205,7 +198,7 @@ gh attestation verify "$ARTIFACT_DIR/update-host-bootstrap-manifest.json" \
   --repo Kome-Lab/Autostream-ControlPanel
 ```
 
-このdownloadと検証は認証済みの管理端末で行います。archive、sidecar、bootstrap manifest、manifest sidecarを管理経路で対象hostへ転送し、host側でも両sidecarと展開後`checksums.txt`を再検証してから、以降の`RELEASE_DIR`を転送先に読み替えます。managed hostで`gh auth login`して長期credentialを残さないでください。Docker baselineで必要なrelease tokenは、後述のone-time標準入力だけで渡します。
+このdownloadと検証は認証済みの管理端末で行います。archive、sidecar、bootstrap manifest、manifest sidecarを管理経路で対象hostへ転送し、host側でも両sidecarと展開後`checksums.txt`を再検証してから、以降の`RELEASE_DIR`を転送先に読み替えます。managed hostで`gh auth login`して長期credentialを残さないでください。Docker baselineで必要なone-time GitHub Release Tokenは、repositoryの公開状態にかかわらず後述の標準入力だけで渡します。
 
 archiveには次が入ります。
 
@@ -232,7 +225,7 @@ sudo install -o root -g root -m 0600 \
 sudoedit /root/autostream-update-host.json
 ```
 
-systemd targetの例です。
+systemd targetの例です。中央Updaterを導入するだけなら既存の直接配置を変えませんが、Control Panel自身をこの例の自動更新targetに追加する場合は、先にmanifest付きreleaseを`/opt/autostream/control-panel/releases`へ導入し、rollback可能な`current`構成へ移行してください。
 
 ```json
 {
@@ -314,7 +307,7 @@ Docker targetも中央設定にはidentityだけを置き、次のfull policyは
 
 `compose_config_sha256`はroot operatorが確認したcanonical Compose modelを固定します。初回bootstrap中の選択targetだけは、draft configで64個の`0`を明示的なsentinelとして使います。通常の`validate-config`、installer、RPCはsentinelを拒否します。`current_version`には現在実行中で、immutable Docker manifestとrollback policyを持つ公開済みbundle tagを指定します。targetごとに別の`version_env_file`を使い、秘密情報を入れません。
 
-Docker targetでは通常exampleではなく、archiveの`autostream-update-host.docker-draft.json.example`からroot所有draftを作ります。対象hostで現在稼働中のcontainer、manifest、platform digest、source version、Compose modelを照合し、target別version envをseedします。private release read tokenは標準入力だけで一時的に渡します。
+Docker targetでは通常exampleではなく、archiveの`autostream-update-host.docker-draft.json.example`からroot所有draftを作ります。対象hostで現在稼働中のcontainer、manifest、platform digest、source version、Compose modelを照合し、target別version envをseedします。GitHub Release Tokenはrepositoryの公開状態にかかわらず必要で、標準入力だけで一時的に渡します。
 
 ```bash
 set -euo pipefail
@@ -334,7 +327,7 @@ sudo jq -e --arg target "$TARGET_ID" --arg zero "$ZERO_SHA" \
 sudo -v
 bootstrap_docker_digest() {
   local token
-  IFS= read -r -s -p 'One-time GitHub token: ' token </dev/tty
+  IFS= read -r -s -p 'One-time GitHub Release Token: ' token </dev/tty
   printf '\n' >&2
   printf '%s\n' "$token" |
     sudo -n "$RELEASE_DIR/bin/autostream-update-host" \
@@ -374,7 +367,7 @@ private GHCRを使う場合は対象hostのroot Docker credential storeを、rea
 
 ## managed hostへ一度だけinstallする
 
-中央で作った、そのhost専用の公開鍵をfileとして用意します。中央Updaterの送信元はnumeric CIDRで制限します。固定addressならIPv4 `/32`またはIPv6 `/128`を推奨します。
+システム更新画面に表示された、そのhost専用のSSHクライアント公開鍵をfileとして用意します。中央Updaterの送信元はnumeric CIDRで制限します。固定addressならIPv4 `/32`またはIPv6 `/128`を推奨します。個人用公開鍵や別hostの公開鍵を使わないでください。
 
 ```bash
 sudo "$RELEASE_DIR/install/install-autostream-update-host" \
@@ -413,102 +406,41 @@ sudo stat -c '%U:%G:%a %n' \
 
 期待するmodeは順に`root:root:755`、`root:root:600`、`root:root:440`、`root:root:644`です。idle中は`autostream-update-host` processもlistening portも存在しません。
 
-## 中央inventoryを設定する
+## 保存した設定が反映されたことを確認する
 
-Control Panelで中央Update Agentを1つ作成します。登録済みの場合はConfigure Tokenを再生成し、Configurationに表示された次のtoken-free commandを中央hostで実行します。
+managed hostへhelperとSSHクライアント公開鍵をinstallすると、中央Updaterはhostのrestricted probeを自動で再試行します。手動reloadやservice再起動は不要です。
 
-```bash
-sudo autostream-updater configure \
-  --panel-url "https://control.example.com" \
-  --node "central-updater" \
-  --config "/etc/autostream/updater.json"
-```
+システム更新画面の状態を確認します。
 
-`updater.json`が存在しない場合、初回実行はUpdater本体に内蔵された初期設定から自動生成し、所有者を`root:autostream-updater`、mode `0640`にした後、安全チェックポイントとして意図的に非ゼロ終了します。Configure Tokenを要求・消費せず、既存の`updater.json`は上書きしません。生成後にGitHub token、API、host/target inventory、SSH pathなどのlocal policyを完成させ、同じtoken-free commandを再実行します。
+| 状態 | 意味 | 対応 |
+| --- | --- | --- |
+| **反映済み** | 保存したrevisionをUpdaterが受理し、その設定で動作中 | hostの到達状態を別に確認します |
+| **反映待ち** | Updaterの取得待ち、または更新job完了待ち | 表示理由に従って待ちます |
+| **反映失敗** | 設定の形式・整合性検証、鍵生成、または安全な切替に失敗 | 理由を修正して **保存** します |
 
-中央`/etc/autostream/updater.json`は次の形です。自動生成された後、`github_token`、`api`、`state_dir`、interval、`hosts`、`targets`、SSH pathをこのhostの実値へ変更します。先頭の`panel_url`、`node_id`、`runtime_token`、`service_name`は再実行時のAuto Configureが設定するため、Node Runtime Tokenを手で貼り付けません。
+更新jobの実行中は反映を保留します。Updaterは新しいjobをclaimせず、実行中jobが安全に終了してから新しい設定を自動反映します。失敗時は更新操作を停止し、失敗した段階に応じて直前の反映済み設定へ戻るか、安全な保存処理を自動再試行します。
 
-```json
-{
-  "panel_url": "https://panel.example.com",
-  "node_id": "central-updater",
-  "runtime_token": "<NODE_RUNTIME_TOKEN>",
-  "service_name": "Central Updater",
-  "github_token": "<PRIVATE_RELEASE_READ_TOKEN>",
-  "api": {
-    "bind_host": "127.0.0.1",
-    "host": "127.0.0.1",
-    "port": 8090,
-    "ssl_enabled": false
-  },
-  "state_dir": "/var/lib/autostream-updater",
-  "poll_interval_seconds": 15,
-  "heartbeat_interval_seconds": 30,
-  "hosts": [
-    {
-      "host_id": "host-tokyo-01",
-      "name": "Tokyo Host 01",
-      "address": "192.0.2.20",
-      "port": 22,
-      "user": "autostream-update-host",
-      "identity_file": "/etc/autostream/updater/ssh/host-tokyo-01_ed25519",
-      "known_hosts_file": "/etc/autostream/updater/ssh/known_hosts",
-      "arch": "amd64"
-    }
-  ],
-  "targets": [
-    {
-      "target_id": "control-panel",
-      "host_id": "host-tokyo-01",
-      "service_type": "control_panel",
-      "deployment_mode": "systemd"
-    }
-  ]
-}
-```
+設定の反映状態とhostの到達状態は別です。helper未導入、SSHクライアント公開鍵未登録、SSHホスト公開鍵不一致、firewall、remote policy不一致はhostを **接続不可** として表示します。restricted probeではOS、host ID、architecture、remote target集合、service type、deployment mode、root所有helper設定のSHA-256、targetごとの現在版を確認します。現在版を取得できないtargetは`current_version_unknown`として更新対象外です。raw SSHの対話shell、PTY、port forwarding、SCP、SFTPが失敗し、固定RPCのprobeだけが成功する状態が正常です。
 
-- `hosts`は`host_id`、表示名、SSH address/port/user、host別private key、strict `known_hosts`、architectureだけです。
-- `identity_file`も実keyもhost間で共有できません。
-- `targets`は`target_id`、`host_id`、`service_type`、`deployment_mode`だけです。
-- `target_id`は中央inventory全体で一意にします。同じservice typeを複数hostへ置く場合もNode IDを重複させません。
-- central targetへhealth URL、unit、path、backup command、Docker/Compose設定を入れると拒否されます。
-- 中央とremoteのhost ID、target ID、service type、mode、architectureは完全一致が必要です。
+中央unitは専用userで動き、sudoやcapabilityを持ちません。`NoNewPrivileges`、空のcapability set、read-only system imageを弱めないでください。書き込み先は`/var/lib/autostream-updater`だけです。
 
-fileを確認します。
+## managed hostを削除する
+
+ホストの削除はSSH認証の廃止を伴います。更新jobが実行中でないことを確認してから、次の順で行います。
+
+1. **システム更新**で対象hostの **削除** を押します。確認画面には、そのhostと紐づくtargetも削除されることが表示されます。
+2. **設定を保存**し、状態が **反映済み** になるまで待ちます。新しい設定が安全に確定すると、中央Updaterは削除したhostのSSH秘密鍵を自動廃棄します。中央のstate directoryを手作業で編集しません。
+3. 対象hostで`/var/lib/autostream-update-host-login/.ssh/authorized_keys`を`sudoedit`し、画面に表示されていたそのhost専用の公開鍵行を削除します。
+4. このhostを今後管理しない場合は、専用sudoers、root policy、helperも撤去します。
 
 ```bash
-sudo stat -c '%U:%G:%a %n' /etc/autostream/updater.json
-sudo chown root:autostream-updater /etc/autostream/updater/ssh/known_hosts
-sudo chmod 0640 /etc/autostream/updater/ssh/known_hosts
-sudo find /etc/autostream/updater/ssh -type f -name '*_ed25519' \
-  -exec chown root:autostream-updater {} \; \
-  -exec chmod 0640 {} \;
+sudo rm -f /etc/sudoers.d/autostream-update-host
+sudo rm -f /etc/autostream/update-host.json
+sudo rm -f /usr/local/libexec/autostream-update-host
+sudo visudo -cf /etc/sudoers
 ```
 
-helper bootstrap、local inventory、file権限を完成させた後、上で使った同じtoken-free commandを再実行します。command自体にはConfigure Tokenを含めません。この再実行でTTY promptへ貼り付けるか、権限を制限した標準入力から渡します。Configure Tokenを1回だけ消費し、`panel_url`、`node_id`、`runtime_token`、`service_name`だけを原子的に更新します。`github_token`、`api`、`hosts`、`targets`、SSH設定、その他のlocal policyは保持されます。
-
-stageしたRuntime Tokenはactivation成功まではinactiveで、旧Runtime Tokenがactiveのままです。ただしactivationの応答を受け取れず結果不確定になった場合は、CLIだけではどちらのRuntime Tokenがactiveか判断できません。local atomic commit後にreload、validation、activationが失敗した場合、disk上の`updater.json`にはstage済みidentityが残ることがあります。CLIはactivation用のTokenやstateを永続化しないため、Updaterを再起動せず、Configurationで必ず新しいConfigure Tokenを発行し、同じtoken-free command形へその新しいTokenを入力して再実行します。activation成功を確認するまで`validate-config`やUpdater起動へ進みません。
-
-## 全hostをprobeして中央Updaterを起動する
-
-中央の`validate-config`はstatic validationだけではありません。全hostへ並列に接続し、各host最大15秒でrestricted probeを行います。OSがLinuxであること、host ID、architecture、remote target集合、service type、deployment modeが中央inventoryと完全一致しない場合は失敗します。probeはroot所有のhelper設定全体のSHA-256と、targetごとの現在版も返します。
-
-新規jobはprobeで確認したconfig digestと現在版をimmutable planへ固定します。現在版は`v1.2.3`または`v1.2.3-rc.1`のようなcanonical tagでなければならず、空、`dev`、`v1.2.3+build.1`など比較不能な値では更新を開始しません。job作成後にroot policy、systemd release、Docker version envや稼働imageが変わった場合、既存jobはfail closedになります。設定変更後はrestricted probeを成功させ、変更後の状態から新しいjobを作成してください。
-
-```bash
-sudo /usr/local/bin/autostream-updater validate-config \
-  --config /etc/autostream/updater.json
-sudo systemd-analyze verify /etc/systemd/system/autostream-updater.service
-sudo systemctl daemon-reload
-sudo systemctl enable autostream-updater
-sudo systemctl restart autostream-updater
-sudo systemctl status autostream-updater
-sudo journalctl -u autostream-updater -n 100 --no-pager
-```
-
-中央unitは専用userで動き、sudo、capability、Docker socketを持ちません。`NoNewPrivileges`、空のcapability set、read-only system imageを弱めないでください。書き込み先は`/var/lib/autostream-updater`だけです。
-
-中央Updaterは初回probeが完了するまで新規jobをclaimしません。現在版を取得できないtargetも`current_version_unknown`として更新対象外です。raw SSHの対話shell、PTY、port forwarding、SCP、SFTPが失敗し、中央validateのrestricted probeだけが成功する状態が正常です。
+同じhost IDを再追加して保存すると新しいSSH鍵とfingerprintが生成されます。以前の公開鍵を再登録せず、画面に新しく表示された公開鍵でhelperをbootstrapし直してください。
 
 ## 更新jobの実行順
 
@@ -517,7 +449,7 @@ sudo journalctl -u autostream-updater -n 100 --no-pager
 1. Control Panelがtarget、host、version、mode、実行方針を固定してqueueします。
 2. 中央Updaterが対象host laneでjobをclaimし、leaseを取得します。
 3. 中央Updaterがrelease manifest、sidecar、artifactまたはimage digestを検証します。
-4. remote helperが`stage`を実行します。private release credentialはSSH stdinで一時受信し、artifactを再取得・再検証します。この段階ではserviceを変更しません。
+4. remote helperが`stage`を実行します。必須のGitHub Release TokenはSSH stdinでjob中だけ一時受信し、artifactを再取得・再検証します。この段階ではserviceを変更しません。
 5. 中央Updaterが`installing` progressの受理を確認します。
 6. 中央Updaterがactive leaseとimmutable planに結び付けた90秒のone-time mutation grantを取得します。
 7. remote helperがroot変更の直前にgrantを消費し、`apply`します。
@@ -585,7 +517,7 @@ claim時にもstream状態を再確認します。強制停止して更新する
 5. 新containerのimage ID、RepoDigest、health、source versionを確認します。
 6. 失敗時はversion envを元のbyte列へ戻し、旧image IDから対象serviceだけを再作成して旧health/versionを確認します。
 
-共有`.env`へdesired versionを書き戻しません。Updater管理serviceを手動でCompose操作する場合も、remote policyと同じtarget専用`--env-file`を使います。private GHCRでは対象hostのroot Docker credential storeを使い、中央GitHub tokenをDocker loginへ流用しません。
+共有`.env`へdesired versionを書き戻しません。Updater管理serviceを手動でCompose操作する場合も、remote policyと同じtarget専用`--env-file`を使います。private GHCRでは対象hostのroot Docker credential storeを使い、中央のGitHub Release TokenをDocker loginへ流用しません。
 
 Control PanelとObservabilityのbackupはdatabaseを自動restoreしません。rollback後もschemaやdataの確認が必要なら、事前に用意したrestore runbookを実行します。
 
@@ -599,14 +531,13 @@ Control PanelとObservabilityのbackupはdatabaseを自動restoreしません。
 
 ## 中央Updaterとremote helperを更新する
 
-中央Updaterは自分自身の更新targetではありません。active jobがないことを確認し、新しいControl Panel host artifactを検証してから固定pathを明示的に置き換えます。
+中央Updaterは自分自身の更新targetではありません。active jobがないことを確認し、新しいControl Panel host artifactを検証・展開してから固定pathを明示的に置き換えます。次はamd64の例です。`vX.Y.Z`は実際のversionへ置き換えます。
 
 ```bash
-set -euo pipefail
-RELEASE_DIR="$(readlink -f /opt/autostream/control-panel/current)"
+cd /opt/autostream/releases/artifacts/autostream-control-panel_vX.Y.Z_linux_amd64
 sudo systemctl stop autostream-updater
 sudo install -o root -g root -m 0755 \
-  "$RELEASE_DIR/bin/autostream-updater" /usr/local/bin/autostream-updater.next
+  bin/autostream-updater /usr/local/bin/autostream-updater.next
 sudo mv -f /usr/local/bin/autostream-updater.next /usr/local/bin/autostream-updater
 /usr/local/bin/autostream-updater --version
 sudo systemctl start autostream-updater
@@ -628,7 +559,7 @@ remote helperもactive jobがないmaintenance中に、新しいhelper artifact�
 | `remote_config_invalid` | central/remoteのhost ID、target集合、service type、mode、arch、root config owner/modeを確認 |
 | `target_reachability_unknown` / `target_unreachable` | 中央onlineとは別に対象hostのprobe結果を確認 |
 | `current_version_unknown` | targetの`.version`またはDocker version env、稼働image、公開済みrelease tagの対応を確認し、restricted probeを再実行 |
-| release manifest取得失敗 | 中央GitHub token、rate limit、tag、manifest/sidecar/artifactを確認 |
+| release manifest取得失敗 | 必須のGitHub Release Token、rate limit、tag、manifest/sidecar/artifactを確認 |
 | stage失敗 | remoteからGitHub/GHCRへの到達、disk、remote checksum検証を確認。serviceはまだ変更されていない |
 | grant発行・消費失敗 | lease、job/host/target/version/mode、plan digest、session、90秒期限を確認。古いgrantを再利用しない |
 | `rolled_back` | backup、中央/remote log、service log、artifact/image digest、旧health/versionを確認 |

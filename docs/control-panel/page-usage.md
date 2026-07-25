@@ -369,30 +369,38 @@ Google Analyticsは有効かつMeasurement IDが妥当な場合だけログイ�
 5. service を起動します。
 6. Service Health で online になったことを確認します。
 
-Auto Configure commandを実行する前に、同じControl Panel release同梱の`autostream-updater` binaryへ更新してください。旧Updaterは`updater.json`を自動生成しません。
+`update_agent`ではConfigurationに表示された次の形のAuto Configure commandを中央hostで1回実行します。
 
-`update_agent`ではConfigurationのAuto Configure commandを中央hostで実行します。`updater.json`が存在しない場合は、Updater本体に内蔵された初期設定から自動生成し、所有者を`root:autostream-updater`、mode `0640`にした後、安全チェックポイントとして意図的に非ゼロ終了します。サンプルファイルの配置や`--init-from`指定は不要です。この初回実行ではConfigure Tokenを要求・消費せず、既存の`updater.json`は上書きしません。生成された設定のGitHub token、API、host/target inventory、SSH pathなどのlocal policyを完成させ、同じtoken-free commandを再実行します。`--init-from PATH`は互換用の明示的なoverrideであり、不正なpathを指定した場合は内蔵設定へfallbackせず失敗します。再実行時のConfigure TokenはTTYまたは標準入力から渡し、commandやprocess argvには含めません。このcommandが`panel_url`、`node_id`、`runtime_token`、`service_name`だけを更新し、local設定は保持します。stageしたRuntime Tokenはactivation成功まではinactiveで、旧Runtime Tokenがactiveのままです。ただしactivationの応答を受け取れず結果不確定になった場合は、CLIだけではどちらのRuntime Tokenがactiveか判断できません。local atomic commit後に失敗した場合、disk上の`updater.json`にはstage済みidentityが残ることがあります。CLIはactivation用のTokenやstateを永続化しないため、Updaterを再起動せず、Configurationで新しいConfigure Tokenを発行し、同じtoken-free command形へ新しいTokenを入力して再実行してください。activation成功を確認した後に`validate-config`を実行し、成功後にだけ中央Updaterを起動または再起動します。各hostへtokenをコピーしないでください。
+```bash
+sudo /usr/local/bin/autostream-updater configure --panel-url "https://control.example.com" --node "central-updater"
+```
 
-登録後のNodeは、同じ画面の登録済みNode一覧から編集、削除、Configure Token再生成、Node Runtime Token再生成ができます。Runtime Tokenを再生成した場合、通常serviceは`config.yml`を更新します。Update AgentはConfigure Tokenも再生成して同じtoken-free Auto Configure command形へ新しいTokenを入力し、activation成功と`validate-config`を確認した後に中央Updaterを再起動してください。
+Configure Tokenはコマンドに含まれません。promptへ貼り付けると標準入力から非表示で読み取られ、`/etc/autostream/updater.json`へ接続identityが自動生成されます。`updater.json`を手で編集したり、GitHub Release TokenやSSH設定を追記したりしません。
+
+登録後のNodeは、同じ画面の登録済みNode一覧から編集、削除、Configure Token再生成、Node Runtime Token再生成ができます。Runtime Tokenを再生成した場合、通常serviceは`config.yml`を更新します。Update Agentの作成とtoken再生成には、Managed更新用GitHub Release Tokenへ到達できる認証情報を扱うため`system_updates.execute`と`secrets.update`の両方が必要です。Update Agentは漏えい対応などでrotationが必要な場合だけ、新しいConfigure TokenでAuto Configure commandを実行し、activation成功後に中央Updaterを再起動します。通常の管理設定変更ではconfigureの再実行も再起動も不要です。
 
 API Tokens は旧構成や移行時の token 確認、rotate、revoke に使います。Node Runtime Token や Configure Token は画面やドキュメント、チャット、GitHub に残さないでください。漏えいの疑いがある場合は Node登録の Configuration で再生成します。
 
 ## Application Info
 
-Application Info は、Control Panelと登録済みNodeのversion情報に加え、中央`autostream-updater`へ安全な更新jobを依頼する画面です。中央Updaterのonline状態と、中央Updaterから各hostへのSSH到達状態は別々に表示します。
+Application Info は、Control Panelと登録済みNodeのversion情報に加え、中央`autostream-updater`の設定と安全な更新jobを管理する画面です。中央Updaterのonline状態と、中央Updaterから各hostへのSSH到達状態は別々に表示します。
 
 1. **再取得**で更新対象、最新release、中央Updaterのonline状態、hostの到達状態、更新履歴を読み直します。
-2. **システム更新**で、現在version、更新先version、systemd / Docker、host ID、担当する中央Updaterを確認します。
-3. 配信中でない対象は **更新**、active streamがある対象は **空き次第更新** を押します。
-4. Control Panel自身を更新する場合は、画面とAPIが一時切断される確認dialogを承認します。
-5. **更新履歴**で、取得、検証、適用、health確認、rollbackの進捗と結果を確認します。
-6. **更新可能なものを順次更新**は、対象を一つずつqueueします。同じtargetを同時に複数更新しません。
+2. **システム更新**で中央Updaterを選び、APIポート、更新確認間隔、Heartbeat間隔、GitHub Release Token、host、完全なSSHホスト公開鍵、targetを入力して **保存** します。SSHホスト公開鍵はSSH接続とは独立した経路で確認してください。
+3. 保存後、Updaterが設定を自動で取得します。ホストごとに生成・報告された **SSHクライアント公開鍵**を管理対象ホストの`autostream-update-host`へ登録します。
+4. 設定状態が **反映済み** になったことを確認します。これは保存したrevisionをUpdaterが受理して動作中という意味で、hostの到達状態とは別です。**反映待ち** は取得待ちまたは更新job完了待ち、**反映失敗** は設定の形式・整合性検証や安全な切替の失敗です。設定反映のための再起動は不要です。
+5. 配信中でない対象は **更新**、active streamがある対象は **空き次第更新** を押します。
+6. Control Panel自身を更新する場合は、画面とAPIが一時切断される確認dialogを承認します。
+7. **更新履歴**で、取得、検証、適用、health確認、rollbackの進捗と結果を確認します。
+8. **更新可能なものを順次更新**は、対象を一つずつqueueします。同じtargetを同時に複数更新しません。
+
+GitHub Release Tokenはrepositoryの公開状態にかかわらずManaged更新では必須です。画面では書き込み専用で、保存後は画面へ再表示しません。更新jobを取得した中央Updaterへだけ一度限りで渡されます。設定を保存した時点で更新jobの実行中なら、自動反映はjob終了まで保留されます。
 
 更新候補は、systemd配備ではNodeが報告したsource versionと同じserviceのhost releaseを比較します。Docker配備では`Autostream-Docker`のbundle versionを比較します。Docker bundle versionと各serviceのsource versionが異なるのは正常です。
 
-実行buttonが有効になるには、担当する中央Updaterがonlineで、対象hostが`到達可`である必要があります。`接続不可`は直近probeが失敗、`未確認`は起動直後、情報期限切れ、または有効なprobe結果がない状態です。中央Updaterがofflineでも、hostが接続不可でも、最新versionの検出と比較は続きます。
+実行buttonが有効になるには、担当する中央Updaterがonlineで、設定が`反映済み`、対象hostが`到達可`である必要があります。`接続不可`はhelper未導入、SSHクライアント公開鍵未登録、SSHホスト公開鍵不一致、firewall、remote policy不一致などで直近probeが失敗した状態です。`未確認`は起動直後、情報期限切れ、または有効なprobe結果がない状態です。中央Updaterがofflineでも、hostが接続不可でも、最新versionの検出と比較は続きます。
 
-Nodeが一覧に出ない場合はNode登録ID、service側のControl Panel URLとtoken、Service Healthのheartbeatを確認します。中央Updaterが出ない場合は1つの`update_agent`登録、中央`autostream-updater`のsystemd状態、Runtime Tokenを確認します。hostだけ接続不可の場合はaddress、firewall、source CIDR、host別SSH key、strict `known_hosts`、forced command、remote helper configを確認します。
+Nodeが一覧に出ない場合はNode登録ID、service側のControl Panel URLとtoken、Service Healthのheartbeatを確認します。中央Updaterが出ない場合は1つの`update_agent`登録、中央`autostream-updater`のsystemd状態、Runtime Tokenを確認します。hostだけ接続不可の場合はaddress、firewall、source CIDR、画面で確認したSSHホスト公開鍵、ホスト別SSHクライアント公開鍵、forced command、remote helper configを確認します。
 
 必要権限、Update Agent登録、`when_idle` / `maintenance`、backup、checksum、health確認、rollback、Control Panel自己更新の詳細は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
 

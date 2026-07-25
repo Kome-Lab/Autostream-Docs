@@ -18,7 +18,7 @@ Node登録で入力する項目は次だけです。
 | SSL | ON | `https` で接続するか |
 | 説明 | `第1スタジオ` | 運用メモ |
 
-中央Update Agentの既定portは`8090`です。更新jobは中央Updaterが外向きpullで取得します。Updaterのinbound APIはhealth、version、認証付きstatusだけを提供し、更新commandは受け付けません。Host、Port、SSLは中央`/etc/autostream/updater.json`の`api`と一致させます。同一ホストならloopbackだけで待ち受け、別ホストならTLSを有効にしてControl Panelから到達できる管理networkだけに公開します。管理対象ホストのhelperには待受portがありません。
+中央Update Agentの既定portは`8090`です。更新jobと「システム更新」で保存した設定は中央Updaterが外向きに取得します。Updaterのinbound APIはhealth、version、認証付きstatusだけを提供し、更新commandは受け付けません。同一ホストならloopbackだけで待ち受けます。管理対象ホストのhelperには待受portがありません。
 
 次の値は手入力しません。
 
@@ -30,7 +30,7 @@ Node登録で入力する項目は次だけです。
 | public URL 全体 | Host、Port、SSL から Panel が組み立てます |
 | `CONTROL_PANEL_TOKEN` | Panel が `config.yml` に Node Runtime Token として出します |
 
-Worker / Encoder Recorderの設定にはstream ingest署名鍵を含むため、それらのNodeを作成するoperatorには`secrets.update`権限が必要です。Encoder RecorderにはYouTube / Driveのruntime secret取得に必要な`service.secret.resolve` scopeも自動付与します。Configure Token再生成とRuntime Token再生成には`api_tokens.create`と`api_tokens.revoke`の両方に加え、既存scopeと署名鍵を再発行できる権限が必要です。Worker / Encoder Recorderでは再生成時も`secrets.update`を要求します。
+Worker / Encoder Recorderの設定にはstream ingest署名鍵を含むため、それらのNodeを作成するoperatorには`secrets.update`権限が必要です。Encoder RecorderにはYouTube / Driveのruntime secret取得に必要な`service.secret.resolve` scopeも自動付与します。中央Update Agentの認証情報はManaged更新用GitHub Release Tokenへ到達できるため、Node作成には`api_tokens.create`、`system_updates.execute`、`secrets.update`が必要です。Configure Token再生成とRuntime Token再生成には`api_tokens.create`と`api_tokens.revoke`の両方に加え、既存scopeとsecret境界を再発行できる権限が必要です。Worker / Encoder Recorderと中央Update Agentでは再生成時も`secrets.update`を要求します。
 
 ## 生成されるもの
 
@@ -38,10 +38,10 @@ Worker / Encoder Recorderの設定にはstream ingest署名鍵を含むため、
 
 | 生成物 | 扱い |
 | --- | --- |
-| Configure Token | 通常Nodeでは`POST /api/node-agent/configure`、Update Agentでは`POST /api/node-agent/configure/stage`へ渡す短期token。Update Agentではcommandへ埋め込まずTTYまたは標準入力から渡します |
+| Configure Token | 通常Nodeでは`POST /api/node-agent/configure`、Update Agentでは`POST /api/node-agent/configure/stage`へ渡す短期token。Update Agentではcommandへ埋め込まずTTYまたは標準入力から非表示で渡します |
 | Node Runtime Token | register、heartbeat、report、runtime config、Panel から Node への dispatch に使う token |
 | `config.yml` | 通常Nodeでは`/etc/autostream-<service>/config.yml`に保存します |
-| Auto Configure command | service binaryの`configure`サブコマンドで設定を取得し、通常Nodeは`config.yml`、Update Agentは中央`updater.json`の接続identityを更新します |
+| Auto Configure command | service binaryの`configure`サブコマンドで設定を取得し、通常Nodeは`config.yml`、Update Agentは中央`/etc/autostream/updater.json`へ接続identityを自動生成します |
 
 Configure Token と Node Runtime Token は作成直後だけ表示します。紛失した場合や期限切れの場合は、登録済みNodeの操作から再生成してください。DB には Configure Token をハッシュで、Node Runtime Token を暗号化して保存します。
 
@@ -55,7 +55,7 @@ Worker / Encoder Recorderを作成する前に、Control Panel envの`AUTOSTREAM
 | --- | --- | --- |
 | Configuration表示 | `config.yml` と Auto Configure command を確認 | 生の token は通常表示しません |
 | Configure Token再生成 | 期限切れ、紛失、未使用tokenの作り直し | `api_tokens.create`、`api_tokens.revoke`、既存scope権限が必要。再生成後のtokenは一度だけ表示します |
-| Runtime Token再生成 | 漏えい疑い、紛失、Node側token更新 | 同じ権限を要求します。通常Nodeではrotation時に旧Runtime Tokenが直ちに無効になります。Update Agentでは新しいConfigure TokenでAuto Configure commandを実行し、activation成功後にだけ旧Runtime Tokenが無効になります。成功を確認してから再起動します |
+| Runtime Token再生成 | 漏えい疑い、紛失、Node側token更新 | 同じ権限を要求します。通常Nodeではrotation時に旧Runtime Tokenが直ちに無効になります。Update Agentでは新しいConfigure TokenでAuto Configure commandを実行し、activation成功後にだけ旧Runtime Tokenが無効になります。rotation時だけ中央Updaterを再起動して新しいidentityを読み込みます |
 | 編集 | Node名、説明、Host、Port、SSL を変更 | Node ID と Node type は変更できません |
 | 削除 | Node登録、割り当て、Runtime Token を無効化 | 削除後は同じ Node ID で作り直してください |
 
@@ -75,9 +75,9 @@ service type ごとの binary 名は次の通りです。
 | `observability` | `autostream-observability` |
 | `update_agent` | 中央管理ホストの`autostream-updater` |
 
-`sudo: autostream-observability: command not found`のように出る場合は、`/usr/local/bin/autostream-observability`互換symlinkが`/opt/autostream/observability/current/bin/autostream-observability`を指しているか確認します。壊れている場合は、manifest付きhost releaseに同梱された`README.install.md`で検証済み`current` linkと互換symlinkを配置し直してください。local binaryを直接copyしてmarkerだけ作る方法は使いません。
+`sudo: autostream-observability: command not found`のように出る場合は、`/usr/local/bin/autostream-observability`互換symlinkが`/opt/autostream/observability/current/bin/autostream-observability`を指しているか確認します。壊れている場合は、manifest付きhost releaseに同梱された`README.install.md`で検証済み`current` linkと互換symlinkを配置し直してください。未検証のlocal binaryを使わないでください。
 
-Update AgentのAuto Configure commandはTokenを含まないため、失敗または結果不確定の後も同じcommand形を使えます。ただしCLIはactivation用のTokenやstateを永続化しません。再実行するたびにConfigurationで新しいConfigure Tokenを発行し、その新しいTokenを入力します。通常Nodeのcommandは上記のとおりConfigure Tokenを引数に含むため、一度だけ実行します。
+Update Agentの通常導入ではAuto Configure commandを1回だけ実行します。Configure Tokenはコマンドに含まれず、TTYまたは標準入力から非表示で読み取られます。`/etc/autostream/updater.json`は接続identityだけを保存するbootstrap設定として原子的に自動生成され、root所有、group `autostream-updater`、mode `0640`になります。`updater.json`を手で編集しません。
 
 Auto Configureの通信とRuntime Token rotationはNode typeによって異なります。
 
@@ -88,80 +88,40 @@ Auto Configureの通信とRuntime Token rotationはNode typeによって異な�
 3. レスポンスJSONから新しいRuntime Tokenと必要な署名鍵を含む`config_yml`を取り出します。
 4. `config.yml`を安全なowner/modeで保存します。取得したNode typeが実行したservice binaryと違う場合は保存前に拒否します。
 
-Auto Configure commandを実行する前に、同じControl Panel release同梱の`autostream-updater` binaryへ更新してください。旧Updaterは`updater.json`を自動生成しません。
+Update Agentでは次の順序です。
 
-Update Agentのtoken-free commandは、`updater.json`が存在しない場合、通信前にUpdater本体に内蔵された初期設定から自動生成し、所有者を`root:autostream-updater`、mode `0640`にした後、安全チェックポイントとして意図的に非ゼロ終了します。サンプルファイルの配置や`--init-from`指定は不要です。この初回実行ではConfigure Tokenを要求・消費せず、既存の`updater.json`は上書きしません。生成された設定のGitHub token、API、host/target inventory、SSH pathなどのlocal policyを完成させ、同じtoken-free commandを再実行します。`--init-from PATH`は互換用の明示的なoverrideであり、不正なpathを指定した場合は内蔵設定へfallbackせず失敗します。
-
-Update Agentでは、通常Nodeの即時rotation endpointを使わず、設定が存在する再実行時に次の二段階で切り替えます。
-
-1. token-free commandが実行時にConfigure TokenをTTYまたは標準入力から読み取り、`POST /api/node-agent/configure/stage`を呼び出します。`update_agent`がlegacyの`POST /api/node-agent/configure`を呼び出した場合、PanelはHTTP `409`で拒否します。
+1. `autostream-updater configure`がConfigure TokenをTTYまたは標準入力から読み取り、`POST /api/node-agent/configure/stage`を呼び出します。`update_agent`がlegacyの`POST /api/node-agent/configure`を呼び出した場合、PanelはHTTP `409`で拒否します。
 2. Panelは新しい接続identityをstageします。新しくstageされたRuntime Tokenはまだinactiveで、旧Runtime Tokenは引き続きactiveです。
-3. `autostream-updater`は既存`/etc/autostream/updater.json`の安全性を通信前に確認し、`panel_url`、`node_id`、`runtime_token`、`service_name`だけを原子的にcommitして、設定をreload・validationします。
-4. local commit、reload、validationがすべて成功した場合だけ、`POST /api/node-agent/configure/activate`を呼び出します。
-5. activation成功後にだけ旧Runtime Tokenを無効化し、stageしたRuntime Tokenをactiveにします。
+3. Updaterは`/etc/autostream/updater.json`へ接続identityだけを原子的に保存します。
+4. 保存と検証が成功した場合だけ`POST /api/node-agent/configure/activate`を呼び出し、stageしたRuntime Tokenをactiveにします。
 
-Update Agentの`github_token`、`api`、`state_dir`、interval、`hosts`、`targets`、SSH pathなどのlocal policyは変更しません。取得したNode typeが`update_agent`と違う場合はlocal commit前に拒否します。
+## 中央Update Agentの登録と管理設定
 
-通常Nodeでは、Configuration画面から手動で`config.yml`を配置する方法とAuto Configure commandは代替手段です。両方を実行すると、Auto ConfigureがRuntime Tokenを差し替えて先に配置したconfigを無効にするため、どちらか一方だけを使います。通常はAuto Configureを推奨します。Update Agentでは、下記の初回生成とlocal inventory編集を順に行います。
-
-## 中央Update Agentのlocal inventoryとAuto Configure
-
-中央管理ホストへControl Panel host releaseと`autostream-updater` binaryを配置し、各hostのhelperをbootstrapします。中央Update Agent Nodeを1つ作成し、Configurationに表示されたtoken-free commandを実行してください。`/etc/autostream/updater.json`が存在しない初回は、Updater本体に内蔵された初期設定から安全に自動生成した時点で終了します。
-
-その後、生成された設定の`github_token`、`api`、`state_dir`、interval、`hosts`、`targets`、SSH pathをlocal inventoryに合わせて設定します。`panel_url`、`node_id`、`runtime_token`、`service_name`は再実行時に設定されるため、Node Runtime Tokenを手で貼り付けません。
-
-```json
-{
-  "panel_url": "https://control.example.com",
-  "node_id": "central-updater",
-  "runtime_token": "<NODE_RUNTIME_TOKEN>",
-  "service_name": "Central Updater",
-  "github_token": "<PRIVATE_RELEASE_READ_TOKEN>",
-  "api": {
-    "bind_host": "127.0.0.1",
-    "host": "127.0.0.1",
-    "port": 8090,
-    "ssl_enabled": false
-  },
-  "state_dir": "/var/lib/autostream-updater",
-  "hosts": [
-    {
-      "host_id": "host-tokyo-01",
-      "name": "Tokyo Host 01",
-      "address": "192.0.2.20",
-      "port": 22,
-      "user": "autostream-update-host",
-      "identity_file": "/etc/autostream/updater/ssh/host-tokyo-01_ed25519",
-      "known_hosts_file": "/etc/autostream/updater/ssh/known_hosts",
-      "arch": "amd64"
-    }
-  ],
-  "targets": [
-    {
-      "target_id": "control-panel",
-      "host_id": "host-tokyo-01",
-      "service_type": "control_panel",
-      "deployment_mode": "systemd"
-    }
-  ]
-}
-```
-
-上で作成した中央Update AgentのConfigurationに表示された次の形のcommandを中央hostで実行します。登録済みNodeを設定し直す場合は、先にConfigure Tokenを再生成します。
+中央管理ホストへ`/usr/local/bin/autostream-updater`を配置し、Control PanelのNode登録で中央Update Agent Nodeを1つだけ作成します。Configurationに表示された次のコマンドを中央ホストで実行してください。
 
 ```bash
-sudo autostream-updater configure --panel-url "https://control.example.com" --node "central-updater" --config "/etc/autostream/updater.json"
+sudo /usr/local/bin/autostream-updater configure --panel-url "https://control.example.com" --node "central-updater"
 ```
 
-`updater.json`が未作成なら、初回実行は自動生成だけを行い、Tokenのpromptを表示せずに終了します。local policyを完成させた後、同じtoken-free commandを再実行してpromptにConfigure Tokenを貼り付けます。Tokenはprocess argvや表示commandに含まれません。Auto Configureが更新するのは`panel_url`、`node_id`、`runtime_token`、`service_name`だけです。`github_token`、`api`、`hosts`、`targets`、SSH設定などのlocal policyは保持されます。
+表示されたpromptへConfigure Tokenを貼り付けます。入力内容は画面に表示されず、process argvやshell historyにも入りません。この1回の実行で`/etc/autostream/updater.json`が自動生成され、接続identityのstage、保存、activationまで行われます。GitHub Release Token、管理対象ホスト、target、SSH設定はこのファイルに書きません。
 
-stageしたRuntime Tokenはactivation成功まではinactiveで、旧Runtime Tokenがactiveのままです。ただしactivationの応答を受け取れず結果不確定になった場合は、Panel側でactivationが成功済みの可能性があるため、CLIだけではどちらのRuntime Tokenがactiveか判断できません。またlocal atomic commit後にreload、validation、activationが失敗した場合、disk上の`updater.json`にはstage済みidentityが残ることがあります。
+その後、Control Panelの **システム更新** で中央Updaterを選び、次を設定します。
 
-CLIはactivation用のTokenやstateを永続化しないため、stage、commit、validation、activationの失敗または結果不確定時はUpdaterを再起動せず、Configurationで必ず新しいConfigure Tokenを発行し、同じtoken-free command形へその新しいTokenを入力して再実行します。activation成功を確認した後にだけ、`sudo -u autostream-updater /usr/local/bin/autostream-updater validate-config --config /etc/autostream/updater.json`を実行し、成功後に`sudo systemctl restart autostream-updater`で反映します。
+- GitHub Release Token。repositoryの公開状態にかかわらずManaged更新では必須です。画面では書き込み専用で、保存後は画面へ再表示しません。更新jobを取得した中央Updaterへだけ一度限り配布します。
+- loopbackで待ち受けるAPIポートと、設定・jobの更新確認間隔、Heartbeat間隔。
+- 管理対象ホストの表示名、address、SSH port、SSHユーザー、architecture。
+- server consoleなどの独立した経路で確認した完全なSSHホスト公開鍵。
+- 管理するtargetとdeployment mode。
 
-中央設定はroot所有、group `autostream-updater`、mode `0640`にし、Node Runtime Token、private release用GitHub token、ホスト別SSH秘密鍵を中央管理ホストの外へコピーしません。`hosts`にはSSH接続先とホスト別identityだけ、`targets`には`target_id`、`host_id`、service type、deployment modeだけを置きます。unit、path、backup command、Compose設定、image repositoryは各管理対象ホストのroot所有`/etc/autostream/update-host.json`だけに固定します。
+`ssh-keyscan`は公開鍵の取得補助には使えますが、`ssh-keyscan`の出力だけを信用しないでください。server consoleや契約先の管理画面など、SSH接続とは独立した経路でfingerprintを照合します。
 
-Update Agentには`updates.claim`、`updates.report`、`updates.authorize` scopeが付与されます。`updates.authorize`は90秒のone-time mutation grantを発行するために使います。対応前に発行したUpdate Agent tokenは、対応Control Panelをdeployした後にConfigure Tokenを再生成し、同じtoken-free Auto Configure command形へ新しいTokenを入力して中央JSONへ反映します。各ホストの一度きりのSSH/bootstrap、root helper設定、systemd/Docker例、起動方法は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
+保存すると中央Updaterが設定を自動で取得し、検証して反映します。設定反映のための再起動は不要です。更新jobの実行中は安全に完了するまで反映を保留し、画面には **反映済み**、**反映待ち**、**反映失敗** のいずれかを表示します。**反映済み** は保存したrevisionを受理して動作中という意味で、hostの到達状態とは別です。反映失敗時は更新操作を停止し、失敗した段階に応じて直前の有効な設定へ戻るか安全な保存処理を自動再試行します。表示された理由を確認し、入力に問題がある場合は修正してもう一度保存します。
+
+新しいホストを保存すると、UpdaterがホストごとのEd25519鍵を生成し、**SSHクライアント公開鍵**をシステム更新画面へ報告します。その公開鍵だけを管理対象ホストの`autostream-update-host`へ登録します。SSH秘密鍵、Node Runtime Token、Configure Token、GitHub Release Tokenを管理対象ホストへコピーしません。
+
+Runtime Tokenを漏えいなどでrotationする場合だけ、新しいConfigure Tokenを発行してAuto Configure commandを再実行します。activation成功を確認してから中央Updaterを再起動し、新しいidentityを読み込みます。activationの結果が不確定な場合はUpdaterを停止・再起動せず、Configurationで新しいConfigure Tokenを発行してからやり直してください。
+
+Update Agentには`updates.claim`、`updates.report`、`updates.authorize` scopeが付与されます。各ホストの一度きりのSSH/bootstrap、root helper設定、起動方法は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
 
 保存後は対象サービスの env に `AUTOSTREAM_NODE_CONFIG=/etc/autostream-<service>/config.yml` を設定して、サービス本体を起動します。サービスを先に起動していた場合、`config.yml` 未作成中は `node config pending` として待機します。Auto Configure コマンドで `config.yml` を作成した後、Worker、Encoder Recorder、Discord Bot は `sudo systemctl restart autostream-<service>` で登録と runtime config の初期読込をそろえます。Observability は起動中に再読込して登録を開始します。
 
@@ -217,7 +177,7 @@ Node Agent は次の Panel API を使います。
 | `POST /api/node-agent/report` | hostname、OS、arch、capability などを明示報告 |
 | `POST /api/node-agent/events` | Node から stream event を送信 |
 
-中央Update Agentは通常のNode APIに加え、Node Runtime Tokenでhostを指定した`POST /services/update-jobs/claim`、`POST /services/update-jobs/{id}/report`、mutation grant発行APIを使います。Updater側は`GET /health`、`GET /version`、bearer認証付き`GET /status`だけを提供し、Control Panelから更新commandを受けるAPIはありません。管理対象ホストのhelperは中央Updaterからのhost-key-pinned SSHと固定RPCだけを受け付け、HTTP APIを提供しません。
+中央Update Agentは通常のNode APIに加え、Node Runtime Tokenで管理設定の取得、hostを指定した`POST /services/update-jobs/claim`、`POST /services/update-jobs/{id}/report`、mutation grant発行APIを使います。GitHub Release Tokenは更新jobを取得した中央Updaterへだけ一度限りで渡され、設定やlogへ永続化しません。Updater側は`GET /health`、`GET /version`、bearer認証付き`GET /status`だけを提供し、Control Panelから更新commandを受けるAPIはありません。管理対象ホストのhelperは中央Updaterからのホスト公開鍵固定済みSSHと固定RPCだけを受け付け、HTTP APIを提供しません。
 
 Panel から Node Agent API へ送る start / stop / preflight も bearer token で認証します。新方式では Node Runtime Token を優先し、古い構成の互換用途だけ `SERVICE_CALL_TOKEN` を fallback として残します。
 
@@ -230,5 +190,5 @@ Discord Bot Node には、VC参加を起点に Control Panel へ stream start �
 - Node Runtime Token はハッシュ検証と暗号化保存を分けて扱います。
 - Panel から Node への bearer token は Node ごとに異なります。
 - host 直接起動では `config.yml` を `root:autostream 0640`、`/etc/autostream-<service>` を `root:autostream 0750` にし、Git に入れないでください。
-- 中央の`updater.json`はroot所有、group `autostream-updater`、mode `0640`、ホスト別SSH秘密鍵は`autostream-updater`所有`0600`にします。管理対象ホストの`/etc/autostream/update-host.json`はroot所有`0600`にし、tokenやSSH秘密鍵を置きません。
+- 中央の`/etc/autostream/updater.json`は接続identityだけを保存し、root所有、group `autostream-updater`、mode `0640`にします。ホスト別SSH秘密鍵は中央Updaterのstate directoryで`autostream-updater`所有`0600`にします。管理対象ホストの`/etc/autostream/update-host.json`はroot所有`0600`にし、tokenやSSH秘密鍵を置きません。
 - 各管理対象ホストにはUpdater daemon、待受port、Node登録、Runtime Tokenを追加しません。Control Panelや各service containerへDocker socketもmountしないでください。

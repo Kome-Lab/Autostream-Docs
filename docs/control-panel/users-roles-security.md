@@ -83,9 +83,9 @@ Roles では、role 名と権限を管理します。
 | permission | 用途 |
 | --- | --- |
 | `system_updates.read` | Application Infoの更新対象、中央Updater状態、host到達状態、更新履歴を見る |
-| `system_updates.execute` | 更新jobの作成、queued jobのcancel、中央Update Agent tokenの必要scope発行 |
+| `system_updates.execute` | 更新jobの作成、queued jobのcancel、中央Update Agentの操作 |
 
-`system_updates.execute`はservice停止、Control Panel再起動、Docker image切替につながるため、メンテナンス担当だけに付与します。中央Update Agent Nodeを作成するuserには`api_tokens.create`に加えて、scope escalationを防ぐため`system_updates.execute`も必要です。管理対象hostごとのUpdate Agent Nodeは作成しません。
+`system_updates.execute`はservice停止、Control Panel再起動、Docker image切替につながるため、メンテナンス担当だけに付与します。中央Update Agent Nodeの作成、Configure Token / Runtime Tokenの再生成、host・SSH鍵・targetを含むUpdater設定の保存は、Managed更新用GitHub Release Tokenへ到達する認証情報や配送先を変更できます。そのため`api_tokens.create`や再生成時の`api_tokens.revoke`に加え、`system_updates.execute`と`secrets.update`の両方を要求します。管理対象hostごとのUpdate Agent Nodeは作成しません。
 
 ## Security Settings
 

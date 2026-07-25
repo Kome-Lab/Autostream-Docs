@@ -20,9 +20,9 @@ secret と token の生成方法は [秘密情報とtoken生成](/security/token
 
 ## host直接起動
 
-自動更新対応の新しいhost releaseからarchive、archive sidecar、`release-manifest.json`、manifest sidecarを取得し、archive同梱の`README.install.md`に従って導入します。READMEはchecksumとmanifest identityを検証し、root所有の`/opt/autostream/control-panel/releases/<version>-<digest12>`を作り、`/opt/autostream/control-panel/current`を原子的に切り替えます。systemd unitは`current/bin/control-panel`、web assetは`current/share/autostream-control-panel`を参照します。詳しい検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
+Control Panel自身を自動更新targetにする場合は、新しいhost releaseからarchive、archive sidecar、`release-manifest.json`、manifest sidecarを取得し、archive同梱の`README.install.md`に従って導入します。READMEはchecksumとmanifest identityを検証し、root所有の`/opt/autostream/control-panel/releases/<version>-<digest12>`を作り、`/opt/autostream/control-panel/current`を原子的に切り替えます。systemd unitは`current/bin/control-panel`、web assetは`current/share/autostream-control-panel`を参照します。詳しい検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
 
-既存のmanifestなしreleaseを`/usr/local/bin`と`/usr/share`へ直接copyする配置はmanual-onlyです。既存releaseへmanifestを後付けせず、manifest付きの新しいreleaseを初期managed releaseとして導入します。
+中央Updaterを追加するだけなら、既存の`/usr/local/bin/control-panel`と`/usr/share/autostream-control-panel`を移行する必要はありません。既存のmanifestなしControl Panelを自動更新targetにする場合だけ、既存releaseへmanifestを後付けせず、manifest付きの新しいreleaseを初期managed releaseとして一度導入します。
 
 `/etc/autostream/control-panel.env` を編集します。
 
@@ -58,7 +58,9 @@ AUTOSTREAM_UPDATE_CHECK_TOKEN=
 TZ=Asia/Tokyo
 ```
 
-Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。systemd配備はControl Panel、Worker、Encoder/Recorder、Discord Bot、ObservabilityそれぞれのGitHub Releases API、Docker配備は`Autostream-Docker`のbundle releaseを確認します。private repo のため、本番ではreleaseを読めるGitHub tokenを `AUTOSTREAM_UPDATE_CHECK_TOKEN` に設定してください。固定値や別endpointを使う場合は、上記のサービス別環境変数を設定します。URLはHTTPSを使います。固定latest-version値やcustom endpointは検出・表示専用です。GitHub Releaseの`release-manifest.json` assetを検証できないため、Application Infoからの自動更新は`manifest_unverified`として無効になります。
+既存の直接配置を維持して中央Updaterだけを追加する場合は、`AUTOSTREAM_WEB_DIR=/usr/share/autostream-control-panel`のままにします。
+
+Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。systemd配備はControl Panel、Worker、Encoder/Recorder、Discord Bot、ObservabilityそれぞれのGitHub Releases API、Docker配備は`Autostream-Docker`のbundle releaseを確認します。private repo のため、本番ではreleaseを読めるGitHub tokenを `AUTOSTREAM_UPDATE_CHECK_TOKEN` に設定してください。これはversion表示用の確認tokenであり、システム更新画面へ保存する必須のGitHub Release Tokenとは別です。固定値や別endpointを使う場合は、上記のサービス別環境変数を設定します。URLはHTTPSを使います。固定latest-version値やcustom endpointは検出・表示専用です。GitHub Releaseの`release-manifest.json` assetを検証できないため、Application Infoからの自動更新は`manifest_unverified`として無効になります。
 
 Application Infoから実際に更新するには、中央管理ホストで常駐する`autostream-updater`が1つ必要です。各管理対象hostにはdaemonではなく、一度だけbootstrapする非常駐`autostream-update-host` helperを置きます。Control Panel自身の更新を含む構成は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
 
@@ -102,9 +104,9 @@ Control Panel の [Node Agent登録](/control-panel/node-agent-registration) で
 | Worker | `worker` | `config.yml`、Configure Token、Node Runtime Token |
 | Encoder Recorder | `encoder_recorder` | `config.yml`、Configure Token、Node Runtime Token |
 | Observability | `observability` | `config.yml`、Configure Token、Node Runtime Token |
-| 中央Update Agent | `update_agent` | Auto Configure初回実行でUpdater本体に内蔵された初期設定から中央のroot所有`updater.json`を自動生成。外部サンプルは不要。local inventory編集後に同じcommandを再実行して接続identityだけを更新。管理対象hostには配布しない |
+| 中央Update Agent | `update_agent` | Auto Configureを1回実行して中央のroot所有`updater.json`へ接続identityを自動生成。管理設定はシステム更新画面で保存し、管理対象hostにはtokenを配布しない |
 
-Configure TokenとNode Runtime Tokenは作成時だけ表示されます。紛失した場合はConfigurationから再生成し、通常serviceは`config.yml`を更新してください。中央Update AgentはConfigure Tokenを再生成して同じtoken-free Auto Configure command形へ入力し、`validate-config`後に再起動します。
+Configure TokenとNode Runtime Tokenは作成時だけ表示されます。紛失した場合はConfigurationから再生成し、通常serviceは`config.yml`を更新してください。中央Update Agentはidentity rotationが必要な場合だけ新しいConfigure TokenでAuto Configure commandを実行し、activation成功後に再起動します。host、target、Managed更新に必須のGitHub Release Token、SSHホスト公開鍵はシステム更新画面で保存します。GitHub Release Tokenは画面では書き込み専用で、保存後は再表示せず、更新job時だけ配布します。Updaterが設定を自動反映するため、通常の管理設定変更では再起動は不要です。
 
 ## 他サービスを許可する
 

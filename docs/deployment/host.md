@@ -73,6 +73,8 @@ WorkerもGitHub Release assetが公開されています。`v1.0.16`ではLinux 
 - ログ: `journalctl -u <service>`
 - systemd unit: `/etc/systemd/system/<service>.service`
 
+この`current`構成は、そのservice自身を自動更新targetにする場合に必要です。既存の`/usr/local/bin/control-panel`と`/usr/share/autostream-control-panel`へ中央Updaterだけを追加する場合は、Control Panel本体を移行しません。
+
 サービスごとに置き場所を分けると、更新や停止を個別に行いやすくなります。
 
 ## 確認ポイント

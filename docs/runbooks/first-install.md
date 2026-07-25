@@ -42,7 +42,7 @@ Ubuntu / Debian 系の例です。
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl tar git jq openssl mariadb-client ffmpeg
 sudo useradd --system --home /var/lib/autostream --shell /usr/sbin/nologin autostream || true
-sudo install -d -o root -g root -m 0750 /etc/autostream
+sudo install -d -o root -g root -m 0755 /etc/autostream
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream
 sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/archives
 ```
@@ -330,7 +330,7 @@ curl -fsS http://127.0.0.1:8084/health  # Worker の local port 例
 3. Services / Assignments で stream 用の primary service を割り当てます。
 4. Integrations で Discord、YouTube、Google Drive、notification channel を登録します。
 5. Start readiness を実行し、不足している設定がないことを確認します。
-6. Control Panelからの更新を使う場合は、配信serviceのhealth確認後に[Control Panelからサービスを更新する](/operations/system-updates)へ進みます。中央Updaterのbinaryを配置し、各hostへ非常駐helperを一度だけbootstrapしてtargetを対応付けます。中央Update Agentを1つだけ登録（登録済みならConfigure Tokenを再生成）し、表示されたAuto Configure commandを実行すると、未作成の`updater.json`がUpdater本体に内蔵された初期設定から自動生成され、Tokenを消費せず停止します。サンプルファイルの配置は不要です。local inventoryを完成させて同じcommandを再実行します。`validate-config`に成功してから中央Updaterを再起動し、中央Updaterがonline、各hostが到達可、各targetの現在versionが一致するまで更新jobは実行しません。
+6. Control Panelからの更新を使う場合は、配信serviceのhealth確認後に[Control Panelからサービスを更新する](/operations/system-updates)へ進みます。中央Updaterのbinaryを`/usr/local/bin/autostream-updater`へ配置し、中央Update Agentを1つだけ登録します。表示されたAuto Configure commandを1回実行し、Configure Tokenを標準入力から非表示で渡すと、接続identityだけを含む`/etc/autostream/updater.json`が自動生成されます。中央Updaterを起動した後、**システム更新** で公開・非公開repositoryのどちらでもManaged更新に必須のGitHub Release Token、検証済みSSHホスト公開鍵、host、targetを保存します。GitHub Release Tokenは画面では書き込み専用で、保存後は再表示されず、job時だけ配布されます。Updaterが生成・報告したSSHクライアント公開鍵で各hostの非常駐helperを一度だけbootstrapします。設定が **反映済み**、中央Updaterがonline、各hostが到達可、各targetの現在versionが一致するまで更新jobは実行しません。設定保存後の再起動は不要です。
 
 ## 12. 初回確認コマンド
 

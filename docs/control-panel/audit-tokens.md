@@ -34,7 +34,7 @@
 
 ## API Tokens
 
-API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorder、Observability が Control Panel に登録するための token を確認、rotate、revoke する画面です。新規構成ではNode登録のAuto Configureを使います。通常serviceは`config.yml`を生成し、Update Agentは中央管理ホストに1つだけ作成してroot所有`/etc/autostream/updater.json`の接続identityだけを更新します。管理対象ホストの非常駐helperにはtokenを配布しません。
+API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorder、Observability が Control Panel に登録するための token を確認、rotate、revoke する画面です。新規構成ではNode登録のAuto Configureを使います。通常serviceは`config.yml`を生成し、Update Agentは中央管理ホストに1つだけ作成してroot所有`/etc/autostream/updater.json`へ接続identityを自動生成します。管理対象ホストの非常駐helperにはtokenを配布しません。
 
 ### Service type
 
@@ -69,7 +69,7 @@ API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorde
 
 ### Pre-create service
 
-API Tokens では、互換用途として token 作成と同時に service registry entry を作れます。通常の新規導入ではNode登録でNode ID、Host、Port、SSLを登録し、ConfigurationのAuto Configure commandを使います。Update AgentはYAMLを使いませんが、`autostream-updater configure`で中央JSONの接続identityを更新します。
+API Tokens では、互換用途として token 作成と同時に service registry entry を作れます。通常の新規導入ではNode登録でNode ID、Host、Port、SSLを登録し、ConfigurationのAuto Configure commandを使います。Update AgentはYAMLを使いませんが、`autostream-updater configure`で中央JSONの接続identityを自動生成します。host、target、Managed更新に必須のGitHub Release Token、SSHホスト公開鍵は **システム更新** で管理します。
 
 | 項目 | 説明 |
 | --- | --- |
@@ -79,7 +79,7 @@ API Tokens では、互換用途として token 作成と同時に service regis
 | Version | service version |
 | Capabilities | service が対応する機能。カンマ区切り |
 
-pre-createした場合、画面にbootstrap envが一度だけ表示されます。これは旧構成や移行用です。新規構成ではbootstrap envではなくNode登録のAuto Configureを使います。Update Agentは中央管理ホストでtoken-free commandを実行し、接続identityだけを中央`updater.json`へ保存します。
+pre-createした場合、画面にbootstrap envが一度だけ表示されます。これは旧構成や移行用です。新規構成ではbootstrap envではなくNode登録のAuto Configureを使います。Update Agentは中央管理ホストでConfigure Tokenを標準入力から非表示で受け取り、接続identityだけを中央`updater.json`へ保存します。
 
 ## token作成手順
 
@@ -92,9 +92,7 @@ pre-createした場合、画面にbootstrap envが一度だけ表示されます
 5. service を起動します。
 6. Service Health で online になるか確認します。
 
-Auto Configure commandを実行する前に、同じControl Panel release同梱の`autostream-updater` binaryへ更新してください。旧Updaterは`updater.json`を自動生成しません。
-
-この手順の4は通常service用です。`update_agent`では各hostのhelperをbootstrapしてtargetを対応付け、中央管理ホスト用Nodeを1つだけ作成してAuto Configure commandを実行します。`updater.json`が存在しない場合は、Updater本体に内蔵された初期設定から自動生成し、所有者を`root:autostream-updater`、mode `0640`にした後、安全チェックポイントとして意図的に非ゼロ終了します。サンプルファイルの配置や`--init-from`指定は不要です。この初回実行ではConfigure Tokenを要求・消費せず、既存の`updater.json`は上書きしません。GitHub token、API、host/target inventory、SSH pathなどのlocal policyを完成させ、同じtoken-free commandを再実行してConfigure Tokenを入力します。`--init-from PATH`は互換用の明示的なoverrideであり、不正なpathを指定した場合は内蔵設定へfallbackせず失敗します。stageしたRuntime Tokenはactivation成功まではinactiveで、旧Runtime Tokenがactiveのままです。ただしactivationの応答を受け取れず結果不確定になった場合は、CLIだけではどちらのRuntime Tokenがactiveか判断できません。local atomic commit後に失敗した場合、disk上の`updater.json`にはstage済みidentityが残ることがあります。CLIはactivation用のTokenやstateを永続化しないため、Updaterを再起動せず、新しいConfigure Tokenを発行し、同じtoken-free command形へ新しいTokenを入力して再実行します。activation成功を確認した後に`validate-config`を通してから中央`autostream-updater`を再起動します。
+この手順の4は通常service用です。`update_agent`では中央管理ホスト用Nodeを1つだけ作成し、`sudo /usr/local/bin/autostream-updater configure --panel-url "https://control.example.com" --node "central-updater"`を1回実行します。Configure Tokenは標準入力から非表示で渡され、接続identityだけを含む`/etc/autostream/updater.json`が自動生成されます。その後は **システム更新** でhost、target、公開・非公開repositoryのどちらでもManaged更新に必須のGitHub Release Token、検証済みSSHホスト公開鍵を保存します。GitHub Release Tokenは画面では書き込み専用で、保存後は再表示されず、job時だけ配布されます。Updaterが設定を自動取得するため、設定反映のための再起動は不要です。
 
 API Tokens で token を作るのは、旧構成を維持している場合や移行中に限ります。
 
@@ -105,7 +103,7 @@ API Tokens で token を作るのは、旧構成を維持している場合や�
 | Rotate | 旧構成の token を入れ替えたい | 新しい token は一度だけ表示。service host の env 更新が必要 |
 | Revoke | 旧構成の token を無効化したい | 旧構成の service は Control Panel へ登録や heartbeat ができなくなります |
 
-Node Runtime Tokenを入れ替える場合はAPI TokensではなくNode登録のConfigurationを使い、通常serviceでは`config.yml`を更新して再起動してください。Update AgentではConfigure Tokenを再生成し、同じtoken-free Auto Configure command形へ新しいTokenを入力して、activation成功と`validate-config`を確認した後に中央Updaterを再起動します。各管理対象ホストには更新するRuntime Tokenがありません。旧構成のtokenをrotateしたら、対象サービスを再起動して新しいtokenを読み込ませてください。
+Node Runtime Tokenを入れ替える場合はAPI TokensではなくNode登録のConfigurationを使い、通常serviceでは`config.yml`を更新して再起動してください。Update Agentでは新しいConfigure TokenでAuto Configure commandを実行し、activation成功後に中央Updaterを再起動して新しいidentityを読み込みます。各管理対象ホストには更新するRuntime Tokenがありません。旧構成のtokenをrotateしたら、対象サービスを再起動して新しいtokenを読み込ませてください。
 
 ## よくあるトラブル
 
