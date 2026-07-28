@@ -76,7 +76,7 @@ export default {
         items: [
           { text: '共通の導入と運用', link: '/services/host-operations' },
           { text: 'Control Panelを導入する', link: '/services/control-panel-install' },
-          { text: '中央Updaterとシステム更新', link: '/operations/system-updates' },
+          { text: 'Host Agent Bridgeとシステム更新', link: '/operations/system-updates' },
           { text: 'Discord Botを導入する', link: '/services/discord-bot-install' },
           { text: 'Workerを導入する', link: '/services/worker-install' },
           { text: 'Encoder Recorderを導入する', link: '/services/encoder-recorder-install' },

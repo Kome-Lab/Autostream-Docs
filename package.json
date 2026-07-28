@@ -6,10 +6,12 @@
     "docs:dev": "vitepress dev docs --host 127.0.0.1",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs --host 127.0.0.1",
+    "bridge:fleet-gate": "node scripts/bridge-fleet-gate.mjs",
+    "bridge:fleet-gate:test": "node scripts/test-bridge-fleet-gate.mjs",
     "docs:check-secrets": "node scripts/check-secrets.mjs",
     "docs:check-release-workflow": "node scripts/check-release-workflow.mjs",
     "docs:check-updater-contract": "node scripts/check-updater-contract.mjs",
-    "docs:check": "npm run docs:check-secrets && npm run docs:check-release-workflow && npm run docs:check-updater-contract"
+    "docs:check": "npm run docs:check-secrets && npm run docs:check-release-workflow && npm run docs:check-updater-contract && npm run bridge:fleet-gate:test"
   },
   "devDependencies": {
     "esbuild": "0.25.12",

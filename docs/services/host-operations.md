@@ -29,10 +29,10 @@
 | Encoder Recorder | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Worker | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Discord Bot | なし | Node Runtime Token は `config.yml`、Discord Bot token は Control Panel の Discord Settings に保存します |
-| 中央Update Agent | なし | Auto Configureで接続identityだけを中央`/etc/autostream/updater.json`へ自動生成します。公開・非公開repositoryのどちらでもManaged更新に必須のGitHub Release Token、host、target、SSHホスト公開鍵はシステム更新画面へ保存します。Tokenは保存後非表示でjob時だけ配布します |
-| 管理対象host helper | なし | Runtime Tokenなし。GitHub Release Tokenと90秒のmutation grantはSSH RPCでjob中だけ一時受信し、保存しません |
+| `pull_v2` Host Agent | なし | 物理ホストごとにAuto Configureで`panel_url`、`node_id`、`runtime_token`、`service_name`だけを`/etc/autostream-host-agent/identity.json`へ生成します |
+| root Local Executor | なし | Host Agentと固定Unix socketで分離。policy/grantとgeneric requestにNode Runtime Tokenを含めない。専用credential-stageのprivate Unix socket requestだけがraw tokenをroot境界へ渡し、log/durable request stateへ残さない。rotation/recoveryは固定canonical/staged identity pathだけを読み書きし、caller指定path/tokenは受け付けない |
 
-Node Runtime TokenとConfigure TokenはNode登録で生成されます。紛失した場合はControl PanelのNode登録Configurationから再生成し、通常serviceは`config.yml`を更新してください。中央Update Agentはidentity rotationが必要な場合だけ新しいConfigure TokenでAuto Configure commandを実行し、activation成功後に再起動します。システム更新画面の管理設定は保存後に自動反映され、こちらの変更では再起動は不要です。管理対象host helperには再生成対象のtokenがありません。
+Node Runtime TokenとConfigure TokenはNode登録で生成されます。通常serviceはConfigurationから`config.yml`を更新します。`pull_v2` Host Agentの即時Runtime Token再生成は拒否され、staged rotationが必要です。zero-downtime rotationのrelease gateが完了するまでgeneric Rotateで旧tokenを先に失効させません。`execution_host_id`と`ownership_epoch`はserver-ownedであり、configへ入れません。
 
 ## 推奨ディレクトリ
 
@@ -47,10 +47,12 @@ Node Runtime TokenとConfigure TokenはNode登録で生成されます。紛失�
 | 録画保存先 | `/var/lib/autostream/archives` |
 | Control Panel web assets | `/opt/autostream/control-panel/current/share/autostream-control-panel` |
 | systemd unit | `/etc/systemd/system/autostream-<service>.service` |
-| 中央Updater設定 / state | `/etc/autostream/updater.json` / `/var/lib/autostream-updater` |
-| remote helper / root policy / state | `/usr/local/libexec/autostream-update-host` / `/etc/autostream/update-host.json` / `/var/lib/autostream-update-host` |
+| `pull_v2` Host Agent設定 / state | `/etc/autostream-host-agent/identity.json` / `/var/lib/autostream-host-agent`。legacy `/etc/autostream/host-agent.json`はcanonical不在時のread-only fallbackだけ |
+| Local Executor policy / state / socket | `/etc/autostream-local-executor/policy.json` / `/var/lib/autostream-local-executor` / `/run/autostream-local-executor/executor.sock` |
+| systemd port sidecar | `/opt/autostream/local-executor/ports/<service>.env` |
+| legacy `ssh_v1`設定 / helper | `/etc/autostream/updater.json` / `/usr/local/libexec/autostream-update-host`。Bridge期間だけ維持 |
 
-このrelease treeは、そのservice自身を自動更新targetにする場合の配置です。中央Updaterを追加するだけなら、既存Control Panelの`/usr/local/bin/control-panel`と`/usr/share/autostream-control-panel`を移行しません。
+このrelease treeは、そのservice自身を安全に更新・rollbackする場合の配置です。legacy `ssh_v1`中央Updaterを追加するだけなら、既存Control Panelの`/usr/local/bin/control-panel`と`/usr/share/autostream-control-panel`を移行しません。
 
 env ファイルと Node Agent の `config.yml` には実値が入るため、権限は `0640` 程度にし、Git 管理しないでください。
 
@@ -140,9 +142,9 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 
 ## 更新方法
 
-中央管理ホストへ常駐`autostream-updater`を1つ配置し、各hostへ非常駐`autostream-update-host` helperを一度だけbootstrapした環境では、Application Infoからbackup、checksum検証、停止、適用、health確認、rollbackを一続きで実行できます。host helperはdaemonではなく、portやRuntime Tokenも不要です。導入方法は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
+新規hostには物理ホストごとに非rootの`pull_v2` Host Agentとroot Local Executorを1つずつ置きます。Host Agentはoutbound HTTPSだけを使い、受信TCP、`8090`、SSH設定を持ちません。epoch `0`ではobserver、明示的ownership切替後だけjobをclaimします。systemd/Docker software updateとsystemd/Docker port変更のsource実装はありますが、公開releaseと実host canaryは未確認です。導入方法とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
 
-中央Updaterまたは対象hostのhelperを配置していない場合も、manifest付きreleaseに同梱された`README.install.md`を使って手動更新できます。Application Infoの更新候補表示だけは引き続き利用できます。
+更新適用が必要な既存hostでは、Bridge期間のlegacy `ssh_v1`中央Updaterとhelperを維持します。どちらも配置していない場合も、manifest付きreleaseに同梱された`README.install.md`を使って手動更新できます。Application Infoの更新候補表示は引き続き利用できます。
 
 1. 現在の version と設定を控えます。Node Agent は `autostream-<service> --version`、Control Panel は `control-panel --version` で build version / commit / build date を確認できます。
 2. 新しい release artifact を取得します。
@@ -152,7 +154,7 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 6. `systemctl daemon-reload`後に対象serviceを明示的にrestartします。
 7. `MainPID`、`/health`、`/updater/version`、Service Health、短いテスト配信を確認します。
 
-`/usr/local/bin`へbinaryを直接上書きする旧手順は、旧unitを使うmanual-only構成の互換手順です。`current`を参照する新unitはそのcopyを実行しません。中央Updaterを追加するだけなら既存の直接配置を変える必要はありませんが、Control Panel自身を自動更新targetにする場合は、新しいmanifest付きreleaseを初期managed releaseとして導入してください。既存releaseにmanifestやmarkerを後付けしません。
+`/usr/local/bin`へbinaryを直接上書きする旧手順は、旧unitを使うmanual-only構成の互換手順です。`current`を参照する新unitはそのcopyを実行しません。legacy `ssh_v1`中央Updaterを追加するだけなら既存の直接配置を変える必要はありませんが、Control Panel自身を更新targetにする場合は、新しいmanifest付きreleaseを初期managed releaseとして導入してください。既存releaseにmanifestやmarkerを後付けしません。
 
 新processの起動に失敗した場合は旧releaseへ`current`を戻してrestartし、旧versionのhealthまで確認します。
 

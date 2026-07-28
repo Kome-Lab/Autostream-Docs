@@ -73,7 +73,7 @@ WorkerもGitHub Release assetが公開されています。`v1.0.16`ではLinux 
 - ログ: `journalctl -u <service>`
 - systemd unit: `/etc/systemd/system/<service>.service`
 
-この`current`構成は、そのservice自身を自動更新targetにする場合に必要です。既存の`/usr/local/bin/control-panel`と`/usr/share/autostream-control-panel`へ中央Updaterだけを追加する場合は、Control Panel本体を移行しません。
+この`current`構成は、そのservice自身を安全に更新・rollbackする場合に使います。Bridge期間のlegacy `ssh_v1`中央Updaterだけを既存配置へ追加する場合は、Control Panel本体を移行しません。
 
 サービスごとに置き場所を分けると、更新や停止を個別に行いやすくなります。
 
@@ -97,9 +97,9 @@ WorkerもGitHub Release assetが公開されています。`v1.0.16`ではLinux 
 
 ## 更新するとき
 
-推奨構成では中央管理ホストに常駐`autostream-updater`を1つ置き、各管理対象hostには一度だけ非常駐`autostream-update-host` helperをbootstrapします。Control PanelのApplication Infoから依頼すると、中央UpdaterがSSHで対象hostのhelperを呼びます。Control Panel自身もUpdaterが別processとして残るため停止、切替、再起動できます。設定は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
+新規hostでは、物理ホストごとに非rootの`pull_v2` Host Agentを1つ置き、root Local Executorと固定Unix socketで分離します。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。登録直後はepoch `0`のobserverで、公開releaseと実host canaryを確認した後にだけownershipを切り替えます。systemd/Docker software updateと4 Node serviceの任意port変更はsource実装済みですが、実Linux/Docker gateは未確認です。Docker port変更には事前の固定policyと承認済みCompose baselineが必要で、reverse proxyは自動変更しません。設定とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
 
-中央Updaterまたはhost helperを導入しない場合も、manifest付きreleaseの`README.install.md`を使って同じ検証済みrelease directoryと`current` symlinkを手動で切り替えます。
+更新適用が必要な既存hostでは、Bridge期間のlegacy `ssh_v1`として中央`autostream-updater`と`autostream-update-host` helperを維持します。どちらも使わない場合は、manifest付きreleaseの`README.install.md`を使って同じ検証済みrelease directoryと`current` symlinkを手動で切り替えます。
 
 1. 現在のversion、`current`のlink先、envを控えます。
 2. serviceを動かしたまま、新しいartifact、sidecar、manifestを検証してimmutable release directoryを作ります。

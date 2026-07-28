@@ -82,10 +82,10 @@ Roles では、role 名と権限を管理します。
 
 | permission | 用途 |
 | --- | --- |
-| `system_updates.read` | Application Infoの更新対象、中央Updater状態、host到達状態、更新履歴を見る |
-| `system_updates.execute` | 更新jobの作成、queued jobのcancel、中央Update Agentの操作 |
+| `system_updates.read` | Application Infoの更新対象・更新履歴と、Node登録のHost Agent transport・endpoint driftを見る |
+| `system_updates.execute` | 更新jobの作成・cancel、execution host ownership、Host Agent transportを操作する |
 
-`system_updates.execute`はservice停止、Control Panel再起動、Docker image切替につながるため、メンテナンス担当だけに付与します。中央Update Agent Nodeの作成、Configure Token / Runtime Tokenの再生成、host・SSH鍵・targetを含むUpdater設定の保存は、Managed更新用GitHub Release Tokenへ到達する認証情報や配送先を変更できます。そのため`api_tokens.create`や再生成時の`api_tokens.revoke`に加え、`system_updates.execute`と`secrets.update`の両方を要求します。管理対象hostごとのUpdate Agent Nodeは作成しません。
+`system_updates.execute`はservice停止、Control Panel再起動、Docker image/port切替、systemd port切替、execution host ownership変更につながるため、メンテナンス担当だけに付与します。物理hostごとの`pull_v2` Update Agent Node作成には`api_tokens.create`、`system_updates.execute`、`secrets.update`が必要です。active Host AgentのRuntime Token rotation（stage/cancel/emergency）には、これらに`api_tokens.revoke`を加えた4権限すべてが必要です。`execution_host_id`と`ownership_epoch`はserver-ownedで、Host Agent configへ入力しません。
 
 ## Security Settings
 

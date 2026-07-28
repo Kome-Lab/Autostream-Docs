@@ -1,569 +1,337 @@
-# Control Panelからサービスを更新する
+# Host Agent Bridgeでサービスを更新する
 
-AutoStreamは、Control Panelの **Application Info** からControl Panel自身と各サービスの更新を依頼できます。常駐するUpdaterは中央管理ホストの`autostream-updater` 1つだけです。各管理対象ホストにUpdater daemonを置く必要はありません。
+AutoStreamのUpdaterは、中央管理ホストから各ホストへSSH接続する`ssh_v1`から、各物理ホストのHost AgentがControl Panelへ接続する`pull_v2`へ段階的に移行します。Bridge期間中は両方式を残し、ホストごとに明示的に実行権限を切り替えます。
 
-各ホストでは、最初に一度だけ`autostream-update-host`をbootstrapします。これはprobe、stage、apply、reconcile中だけ動く非常駐helperです。常駐systemd unit、待受port、Node登録、Node Runtime Token、GitHub Release Tokenの保存はありません。applyはSSH切断でも中途半端に終了しないよう、一時的なsystemd workerとして継続する場合があります。
+> [!IMPORTANT]
+> この作業ツリーには`pull_v2`のjob claim、root Local Executor、systemd/Dockerポート変更、staged Runtime Token rotation、自己更新directive/grant/rollbackのsource実装があります。自己更新のP1電源断境界はdirectory fsync、slot再検証、grant収束、root-only watchdog statusまでsource/focused testsで閉じ、Docker port jobもローカルの実daemon DIND smokeでfresh-process reconcile、unhealthy rollback、foreign owner拒否を確認しました。ただし、公開Host Releaseのasset・checksum・attestation、実Linux/systemdでのprocess kill/reboot canary、全Docker imageの公開証拠、22/TCPと8090/TCPを閉じたE2E、fleet移行は未実施です。ローカル検証をproduction proofと読み替えず、これらのavailability gateを通過するまで本番ホストの実行権限は`ssh_v1`から切り替えないでください。
 
-Updaterを導入しない環境でも最新releaseと現在versionの比較はできますが、更新jobは実行できません。
+## 移行後の構成
 
-## 配置するもの
-
-| 場所 | 配置するもの | 配置しないもの |
-| --- | --- | --- |
-| 中央管理ホスト | 常駐`autostream-updater`、接続identity、Updaterが生成するhost別SSH秘密鍵 | root helper、GitHub Release Tokenの永続保存、各hostのprivileged path |
-| 各管理対象ホスト | 非常駐`autostream-update-host`、root所有target policy、専用SSH user、forced key、exact sudoers、rollback state | Updater daemon、HTTP listener、Node登録、Runtime Token、GitHub Release Tokenの永続保存 |
-
-中央UpdaterとControl Panelを同じホストに置くこともできます。そのホスト自身を更新対象にする場合も、ほかのhostと同じSSH/helper境界を使います。
-
-## 構成とセキュリティ境界
+物理ホスト1台につき、非rootの`autostream-host-agent`を1つだけ常駐させます。サービスごとにUpdaterやhelperを置きません。
 
 ```text
-Browser
-  -> Control Panel: Updater設定を保存、更新jobを作成、leaseと90秒grantを発行
-       <- 中央autostream-updater: 設定取得 / heartbeat / host別claim / report
-             -> GitHub Release / GHCR: versionとdigestを検証
-             -> host-key-pinned SSH: host別key + fixed RPC
-                  -> forced command + exact sudoers
-                       -> 非常駐autostream-update-host
-                            -> root所有update-host.jsonの対象だけを更新
+                         outbound HTTPS
++------------------+  <-------------------  +--------------------------+
+| Control Panel    |                         | 物理ホスト               |
+|                  |                         |                          |
+| policy / jobs    |                         | autostream-host-agent    |
+| desired endpoint |                         | 非root、受信TCPなし      |
+| ownership fence  |                         | 1 hostにつき1 process    |
++------------------+                         |            |             |
+                                               Unix socket | target      |
+                                                           v             |
+                                               root Local Executor       |
+                                               systemd / Docker / port   |
+                                             +--------------------------+
 ```
 
-- Control Panelと各serviceはroot権限、Docker socket、`systemctl`権限を持ちません。
-- 中央UpdaterはControl Panelへ外向きにpollし、管理対象hostへ外向きSSH接続します。Control PanelからUpdaterへ更新commandをpushしません。
-- 更新jobが指定できるのは登録済み`target_id`、公開済みversion、`maintenance`または`when_idle`だけです。任意command、unit、path、URL、image repositoryは指定できません。
-- 中央`/etc/autostream/updater.json`にはControl Panelへ接続するidentityだけを保存します。hostとtargetの管理設定はControl Panelの **システム更新** が所有し、privileged policyは各hostのroot所有`/etc/autostream/update-host.json`だけに置きます。
-- SSHはhostごとに異なるEd25519 keyをUpdaterが生成します。serverの完全なSSHホスト公開鍵は事前に独立した経路で確認してControl Panelへ保存します。password、SSH agent、PTY、port forwarding、SCP、SFTP、対話shellは使いません。
-- forced commandは次の1つだけです。
+Host AgentからControl Panelへの通信だけを許可し、Control PanelからHost AgentへTCP接続しません。`8090`を含む受信TCPポート、SSH設定、SSH鍵は`pull_v2`には不要です。公開Control PanelにはHTTPSで接続します。loopback HTTPは開発・テストだけに限定してください。
 
-  ```text
-  /usr/bin/sudo -n /usr/local/libexec/autostream-update-host rpc --config /etc/autostream/update-host.json
-  ```
+root権限が必要なsystemd、Docker、ポート切替はrootの`autostream-local-executor`だけが担当します。Host Agentとは`/run/autostream-local-executor/executor.sock`で通信し、TCP listenerやHost AgentへのDocker socket mountは使いません。Local Executorはroot所有policy、peer UID/GID、policy revision、ownership epoch、plan digest、session、1回限りのmutation grantを照合し、固定されたtargetとoperation以外を拒否します。
 
-- `SSH_ORIGINAL_COMMAND`はprotocol marker `autostream-update-rpc-v1`との完全一致が必要です。
-- GitHub Release Tokenはrepositoryの公開状態にかかわらずManaged更新では必須です。Control Panelへ画面では書き込み専用のsecretとして暗号化保存し、保存後は画面へ再表示しません。更新jobを取得した中央Updaterへだけ一度限りで渡し、必要なremote stageへそのjob中だけ転送します。中央・remoteのconfig、state、process引数、logへ保存しません。
-- root変更には、job、host、target、現在版、更新先版、remote root policyのconfig digest、deployment mode、operation、plan digest、session、active leaseへ結び付いた有効期間90秒のone-time mutation grantが必要です。helperはservice変更の直前に消費します。
-- Control Panelや各service containerへ`/var/run/docker.sock`をmountしません。Docker CLIを使うのは対象hostで実行中のroot helperだけです。
+登録直後のHost Agentは`ownership_epoch=0`のobserverです。この状態でもregister、heartbeat、policy refresh、target probeを行いますがjobをclaimしません。Control Panelの「Host Agentへ切り替え」で正のownership epochを発行した後だけ、同じoutbound loopが更新jobをclaimします。
 
-## 事前条件
+## Bridge期間のtransport
 
-1. Control Panelがproduction databaseを使用し、同じreleaseに含まれるmigrationがすべて適用済みである。
-2. 閲覧者に`system_updates.read`、更新jobの作成・取消担当者に`system_updates.execute`がある。中央UpdaterのNode登録、Configure Token / Runtime Tokenの再生成、host・SSH鍵・targetを含むUpdater設定の保存には、secretの配送先も変更できるため`system_updates.execute`と`secrets.update`の両方が必要。
-3. Control Panelがprivate releaseを確認する必要がある場合は`AUTOSTREAM_UPDATE_CHECK_TOKEN`を設定している。
-4. 中央管理ホストからControl Panel HTTPS、GitHub API、release asset、GHCR、各hostのSSH portへ到達できる。
-5. 各管理対象hostからControl Panel HTTPS、GitHub API、release asset、必要ならGHCRへ到達できる。helperはgrant消費とartifact再検証をhost側でも行う。
-6. 各hostのsshdがpublic-key認証と標準の`.ssh/authorized_keys`を有効にしている。
-7. 各hostがsystemd 236以上で、固定path`/usr/bin/systemd-run`の`--collect`と`--service-type=`を利用できる。apply/reconcileの一時workerに使う。
-8. 各targetの`/health`と`/updater/version`を、そのtargetと同じhostのloopbackから取得できる。
-9. Control PanelとObservability targetでは、root所有backup commandと実backupを事前に確認している。
-10. 最初のmanaged releaseがimmutable manifest、checksum、`.artifact-sha256`、`.version`、`current` linkを持ち、rollbackできる。
-
-manifestがない既存releaseへassetやmanifestを後付けしません。新しいmanifest付きreleaseを発行し、手動でhealthとversionを確認してから最初のmanaged releaseにします。
-
-`/updater/version`を実装していない旧releaseは、最初のmanaged releaseやrollback baselineに使いません。まず全5serviceでendpoint対応releaseを発行し、各hostへ手動で最初のmanaged releaseとして導入します。各serviceの独自loopback portで`/health`と`/updater/version`を確認してから、host helperと中央Updaterを有効化します。Docker bundleもendpoint対応済みの5つのsource versionから再構築します。
-
-Updater helperがtargetの稼働version確認に使う共通endpointは`/updater/version`です。root policyの`version_url`には、同じhostのloopbackにある`http://127.0.0.1:<service-port>/updater/version`を指定します。このendpointは認証なしで埋め込みversionだけを返すため、public reverse proxyではexact pathを遮断し、helperからloopbackへ直接接続します。Control Panelの既存`/version`は認証付きのApplication Info APIのままであり、helperの`version_url`には指定しません。
-
-## 中央Update Agentを1つ登録する
-
-1. Control Panel host releaseと`autostream-updater` binaryを中央管理ホストへ配置します。
-2. Control Panelの **Node登録** でNode typeに`Update Agent`を選び、中央Updater用の固定Node IDを決めます。例: `central-updater`。
-3. Node作成後のConfigurationに表示されるコマンドを中央管理ホストで1回実行します。
-
-   ```bash
-   sudo /usr/local/bin/autostream-updater configure --panel-url "https://control.example.com" --node "central-updater"
-   ```
-
-4. promptへConfigure Tokenを貼り付けます。標準入力から非表示で読み取られるため、コマンド、process argv、shell historyには残りません。
-5. UpdaterはControl Panelへの接続identityだけを含む`/etc/autostream/updater.json`を自動生成し、root所有、group `autostream-updater`、mode `0640`で保存します。`updater.json`を手で編集しません。
-6. `sudo -u autostream-updater test -r /etc/autostream/updater.json`で、service userから設定を読めることを確認します。
-7. `sudo systemctl enable --now autostream-updater`で中央Updaterを起動します。
-
-管理対象hostごとにUpdate Agent Nodeを作成しません。`autostream-update-host`には`config.yml`、Configure Token、Runtime Tokenがありません。
-
-Update Agent tokenには`updates.claim`、`updates.report`、`updates.authorize`が必要です。漏えい対応などでRuntime Tokenをrotationする場合だけ、Configurationで新しいConfigure Tokenを発行してAuto Configure commandを実行し、activation成功後に中央Updaterを再起動します。通常の設定変更はシステム更新画面で保存するだけで、configureの再実行やserviceの再起動は不要です。
-
-## 旧per-host Updaterから移行する
-
-旧構成ですでに各hostへ`autostream-updater`を置いている場合は、中央方式と同時稼働させません。次の順序で一度だけ移行します。
-
-1. 既存のqueued jobをcancelし、実行中jobを完了させます。reconcile待ちを含むactive jobが1件もないことを確認します。
-2. 新しいControl Panelと同梱migrationをdeployします。旧`/services/update-jobs/{id}/authorize`はHTTP 410になり、host mappingを報告しない旧Updaterは新しいjobをclaimできません。旧per-host JSONを中央設定として再利用せず、Auto Configureで新しい接続identityを生成します。
-3. 各管理対象hostへ、この文書の手順で非常駐`autostream-update-host`、forced SSH key、exact sudoers、root policyをbootstrapします。
-4. 中央にするhostを1台決め、そこを含む全hostの旧`autostream-updater.service`を停止・disableします。旧configとstateは移行確認が終わるまでrootだけが読める場所へ保全し、旧daemonと中央Updaterを同時稼働させません。
-5. 選んだ中央hostへ新しいbinaryを配置し、Update AgentのAuto Configure commandを1回実行して中央configを自動生成し、serviceを開始します。システム更新画面でhostとtargetを保存し、reachabilityと現在versionがControl Panelに表示されることを確認します。
-6. 影響の小さいtargetで試験更新と必要ならreconcileまで確認した後、旧per-host Update Agent NodeのRuntime Tokenを失効させ、旧Node登録、config、unitを撤去します。旧stateは監査・ロールバックに必要な保持期間を過ぎてから削除します。remote helperのroot policy、state、rollback baselineは削除しません。
-7. 各管理対象hostで`systemctl list-unit-files 'autostream-update*'`を確認します。常駐してよいのは中央hostの`autostream-updater.service`だけで、`autostream-update-host.service`はどのhostにも存在してはいけません。
-
-移行後、管理対象hostにControl PanelのRuntime TokenやGitHub Release Tokenを残しません。問題が起きた場合も旧per-host Updaterを再起動せず、システム更新画面の反映状態とremote root policyを確認します。
-
-## 中央Updaterを配置する
-
-Control Panel host releaseの`README.install.md`には中央Updaterの配置手順が入っています。archive、`release-manifest.json`、sidecar、archive内`checksums.txt`を検証・展開した後に実行してください。次はamd64 archiveを`/opt/autostream/releases/artifacts`へ展開済みの例です。`vX.Y.Z`は実際のversionへ置き換えます。
-
-```bash
-getent group autostream-updater >/dev/null 2>&1 || \
-  sudo groupadd --system autostream-updater
-id -u autostream-updater >/dev/null 2>&1 || \
-  sudo useradd --system --gid autostream-updater \
-    --home /var/lib/autostream-updater --shell /usr/sbin/nologin \
-    autostream-updater
-sudo install -d -o autostream-updater -g autostream-updater -m 0700 \
-  /var/lib/autostream-updater
-sudo install -d -o root -g root -m 0755 /etc/autostream
-cd /opt/autostream/releases/artifacts/autostream-control-panel_vX.Y.Z_linux_amd64
-sudo install -o root -g root -m 0755 \
-  bin/autostream-updater /usr/local/bin/autostream-updater
-sudo install -o root -g root -m 0644 \
-  systemd/autostream-updater.service.example \
-  /etc/systemd/system/autostream-updater.service
-sudo systemctl daemon-reload
-```
-
-`/usr/local/bin/autostream-updater`と`/usr/share/autostream-control-panel`を使う既存の直接配置に対応します。`/opt/autostream/control-panel/current/bin`は前提にしません。JSON sample、空のSSH trust file、SSH client keyを手作業で作る必要はありません。
-
-`/etc/autostream`は`root:root 0755`にします。`updater.json`自体は`root:autostream-updater 0640`のため内容を他userへ公開せず、`autostream-updater`には親directoryをtraverseして設定を開く権限だけを与えます。configure後は起動前に`sudo -u autostream-updater test -r /etc/autostream/updater.json`を実行してください。
-
-### システム更新でhostを保存する
-
-中央Updaterを起動した後、Control Panelの **Application Info > システム更新** で中央Updaterを選び、次を入力します。
-
-1. loopbackで待ち受けるAPIポート、更新確認間隔、Heartbeat間隔。通常は初期値のまま使います。
-2. GitHub Release Token。repositoryがpublic/privateのどちらでもManaged更新には必須です。画面では書き込み専用で、保存後は画面へ再表示しません。
-3. host ID、表示名、address、SSH port、SSHユーザー、architecture。
-4. managed hostの完全なSSHホスト公開鍵。server consoleや契約先の管理画面など、SSH接続とは独立した経路でfingerprintを確認してから入力します。
-5. hostに対応付けるtargetとdeployment mode。
-
-`ssh-keyscan`は公開鍵候補の取得には使えますが、`ssh-keyscan`の出力だけを信用しないでください。未確認の鍵を保存したり、初回接続の鍵を自動受諾したりしません。
-
-**保存** を押すと、Updaterが設定を自動取得し、ホストごとのEd25519鍵を生成して **SSHクライアント公開鍵**を画面へ報告します。秘密鍵は中央Updaterのstate directoryだけに保存されます。この時点でhelperが未導入でも、設定revisionの受理に成功すれば設定は **反映済み** になります。表示された公開鍵を次のhelper installで使います。
-
-### managed hostのSSH認証を専用userだけに制限する
-
-installerより前に、各managed hostで`autostream-update-host` userへpublic-key認証だけを許可します。distributionのsshd include設定へ次を追加します。
-
-```text
-Match User autostream-update-host
-    AuthenticationMethods publickey
-    PubkeyAuthentication yes
-    PasswordAuthentication no
-    KbdInteractiveAuthentication no
-    AuthorizedKeysCommand none
-    AuthorizedKeysFile .ssh/authorized_keys
-```
-
-既存console sessionを開いたまま`sshd -t`と、そのhostで使うSSH serviceのreloadを行います。installerは`sshd -T`でeffective設定を再確認し、password/keyboard-interactive、別のAuthorizedKeysCommand、複数のauthorized key source、別のForceCommandが残っていれば失敗します。restricted probeが成功するまでconsole sessionを閉じないでください。
-
-## managed host helper artifactを取得する
-
-helperはControl Panel host archiveとは別のartifactです。対象hostのarchitectureに一致するarchiveを取得します。
-
-```bash
-set -euo pipefail
-VERSION="${VERSION:?export VERSION=vX.Y.Z}"
-ARCH="${ARCH:-amd64}"
-ASSET="autostream-update-host_${VERSION}_linux_${ARCH}.tar.gz"
-ARTIFACT_DIR="$(mktemp -d)"
-
-gh release download "$VERSION" \
-  --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern "$ASSET" \
-  --pattern "$ASSET.sha256" \
-  --pattern update-host-bootstrap-manifest.json \
-  --pattern update-host-bootstrap-manifest.json.sha256 \
-  --dir "$ARTIFACT_DIR"
-
-(cd "$ARTIFACT_DIR" && sha256sum --check --strict "$ASSET.sha256")
-(cd "$ARTIFACT_DIR" && sha256sum --check --strict update-host-bootstrap-manifest.json.sha256)
-DIGEST="$(awk 'NR == 1 { print $1 }' "$ARTIFACT_DIR/$ASSET.sha256")"
-SIZE="$(stat -c %s "$ARTIFACT_DIR/$ASSET")"
-jq -e \
-  --arg version "$VERSION" --arg arch "$ARCH" --arg asset "$ASSET" \
-  --arg sha "$DIGEST" --argjson size "$SIZE" \
-  '.schema_version == 1 and .release_id == $version and
-   .channel == "update-host-bootstrap" and .protocol_version == 1 and
-   ([.artifacts[] |
-     select(.os == "linux" and .arch == $arch and .name == $asset and
-            .sha256 == $sha and .size == $size)] | length == 1)' \
-  "$ARTIFACT_DIR/update-host-bootstrap-manifest.json"
-
-tar -C "$ARTIFACT_DIR" -xzf "$ARTIFACT_DIR/$ASSET"
-RELEASE_DIR="$ARTIFACT_DIR/${ASSET%.tar.gz}"
-(cd "$RELEASE_DIR" && sha256sum --check --strict checksums.txt)
-```
-
-release promotion時はprovenanceも確認します。
-
-```bash
-gh attestation verify "$ARTIFACT_DIR/update-host-bootstrap-manifest.json" \
-  --repo Kome-Lab/Autostream-ControlPanel
-```
-
-このdownloadと検証は認証済みの管理端末で行います。archive、sidecar、bootstrap manifest、manifest sidecarを管理経路で対象hostへ転送し、host側でも両sidecarと展開後`checksums.txt`を再検証してから、以降の`RELEASE_DIR`を転送先に読み替えます。managed hostで`gh auth login`して長期credentialを残さないでください。Docker baselineで必要なone-time GitHub Release Tokenは、repositoryの公開状態にかかわらず後述の標準入力だけで渡します。
-
-archiveには次が入ります。
-
-```text
-bin/autostream-update-host
-install/install-autostream-update-host
-sudoers/autostream-update-host
-autostream-update-host.json.example
-autostream-update-host.docker-draft.json.example
-README.bootstrap.md
-checksums.txt
-```
-
-## managed hostのroot policyを作る
-
-archiveのexampleをrootだけが読める作業用pathへコピーし、実際にそのhostにあるtargetだけを残します。
-
-```bash
-sudo install -d -o root -g root -m 0700 \
-  /root/autostream-update-host-bootstrap
-sudo install -o root -g root -m 0600 \
-  "$RELEASE_DIR/autostream-update-host.json.example" \
-  /root/autostream-update-host.json
-sudoedit /root/autostream-update-host.json
-```
-
-systemd targetの例です。中央Updaterを導入するだけなら既存の直接配置を変えませんが、Control Panel自身をこの例の自動更新targetに追加する場合は、先にmanifest付きreleaseを`/opt/autostream/control-panel/releases`へ導入し、rollback可能な`current`構成へ移行してください。
-
-```json
-{
-  "schema_version": 1,
-  "host_id": "host-tokyo-01",
-  "panel_url": "https://panel.example.com",
-  "arch": "amd64",
-  "state_dir": "/var/lib/autostream-update-host",
-  "targets": [
-    {
-      "target_id": "control-panel",
-      "host_id": "host-tokyo-01",
-      "service_type": "control_panel",
-      "deployment_mode": "systemd",
-      "health_url": "http://127.0.0.1:8080/health",
-      "version_url": "http://127.0.0.1:8080/updater/version",
-      "backup_argv": [
-        "/usr/local/sbin/autostream-backup-control-panel",
-        "replace-with-control-panel-database-name"
-      ],
-      "systemd": {
-        "systemctl_path": "/usr/bin/systemctl",
-        "runuser_path": "/usr/sbin/runuser",
-        "smoke_user": "autostream",
-        "unit": "autostream-control-panel.service",
-        "release_root": "/opt/autostream/control-panel/releases",
-        "current_link": "/opt/autostream/control-panel/current",
-        "binary_path": "bin/control-panel",
-        "required_paths": ["share/autostream-control-panel"]
-      }
-    }
-  ]
-}
-```
-
-top-levelと全targetの`host_id`は一致させます。`arch`はhelper artifactと実hostに一致させます。`health_url`と`version_url`は同じhostのloopbackだけを指定し、`version_url`のpathは全serviceで`/updater/version`を使います。Control PanelとObservabilityではroot所有`backup_argv`が必須です。配布スクリプトの標準DB名と実際の`DATABASE_URL`のDB名が異なる場合は、上の例のように実DB名を固定第2引数へ指定します。MariaDBの`GRANT`対象、事前の実dump、`backup_argv`の固定第2引数には、`DATABASE_URL`で確認した同一のDB名を必ず使います。DB名は英数字で始まる1〜64文字のASCII英数字・underscore・hyphenだけを許可し、ブラウザやupdate jobから渡しません。
-
-標準systemd targetの対応は次のとおりです。Node serviceの`target_id`はControl Panelに登録したNode IDに合わせます。
-
-| `service_type` | `release_root` / `current_link` | `unit` | `binary_path` |
+| transport | 配置 | 通信 | Bridge中の扱い |
 | --- | --- | --- | --- |
-| `control_panel` | `/opt/autostream/control-panel/releases` / `/opt/autostream/control-panel/current` | `autostream-control-panel.service` | `bin/control-panel` |
-| `worker` | `/opt/autostream/worker/releases` / `/opt/autostream/worker/current` | `autostream-worker.service` | `bin/autostream-worker` |
-| `encoder_recorder` | `/opt/autostream/encoder-recorder/releases` / `/opt/autostream/encoder-recorder/current` | `autostream-encoder-recorder.service` | `bin/autostream-encoder-recorder` |
-| `discord_bot` | `/opt/autostream/discord-bot/releases` / `/opt/autostream/discord-bot/current` | `autostream-discord-bot.service` | `bin/autostream-discord-bot` |
-| `observability` | `/opt/autostream/observability/releases` / `/opt/autostream/observability/current` | `autostream-observability.service` | `bin/autostream-observability` |
+| `pull_v2` | 各物理ホストに非root Host Agentを1つ、root Local Executorを1つ | Control Panelへoutbound HTTPS、host内Unix socket。受信TCPなし | source実装あり。ownership切替前はobserver、切替後だけjobを実行 |
+| `ssh_v1` | 中央`autostream-updater`と各hostの`autostream-update-host` helper | 中央からhostへSSH | 既存の更新適用を維持する互換経路。Bridge完了までは削除しない |
 
-### Docker targetのroot policy
+transportをホスト単位で切り替えます。同じホストの更新jobを`ssh_v1`と`pull_v2`が同時に実行してはいけません。Control Panelが所有する`execution_host_id`と`ownership_epoch`で実行権をfenceし、active jobがないことを確認してから切り替えます。
 
-Docker targetも中央設定にはidentityだけを置き、次のfull policyは対象hostの`update-host.json`だけに置きます。
+## `pull_v2` Host Agentを登録する
+
+Control Panelの **Node登録** でNode typeに`Update Agent`、transportに`pull_v2`を選びます。物理ホストごとに固定Node IDを1つ割り当て、Configurationに表示されたAuto Configure commandをそのホストで実行します。
+
+`pull_v2` Nodeの作成と初回credential発行には`api_tokens.create`、`secrets.update`、`system_updates.execute`が必要です。active Host Agentの専用Runtime Token rotation（stage/cancel/emergency）には旧tokenと新tokenの両方を管理するため、さらに`api_tokens.revoke`を含む4権限すべてが必要です。
+
+```bash
+sudo /usr/local/bin/autostream-host-agent configure \
+  --panel-url "https://control.example.com" \
+  --node "host-agent-tokyo-01" \
+  --config "/etc/autostream-host-agent/identity.json"
+```
+
+Configure Tokenはargv、環境変数、shell historyへ入れず、promptまたは標準入力から非表示で渡します。生成する`/etc/autostream-host-agent/identity.json`は、次の4項目だけを持つbootstrap identityです。
 
 ```json
 {
-  "target_id": "control-panel",
-  "host_id": "host-tokyo-01",
-  "service_type": "control_panel",
-  "deployment_mode": "docker",
-  "health_url": "http://127.0.0.1:8080/health",
-  "version_url": "http://127.0.0.1:8080/updater/version",
-  "backup_argv": [
-    "/usr/local/sbin/autostream-backup-control-panel",
-    "replace-with-control-panel-database-name"
-  ],
-  "docker": {
-    "docker_path": "/usr/bin/docker",
-    "compose_project": "autostream",
-    "project_dir": "/opt/autostream",
-    "compose_files": ["/opt/autostream/compose.yml"],
-    "service": "control-panel",
-    "image_repo": "ghcr.io/kome-lab/autostream-docker/control-panel",
-    "image_variable": "AUTOSTREAM_DOCKER_VERSION",
-    "version_env_file": "/etc/autostream/updater/control-panel.env",
-    "compose_config_sha256": "<APPROVED_LOWERCASE_SHA256>",
-    "current_version": "<CURRENT_PUBLISHED_BUNDLE_TAG>",
-    "channel": "docker"
-  }
+  "panel_url": "https://control.example.com",
+  "node_id": "host-agent-tokyo-01",
+  "runtime_token": "<NODE_RUNTIME_TOKEN>",
+  "service_name": "Tokyo Host Agent"
 }
 ```
 
-`compose_config_sha256`はroot operatorが確認したcanonical Compose modelを固定します。初回bootstrap中の選択targetだけは、draft configで64個の`0`を明示的なsentinelとして使います。通常の`validate-config`、installer、RPCはsentinelを拒否します。`current_version`には現在実行中で、immutable Docker manifestとrollback policyを持つ公開済みbundle tagを指定します。targetごとに別の`version_env_file`を使い、秘密情報を入れません。
+許可するキーは`panel_url`、`node_id`、`runtime_token`、`service_name`の4つだけです。次の値を追加しないでください。
 
-Docker targetでは通常exampleではなく、archiveの`autostream-update-host.docker-draft.json.example`からroot所有draftを作ります。対象hostで現在稼働中のcontainer、manifest、platform digest、source version、Compose modelを照合し、target別version envをseedします。GitHub Release Tokenはrepositoryの公開状態にかかわらず必要で、標準入力だけで一時的に渡します。
+- API host、API port、`8090`
+- SSH host、SSH port、SSH鍵
+- `execution_host_id`、`ownership_epoch`
+- target policy、GitHub Release Token
+- systemd unit、Docker path、任意command
 
-```bash
-set -euo pipefail
-TARGET_ID=worker-docker
-DRAFT=/root/autostream-update-host.docker-draft.json
-ZERO_SHA=0000000000000000000000000000000000000000000000000000000000000000
+`execution_host_id`と`ownership_epoch`はControl Panelがtokenとservice bindingから解決するserver-owned値です。Host Agentのconfig、CLI、heartbeatで上書きしません。
 
-sudo install -o root -g root -m 0600 \
-  "$RELEASE_DIR/autostream-update-host.docker-draft.json.example" "$DRAFT"
-sudoedit "$DRAFT"
-sudo jq -e --arg target "$TARGET_ID" --arg zero "$ZERO_SHA" \
-  '([.targets[] | select(.target_id == $target and .deployment_mode == "docker")] |
-    length) == 1 and
-   ((.targets[] | select(.target_id == $target))
-     .docker.compose_config_sha256 == $zero)' "$DRAFT" >/dev/null
-
-sudo -v
-bootstrap_docker_digest() {
-  local token
-  IFS= read -r -s -p 'One-time GitHub Release Token: ' token </dev/tty
-  printf '\n' >&2
-  printf '%s\n' "$token" |
-    sudo -n "$RELEASE_DIR/bin/autostream-update-host" \
-      bootstrap-docker-target --config "$DRAFT" --target "$TARGET_ID"
-}
-
-COMPOSE_SHA="$(bootstrap_docker_digest)"
-[[ $COMPOSE_SHA =~ ^[0-9a-f]{64}$ && $COMPOSE_SHA != "$ZERO_SHA" ]]
-```
-
-tokenをcommand line、config、shell history、root Docker configへ書きません。成功時、標準出力は承認済みlowercase digestだけです。別のfinal fileでsentinelを置換して通常validationを通します。
+package済みinstallerは専用の`autostream-host-agent` user/group、Host Agent、同じreleaseのLocal Executor、unit、root-owned directoryをprepareします。identityとpolicyは作らず、Host Agent、Local Executor、socketはinactive/disabledのままです。A/B self-updateの期限超過時に旧healthy slotへ戻せるよう、固定root recovery timerだけはこの時点でenable/startします。
 
 ```bash
-USER_STAGE="$(mktemp)"
-ROOT_STAGE="$(sudo mktemp /root/.autostream-update-host.json.new.XXXXXX)"
-FINAL_CONFIG=/root/autostream-update-host.json
-trap 'rm -f "$USER_STAGE"; sudo -n rm -f "$ROOT_STAGE" 2>/dev/null || true' EXIT
-
-sudo jq --arg target "$TARGET_ID" --arg sha "$COMPOSE_SHA" \
-  '(.targets[] | select(.target_id == $target)
-     .docker.compose_config_sha256) = $sha' "$DRAFT" >"$USER_STAGE"
-sudo install -o root -g root -m 0600 "$USER_STAGE" "$ROOT_STAGE"
-sudo "$RELEASE_DIR/bin/autostream-update-host" validate-config \
-  --config "$ROOT_STAGE"
-sudo mv -f "$ROOT_STAGE" "$FINAL_CONFIG"
-rm -f "$USER_STAGE"
-trap - EXIT
+sudo ./install/install-autostream-host-agent --prepare
 ```
 
-bootstrapは検証に成功した場合だけversion envを原子的にseedし、Compose approval digestを出力します。失敗した場合はversion envを元の状態へ戻します。複数Docker targetがある場合は、未承認sentinelを一度に1件だけ置き、digestへ置換してから次をbootstrapします。最終configにはsystemd targetも含められます。digestを手で捏造したり、sentinelをinstallerやruntimeへ残したりしないでください。
+prepare後に上のAuto Configure commandを実行します。Control Panelは登録済みのpull policyと各systemd targetの`applied` endpoint/config stateからcanonical Local Executor policyを生成します。clientはroot path、unit、command、digestを指定できません。Docker authorityはAuto Configureで生成せず、Docker targetを含む自動projectionはfail closedです。Dockerは別途root所有の固定policyと承認済みfrozen Compose baselineを準備します。Configureは次を1つのtransactionとして扱います。
 
-private GHCRを使う場合は対象hostのroot Docker credential storeを、read-only package credentialで事前に認証します。credentialをcommand line、JSON、version env、logへ残さずstdinで渡してください。
+1. 実在する非root `autostream-host-agent`のUID/GIDと固定protocolをstage requestへ結び付ける。
+2. `/opt/autostream/local-executor/ports`へ対象systemd serviceのsidecarがなければ生成する。
+3. `/etc/autostream-local-executor/policy.json`と`/etc/autostream-host-agent/identity.json`の4項目identityをatomicにinstallする。
+4. installed bytes、policy SHA-256、source/projection/executor policy revisionを再検証してactivationする。
 
-### rollback baselineを確認する
+sidecarは次の固定pathのうち、policyに含まれるtarget分だけです。
 
-最初の自動更新前に、systemd targetでは`current`のlink先、`.artifact-sha256`、`.version`、binary、必要asset、実行中MainPIDを照合します。Docker targetでは現在containerのimage ID、RepoDigest、platform、source version、target別version env、承認済みCompose digestを照合します。いずれもmanifest付きreleaseのarchiveにある`README.install.md`とhelper artifactの`README.bootstrap.md`に従い、local binaryや稼働containerからmarkerを捏造しないでください。
-
-## managed hostへ一度だけinstallする
-
-システム更新画面に表示された、そのhost専用のSSHクライアント公開鍵をfileとして用意します。中央Updaterの送信元はnumeric CIDRで制限します。固定addressならIPv4 `/32`またはIPv6 `/128`を推奨します。個人用公開鍵や別hostの公開鍵を使わないでください。
-
-```bash
-sudo "$RELEASE_DIR/install/install-autostream-update-host" \
-  --config /root/autostream-update-host.json \
-  --authorized-key /path/to/host-tokyo-01_ed25519.pub \
-  --source-cidr 192.0.2.10/32
-```
-
-installerはhelper config、Ed25519 key、CIDR、effective sshd config、sudoersを検証し、forced keyを最後に原子的に有効化します。同じconfig、key、CIDRでの再実行は安全です。既存configやkeyが異なる場合は黙って上書きせずfail closedになります。
-
-最終配置は次のとおりです。
-
-```text
-/usr/local/libexec/autostream-update-host
-/etc/autostream/update-host.json
-/etc/sudoers.d/autostream-update-host
-/var/lib/autostream-update-host/
-/var/lib/autostream-update-host-login/.ssh/authorized_keys
-```
-
-remote systemd unitはありません。作成しないでください。
-
-managed host側を確認します。
-
-```bash
-sudo /usr/local/libexec/autostream-update-host validate-config \
-  --config /etc/autostream/update-host.json
-sudo visudo -cf /etc/sudoers.d/autostream-update-host
-sudo -l -U autostream-update-host | grep -F SSH_ORIGINAL_COMMAND
-sudo stat -c '%U:%G:%a %n' \
-  /usr/local/libexec/autostream-update-host \
-  /etc/autostream/update-host.json \
-  /etc/sudoers.d/autostream-update-host \
-  /var/lib/autostream-update-host-login/.ssh/authorized_keys
-```
-
-期待するmodeは順に`root:root:755`、`root:root:600`、`root:root:440`、`root:root:644`です。idle中は`autostream-update-host` processもlistening portも存在しません。
-
-## 保存した設定が反映されたことを確認する
-
-managed hostへhelperとSSHクライアント公開鍵をinstallすると、中央Updaterはhostのrestricted probeを自動で再試行します。手動reloadやservice再起動は不要です。
-
-システム更新画面の状態を確認します。
-
-| 状態 | 意味 | 対応 |
-| --- | --- | --- |
-| **反映済み** | 保存したrevisionをUpdaterが受理し、その設定で動作中 | hostの到達状態を別に確認します |
-| **反映待ち** | Updaterの取得待ち、または更新job完了待ち | 表示理由に従って待ちます |
-| **反映失敗** | 設定の形式・整合性検証、鍵生成、または安全な切替に失敗 | 理由を修正して **保存** します |
-
-更新jobの実行中は反映を保留します。Updaterは新しいjobをclaimせず、実行中jobが安全に終了してから新しい設定を自動反映します。失敗時は更新操作を停止し、失敗した段階に応じて直前の反映済み設定へ戻るか、安全な保存処理を自動再試行します。
-
-設定の反映状態とhostの到達状態は別です。helper未導入、SSHクライアント公開鍵未登録、SSHホスト公開鍵不一致、firewall、remote policy不一致はhostを **接続不可** として表示します。restricted probeではOS、host ID、architecture、remote target集合、service type、deployment mode、root所有helper設定のSHA-256、targetごとの現在版を確認します。現在版を取得できないtargetは`current_version_unknown`として更新対象外です。raw SSHの対話shell、PTY、port forwarding、SCP、SFTPが失敗し、固定RPCのprobeだけが成功する状態が正常です。
-
-中央unitは専用userで動き、sudoやcapabilityを持ちません。`NoNewPrivileges`、空のcapability set、read-only system imageを弱めないでください。書き込み先は`/var/lib/autostream-updater`だけです。
-
-## managed hostを削除する
-
-ホストの削除はSSH認証の廃止を伴います。更新jobが実行中でないことを確認してから、次の順で行います。
-
-1. **システム更新**で対象hostの **削除** を押します。確認画面には、そのhostと紐づくtargetも削除されることが表示されます。
-2. **設定を保存**し、状態が **反映済み** になるまで待ちます。新しい設定が安全に確定すると、中央Updaterは削除したhostのSSH秘密鍵を自動廃棄します。中央のstate directoryを手作業で編集しません。
-3. 対象hostで`/var/lib/autostream-update-host-login/.ssh/authorized_keys`を`sudoedit`し、画面に表示されていたそのhost専用の公開鍵行を削除します。
-4. このhostを今後管理しない場合は、専用sudoers、root policy、helperも撤去します。
-
-```bash
-sudo rm -f /etc/sudoers.d/autostream-update-host
-sudo rm -f /etc/autostream/update-host.json
-sudo rm -f /usr/local/libexec/autostream-update-host
-sudo visudo -cf /etc/sudoers
-```
-
-同じhost IDを再追加して保存すると新しいSSH鍵とfingerprintが生成されます。以前の公開鍵を再登録せず、画面に新しく表示された公開鍵でhelperをbootstrapし直してください。
-
-## 更新jobの実行順
-
-新規jobは次の順で処理されます。
-
-1. Control Panelがtarget、host、version、mode、実行方針を固定してqueueします。
-2. 中央Updaterが対象host laneでjobをclaimし、leaseを取得します。
-3. 中央Updaterがrelease manifest、sidecar、artifactまたはimage digestを検証します。
-4. remote helperが`stage`を実行します。必須のGitHub Release TokenはSSH stdinでjob中だけ一時受信し、artifactを再取得・再検証します。この段階ではserviceを変更しません。
-5. 中央Updaterが`installing` progressの受理を確認します。
-6. 中央Updaterがactive leaseとimmutable planに結び付けた90秒のone-time mutation grantを取得します。
-7. remote helperがroot変更の直前にgrantを消費し、`apply`します。
-8. backup、停止、切替、起動、MainPID/container image、health、versionを確認し、結果をreportします。
-
-同じhostのjobは直列です。別hostの通常jobは並列に進められます。Control Panel自身の更新だけは例外で、grant、report、lease APIを他jobが利用中に停止しないよう、全hostの既存更新が完了してから単独で実行します。その間は新しい通常jobのclaim・実行も待機します。
-
-## `maintenance`と`when_idle`
-
-| 方針 | 用途 | 動作 |
-| --- | --- | --- |
-| `maintenance` | 現在配信していないtarget | active streamがなければqueueします。配信中なら拒否します |
-| `when_idle` | active streamを報告中のtarget | queueに保持し、配信終了後にclaimします |
-
-claim時にもstream状態を再確認します。強制停止して更新する機能ではありません。
-
-## 再起動、通信断、recovery
-
-中央Updaterはhost別stateを`/var/lib/autostream-updater/hosts/<host_idをSHA-256したlowercase hex>`へ分離します。raw host IDをdirectory名に使わず、job directoryにはsecret-free intentだけ、journalにはtokenを除いたrecovery metadataだけを永続化します。lease token、mutation grant、release credentialは保存しません。通信断や再起動でapply結果が不明になった場合、同じapplyを再実行しません。
-
-- active journalがない到達不能hostは新規jobをclaimしません。
-- active journalがあるhostは、表示が接続不可でもrecovery claimを試します。
-- recoveryはfresh sessionとfresh 90秒grantを使う`reconcile`だけです。`stage`や`apply`へ戻りません。
-- remote root ledgerが同じjob/planの二重適用を防ぎます。
-- checkpointから成功状態またはrollback状態を確定できない場合はfailedとして人手の確認を要求します。
-
-## Application Infoから実行する
-
-1. **Application Info**を開き、**再取得**でrelease、中央Updater、host状態、履歴を読み直します。
-2. **システム更新**で現在version、更新先version、systemd / Docker、host IDを確認します。
-3. 中央Updaterが`online`、対象hostが`到達可`であることを確認します。
-4. 配信中でないtargetは **更新**、配信中のtargetは **空き次第更新** を選びます。
-5. Control Panel自身では、画面とAPIが一時切断される確認dialogを承認します。
-6. **更新履歴**でstage、grant、apply、health、rollbackの進捗と結果を確認します。
-
-中央Updaterの状態とhost到達状態は別です。
-
-| 表示 | 意味 |
+| service | sidecar |
 | --- | --- |
-| 中央Updater online | heartbeatが有効。hostへ到達できることまでは意味しない |
-| host 到達可 | 直近のrestricted probeが成功し、identityとtarget集合も一致 |
-| host 接続不可 | 直近probeがSSHまたはremote validationで失敗 |
-| host 未確認 | 起動直後、情報期限切れ、または有効なprobe結果がまだない |
+| Worker | `/opt/autostream/local-executor/ports/worker.env` |
+| Encoder Recorder | `/opt/autostream/local-executor/ports/encoder-recorder.env` |
+| Discord Bot | `/opt/autostream/local-executor/ports/discord-bot.env` |
+| Observability | `/opt/autostream/local-executor/ports/observability.env` |
 
-実行buttonは中央Updaterがonlineかつ対象hostが到達可の場合だけ有効です。最新versionの検出と比較は、どちらかがofflineでも続きます。
+各sidecarはservice固有のbind変数と`AUTOSTREAM_CONFIG_REVISION`だけを持つ正確な2行、`root:root 0600`です。directoryは`root:root 0700`です。既存sidecarが1 byteでもcanonical policyと異なる場合は上書きせず失敗します。old client、rootのAgent UID/GID、runtime state不足、stage/activate間のbinding変更も拒否します。
 
-## backup、health、rollback
-
-### systemd target
-
-1. 中央とremoteの両方で固定tag、architecture、外側SHA-256、archive内`checksums.txt`を検証します。
-2. 絶対path、`..`、symlink、重複・未記載file、展開size超過を拒否します。
-3. 新binaryの`--version`を`runuser`で実service userとして確認します。
-4. database所有serviceはroot所有backup commandを実行します。
-5. 旧`current`とdigestをcheckpointへ保存し、service停止、symlink切替、service起動を行います。
-6. systemd `MainPID`が新releaseのbinaryを実行し、loopback healthが2xx、versionが対象versionであることを確認します。
-7. 失敗時は旧linkへ戻し、旧binaryのMainPID、health、versionまで確認します。
-
-### Docker target
-
-1. remote root policyにDocker binary、Compose project/files/service、固定image repository、target別version env file、承認済みCompose model digestを置きます。
-2. release manifest、sidecar、multi-arch digest、host platform digest、source versionを中央とremoteで検証します。
-3. database所有serviceはbackupし、旧version env byte列、container image ID、health versionをcheckpointへ保存します。
-4. target専用version envを`<bundle tag>@sha256:<verified multiarch digest>`へ原子的に更新し、検証済みplatform digestへ固定した一時overrideで対象serviceだけを再作成します。
-5. 新containerのimage ID、RepoDigest、health、source versionを確認します。
-6. 失敗時はversion envを元のbyte列へ戻し、旧image IDから対象serviceだけを再作成して旧health/versionを確認します。
-
-共有`.env`へdesired versionを書き戻しません。Updater管理serviceを手動でCompose操作する場合も、remote policyと同じtarget専用`--env-file`を使います。private GHCRでは対象hostのroot Docker credential storeを使い、中央のGitHub Release TokenをDocker loginへ流用しません。
-
-Control PanelとObservabilityのbackupはdatabaseを自動restoreしません。rollback後もschemaやdataの確認が必要なら、事前に用意したrestore runbookを実行します。
-
-## releaseとversionの扱い
-
-- systemd targetは各service repositoryのhost releaseとsource versionを使います。
-- Docker targetは`Autostream-Docker`のbundle releaseを使います。bundle versionと各serviceのsource versionは別管理で、表示差は正常です。
-- manifest、sidecar、必要component、rollback policyがそろわないreleaseは自動更新できません。
-- 既存のControl Panel `v1.6.5`やDocker `v1.2.3`など、公開済みtagとassetを移動・置換しません。修正版は新しいtagとして発行します。
-- `source-versions.env`の更新は、新しいControl Panel releaseを発行・検証した後のDocker release作業で別途行います。helper導入手順で既存値を書き換えません。
-
-## 中央Updaterとremote helperを更新する
-
-中央Updaterは自分自身の更新targetではありません。active jobがないことを確認し、新しいControl Panel host artifactを検証・展開してから固定pathを明示的に置き換えます。次はamd64の例です。`vX.Y.Z`は実際のversionへ置き換えます。
+Configure成功後にLocal ExecutorとHost Agentを起動します。
 
 ```bash
-cd /opt/autostream/releases/artifacts/autostream-control-panel_vX.Y.Z_linux_amd64
-sudo systemctl stop autostream-updater
-sudo install -o root -g root -m 0755 \
-  bin/autostream-updater /usr/local/bin/autostream-updater.next
-sudo mv -f /usr/local/bin/autostream-updater.next /usr/local/bin/autostream-updater
-/usr/local/bin/autostream-updater --version
-sudo systemctl start autostream-updater
+sudo ./install/install-autostream-local-executor \
+  --policy /etc/autostream-local-executor/policy.json
+sudo systemctl enable --now autostream-host-agent.service
 ```
 
-remote helperもactive jobがないmaintenance中に、新しいhelper artifactを検証して明示的に再bootstrapします。中央Updaterの更新で別hostのhelperを暗黙に置き換えません。config、key、CIDRを変更する場合は通常の再実行ではなく、差分を確認した明示的rotationとして扱います。
+このfilesystem transactionのpure Go/HTTP testはありますが、実root Linuxでの初回configure/rollbackはまだ検証していません。導入前にrelease archive、checksum、manifest、attestationを検証してください。公開release assetが存在することや本番canaryが成功したことは、この文書だけでは証明できません。
 
-## troubleshooting
+導入後は次を確認します。
 
-| 状況 / code | 確認すること |
-| --- | --- |
-| 中央Updater未設定 / offline | `update_agent`を1つだけ登録したか、中央systemd、Runtime Token、Panel URL、時刻、TLSを確認 |
-| host `未確認` | 中央起動直後のprobe待ちか、heartbeat情報が期限切れでないか確認 |
-| `ssh_timeout` | address/port、route、firewall、source CIDR、sshdを確認 |
-| `ssh_connection_refused` | sshd起動、port、security groupを確認 |
-| `ssh_auth_failed` | host別private/public keyの組合せ、owner/mode、password-lock user、authorized_keysを確認 |
-| `ssh_host_key_mismatch` | 接続を止め、consoleからserver key変更理由を確認。未確認keyへ置換しない |
-| `remote_helper_unavailable` | helper binary、forced command、exact sudoers、`SSH_ORIGINAL_COMMAND`、architectureを確認 |
-| `remote_config_invalid` | central/remoteのhost ID、target集合、service type、mode、arch、root config owner/modeを確認 |
-| `target_reachability_unknown` / `target_unreachable` | 中央onlineとは別に対象hostのprobe結果を確認 |
-| `current_version_unknown` | targetの`.version`またはDocker version env、稼働image、公開済みrelease tagの対応を確認し、restricted probeを再実行 |
-| release manifest取得失敗 | 必須のGitHub Release Token、rate limit、tag、manifest/sidecar/artifactを確認 |
-| stage失敗 | remoteからGitHub/GHCRへの到達、disk、remote checksum検証を確認。serviceはまだ変更されていない |
-| grant発行・消費失敗 | lease、job/host/target/version/mode、plan digest、session、90秒期限を確認。古いgrantを再利用しない |
-| `rolled_back` | backup、中央/remote log、service log、artifact/image digest、旧health/versionを確認 |
-| recovery中 | 新しいapplyをqueueせず、journalとremote ledgerからreconcileが完了するのを確認 |
-| versionは見えるが実行不可 | central offline、host未確認/接続不可、`manifest_unverified`、busy stream、権限不足を確認 |
+```bash
+sudo systemctl status autostream-host-agent.service
+sudo -u autostream-host-agent \
+  /usr/local/bin/autostream-host-agent validate-config \
+  --config /etc/autostream-host-agent/identity.json
+sudo ss -lntup
+```
 
-helperを置かずに手動更新を続けることもできます。その場合Application Infoは検出専用です。手動更新後はbinaryの`--version`、systemd MainPIDまたはcontainer image ID、`/health`、`/updater/version`、Service Health、短いテスト配信まで確認してください。
+Host Agentがlistening socket一覧に出ないことを確認します。systemd unitの`SocketBindDeny=any`を弱めないでください。
+
+`/etc/autostream/host-agent.json`は旧releaseのlegacy pathです。canonical identityがない場合に限り、runtimeはこの旧pathをread-only fallbackとして読めます。installerのmanaged migrationはsourceのinode、owner、mode、digestを固定してcanonical pathへinstallします。その後、zero overwrite/syncをbest-effortで試して旧secretを必ずunlinkし、unlinkに失敗した場合はcanonicalを保持したままAgentを停止します。canonicalとlegacyが同時に存在する場合は、どちらかを推測せず起動・設定・rotationをfail closedにします。新規設定、書き込み、Runtime Token rotationは常にcanonical pathを使ってください。
+
+## Nodeポートの契約
+
+通常のNode serviceでは、Node登録時に`1024..65535`の任意ポートを指定できます。`pull_v2` Host Agent自身はendpointlessなのでNode portを持ちません。Node登録のPortと旧中央UpdaterのAPI port `8090`は、もともと別用途でした。
+
+| ポート | 用途 | `pull_v2`での扱い |
+| --- | --- | --- |
+| 通常NodeのPort | Worker等、そのサービス本来のAPI listen endpoint | 任意の`1024..65535`。systemdではポート変更jobで切替可能 |
+| Control PanelのPort | Host Agentがoutbound HTTPSで接続する公開origin | 通常はreverse proxyの`443`。Host Agentの受信portではない |
+| legacy Updaterの`8090` | `ssh_v1`中央Updaterのloopback status API | `pull_v2`では使用しない。legacy撤去releaseで削除 |
+| Local Executor | Host Agentからroot operationを依頼するlocal IPC | TCP portなし。固定Unix socketだけ |
+
+Control Panelは`execution_host_id + network_namespace + protocol + port`で、systemdではservice listen port、Dockerではlocalhost published portの現在値と変更予定値を予約します。Docker advertised/containerだけの変更ではport reservationを増やしません。同一ホスト・同一namespaceの競合、範囲外、stale endpoint revisionを拒否します。別ホストで同じ番号を使うことはできます。
+
+ポートは1つの値で上書きせず、次の3状態を分けて扱います。
+
+| 状態 | 所有者 | 意味 |
+| --- | --- | --- |
+| `desired` | Control Panel | operatorが次に適用したいhost、port、scheme |
+| `applied` | executor | 管理対象systemd endpointまたはDocker port mappingへ最後に適用した値 |
+| `reported` | service / Host Agent | heartbeatやprobeで実際に観測したlisten endpoint |
+
+`pull_v2`でactiveなsystemd targetは、Node編集からendpointを直接変更できません。Application Infoの「サービスのポート変更」から独立した`port_reconfigure` jobを作成します。UIはControl Panelが返した`eligible_operations`に`port_reconfigure`がある場合だけ操作を有効にします。
+
+対象はWorker、Encoder Recorder、Discord Bot、Observabilityのsystemd配置です。Local Executorは`/opt/autostream/local-executor/ports`配下の固定sidecarだけをatomicに切り替え、対象unitだけをrestartします。新しいlistener owner、service identity、`/health`、`/updater/version`、config revisionとconfig SHA-256を確認できたときだけ`applied`を進めます。
+
+失敗時は旧sidecar・旧port・旧config revisionへrollbackして再検証します。結果は`applied`、`rolled_back`、`unchanged`、`rollback_failed`のいずれかです。`unchanged`は「旧portが一度も置き換わらなかったことを証明済み」、`rolled_back`は「旧portへ復帰して検証済み」です。どちらもpending endpoint generationを消費し、configは旧値のまま、endpoint revisionだけを単調増加させます。
+
+`rollback_failed`では有効portを推測せず、Local Executorをterminal quarantineにしてapplied overlayを書きません。Control Panelは両方のreservationと`rollback_failed`状態を保持し、別の明示的な復旧で旧sidecar/runtimeを証明するまで新jobを許可しません。通信結果が不明な場合は同じmutationを再送せず、durable journalからreconcileします。applied state保存後にprocessが停止した場合も、reconcileはterminal ledgerだけを修復し、sidecar rewriteやservice restartを繰り返しません。
+
+Docker targetでは、Nodeのadvertised port、hostのlocalhost published port、container listen portを別々に指定する専用`port_reconfigure` jobを使います。対象はWorker、Encoder Recorder、Discord Bot、Observabilityです。advertised portは`1..65535`、published/container portは`1024..65535`で、published hostは`127.0.0.1`固定です。Local Executorは`/opt/autostream/local-executor/docker/ports/<service>.env`の固定port envと承認済みfrozen Compose modelだけを使って対象serviceをrecreateし、container/image/repository identity、Compose revision/digest、env digest、healthを再検証します。失敗または通信結果不明時はdurable ledgerからrollback/reconcileし、同じmutationを再送しません。
+
+Docker port jobは、root所有の固定Docker target policyと承認済みfrozen Compose baselineがすでにactiveで、現在のmappingを完全にprobeできるhostだけで有効です。Auto Configureはsystemd policy/sidecarだけを自動生成し、Node登録値からDocker authorityを推測しません。policy、baseline、mappingのどれかが欠ける、busy、stale、drift、recovery中の場合はfail closedです。
+
+## endpointの意味
+
+systemd、Docker、reverse proxyでは、同じ「ポート」という言葉が別のendpointを指します。
+
+| 構成 | Nodeのdesired endpoint | local listen / applied | 外部公開 |
+| --- | --- | --- | --- |
+| systemd | Control Panelからserviceへ到達するhostとport | service processのbind addressとport | reverse proxyを使う場合は別endpoint |
+| Docker | Control Panelから到達するadvertised host/port | container listen portと`127.0.0.1`のpublished portを別々に管理 | reverse proxyを使う場合はpublished portをoriginにする |
+| reverse proxy | 通常はproxyから到達するorigin endpoint | upstreamのhostとport | browser向けHTTPSは通常`443` |
+
+公開HTTPSの`443`はreverse proxyの入口であり、管理対象Node service本来のlisten portではありません。systemdのlisten portとDockerのpublished/container portは`1024..65535`です。Docker advertised portだけは既存の公開/proxy endpointも表せるため`1..65535`ですが、Local Executorがprivileged portへbindしたりreverse proxyを変更したりする意味ではありません。
+
+systemd targetではNode編集を使わず、Application Infoからポート変更jobを開始します。Control PanelとLocal Executorが次を順番に行います。
+
+1. `1024..65535`、endpoint revision、config revision、policy revision、同一host/namespaceの予約を確認する。
+2. 変更予定portを`api_pending`として予約し、old/new portとsidecar SHA-256をmutation planへ固定する。
+3. root所有sidecarをstageし、対象unitだけをrestartする。
+4. listener owner、service identity、health、version、config revision、sidecar bytesを確認する。
+5. 成功時だけ新portを`applied`へ昇格し、旧port予約を解放する。失敗時は旧値へrollbackする。
+6. Host Agentの次のprobeで`reported`を更新し、driftがないことを確認する。
+
+Docker targetでは専用jobにadvertised、localhost published、container listenの3値を渡し、承認済みfrozen Compose baselineとexact policyを再検証してから切り替えます。画面の`desired` / `applied` / `reported` endpointはadvertised側です。published/containerは、applied endpointとHost Agent probeが一致したverified current mapping、pending job plan、完了履歴のold/new tripleとして確認します。Control Panel自身、Update Agent、固定Docker authorityを持たないhostは対象外です。
+
+reverse proxyの自動書き換えはこのreleaseの対象外です。proxy originをpublished portへ追従させる必要がある場合はoperatorが別手順でNginx/Caddy等を変更し、proxy経由のhealthを確認してください。Docker port jobがreverse proxy設定を変更したと解釈してはいけません。
+
+## availability gateと移行順
+
+| gate | 完了条件 | 現在の扱い |
+| --- | --- | --- |
+| 1. Bridge contract | `ssh_v1` / `pull_v2`、host ownership、desired/applied/reportedを保存できる | source実装とlocal DB/API testsあり。deploy未確認 |
+| 2. Observer導入 | register、heartbeat、policy refresh、exact Local Executor policy/target probe。受信TCPなし | source、unit、installerあり。公開release/canary未確認 |
+| 3. Local Executor | root executor、Unix socket認証、固定operation、grant、durable recovery | systemd/Docker software updateとsystemd/Docker port operationのsource/tests、Linux container tests、root fixtureあり。実systemd VM canaryは未確認 |
+| 4. 更新適用 | `pull_v2`でclaim、stage、grant、apply、report、rollback/reconcile | source/testsあり。公開artifactと22/8090遮断canary未確認 |
+| 5. systemd Port apply | reservation、preflight、`port_reconfigure`、health、rollback、旧port解放 | source/UI/testsあり。実systemd VMでのnon-default port smoke未確認 |
+| 6. Agent / Executor自己更新 | 同一releaseの2-slot更新、dedicated directive/grant、Agent heartbeatとExecutor probe、root recovery supervisor、失敗時rollback/reconcile | recovery protocol 2、directory fsync、reserved artifact recovery、fresh-process slot検証、failed generationとgrant収束、root-only watchdog statusのsource/focused testsあり。公開artifact、実systemd process kill/reboot、amd64/arm64 canaryは未確認 |
+| 7. Runtime Token rotation | stage→claim→local ack→staged heartbeat proof→activate→旧token revoke | HTTP/Store/Host Agent/Local Executor sourceとtestsあり。mixed-version実host drillとrelease/deployは未確認 |
+| 8. Docker port mapping | advertised、localhost published、container listenを別々にtransactional変更 | source/API/UI/unit testsあり。Docker 29.6.2 / Compose 5.3.1のisolated root DINDで連続変更、実process crash後のfresh-process reconcile、unhealthy rollback、foreign ownerのgrant前拒否を確認。公開imageと実Docker host canaryは未確認 |
+| 9. Fleet移行 | host単位canary、Control Panel hostを最後に移行、rollback drill | release/fleet gate CLIと`pull_v2 → ssh_v1 → pull_v2`のsource契約・local testsあり。公開release、実host canary、fleet証拠は未検証 |
+| 10. Legacy撤去 | 全host移行、active jobなし、SSH鍵/helper/中央Updater/8090を別releaseで撤去 | 未着手 |
+
+Gate 1〜5のsourceが存在しても、Gate 6〜9とrelease proofが完了するまでは本番のownershipを切り替えません。Host Agentを`ownership_epoch=0`のobserverとして並行導入し、SSH経路を残したままreadinessを確認できます。
+
+## ownershipを切り替える
+
+Auto Configureのactivationはidentityとexact Local Executor policyを有効にする処理であり、更新実行権限の切替ではありません。最初のheartbeatでは`ownership_epoch=0`、`observe_only=true`で動きます。
+
+Control Panelの「システム更新」で対象Host Agentの設定を開き、「更新実行権限の切替」が「切替可能」になるまで待ちます。Control Panelは少なくとも次を確認します。
+
+- Host Agentがonlineで、observerとしてepoch `0`を報告している。
+- Local Executorがexact policy SHA-256とprojection revisionでprobeに成功している。
+- 全targetのservice type、deployment mode、applied endpoint、config revision/SHA-256がpolicyと一致する。
+- active job、recovery、別のownership operationがない。
+- execution hostの現在ownerが`ssh_v1`で、requestに含めるownership epochが最新である。
+
+「Host Agentへ切り替え」を実行すると、Control Panelはこれらをtransaction内で再検証し、execution hostのownerを`pull_v2`へ変更して正のownership epochを発行します。応答が不明な場合は再クリックせず、最新設定を取得してowner/epochを照合します。Host Agentの次のheartbeatで同じ正のepoch、`mutation_enabled=true`、policy revision一致を確認してからjobを作成します。
+
+## Bridge中にownershipを`ssh_v1`へ戻す
+
+既存hostのcanaryとrollback drillでは、「システム更新」の対象Host Agent設定から「SSH updaterへ戻す」を実行できます。この操作はBridge中だけのreverse CASです。requestから復帰先Updaterを指定することはできず、Control Panelが`pull_v2`切替時に保存したlegacy ownerだけを復元します。
+
+Control Panelはtransaction内で少なくとも次を再検証します。
+
+- execution hostの現在ownerが対象`pull_v2` Host Agentで、ownership epoch、source/projection/local policy revision、local policy SHA-256が画面のexpected値と一致する。
+- 保存されたlegacy ownerがactiveな`ssh_v1` Update Agentで、Runtime Tokenに`updates.claim`、`updates.report`、`updates.authorize`がある。
+- legacy policyが現在のpull policyの全targetを、同じhost、target、service type、deployment modeで覆う。
+- active job、Host Agent自己更新、Runtime Token rotation、recovery、未収束または未失効のmutation grantがない。
+
+成功するとexecution hostのownerはserver保存済み`ssh_v1` ownerへ戻り、ownership epochは1増え、pull Host Agentはobserver epoch `0`になります。応答が不明な場合は操作をretryせず、最新状態を再取得してowner/epochを確認します。UIの確認は破壊的操作用のDanger Confirmであり、staleな確認結果を別epochへ再利用しません。
+
+canaryでは復帰後にlegacy経路で更新可能なことを確認し、同じhostを再度`pull_v2`へ切り替えて、さらに1増えたepochをHost Agent heartbeatが報告するところまで記録します。保存済みlegacy ownerがない新規SSH-free hostや、legacy token/policyが不足するhostではreverse CASはfail closedです。local consoleを含むmanual recoveryへ停止し、復帰先を推測してDBを直接変更しないでください。
+
+公開release、全host roster、phase receipt、systemd/Docker canary、bake、別releaseでのlegacy撤去条件は[Bridge release / fleet移行gate](/runbooks/bridge-release-fleet-gate)に従います。legacy撤去release後は`ssh_v1`への自動復帰を前提にしません。
+
+## 更新jobとrollback
+
+`pull_v2`のsoftware updateは、固定Kome-Lab repositoryの公開immutable releaseを匿名HTTPSで取得します。長期GitHub Release TokenをHost AgentやLocal Executorへ配布しません。
+
+1. Control Panelがtarget、version、deployment mode、ownership epoch、policy revisionをjobへ固定する。
+2. Host Agentがmanifest、tag commit、asset/checksum、architecture、digestを検証してstageする。
+3. root変更直前にControl Panelが短命・1回限りのmutation grantを発行する。
+4. Local Executorがpolicy、plan、session、grantを再検証し、固定targetだけを更新する。
+5. listener/container identity、health、versionを確認し、成功結果をdurable journalから報告する。
+6. 検証に失敗した場合は旧release/imageへrollbackして旧healthまで確認する。結果が不明な場合はreconcileだけを行い、applyを繰り返さない。
+
+このsource pathのunit/integration testが通っていても、実際の公開releaseと実Linux/Docker canaryは別の証拠です。本番ではavailability tableの未確認gateを残したままownershipを切り替えないでください。
+
+## Runtime Token rotation
+
+`pull_v2` Host Agentに対する旧来の即時Runtime Token再生成はfail closedで拒否され、HTTP `409`の`staged_runtime_token_rotation_required`になります。generic token画面から旧tokenを先に失効させないでください。
+
+通常のrotationは次の順序です。Control Panel側の`staged`、`local_staged`、`heartbeat_proved`、`activated`と、Local Executor側のdurable phaseを混同しないでください。server statusはoperator-visibleな進捗、local phaseはresponse lossや再起動後に同じroot mutationを繰り返さないための証拠です。
+
+1. 管理者が新しいstaged credentialを作成する。
+2. 旧tokenで動くHost Agentだけがcredentialを1回だけclaimする。
+3. Local Executorが`/etc/autostream-host-agent/identity.staged.json`へ固定された新identityをinstallし、local-stage receiptを返す。
+4. Host Agentが旧tokenのheartbeatでreceipt、policy/ownership fenceを報告し、staged tokenで同じbindingのheartbeat proofを送る。
+5. serverがactivateしてから、Local Executorがstaged identityを`/etc/autostream-host-agent/identity.json`へatomicに昇格する。旧tokenはこのactivateで失効する。
+
+途中で応答を失った場合はexact claim ID/revisionとdurable claim/root ledgerからreconcileします。同じclaimのresponse-loss replayに限って同じcredentialを再取得できますが、別claimへ再表示せず、同じroot mutationも再実行しません。未claimのstaged credentialはserverだけでcancelできます。claim後は`cancel_requested`となり、Local Executorが`cancel_ready`を永続化してstaged identityを破棄し、Host Agentが旧tokenでcancel ackを返した後にstaged tokenとledgerをretireします。activate済みidentityはcancelでは戻しません。root ledgerで追跡できないcancel requestは推測して処理せず、manual recoveryへfail closedにします。
+
+`emergency-revoke`は指定slotがprevious/stagedのどちらでも両tokenを失効し、Agentをofflineにしてheartbeat/capability/sealed credentialをclearするbreak-glass操作です。`recovery_required=true`になり、次のlocal recoveryが必要です。
+
+1. Control Panelで対象rotationが`emergency_revoked`になり、両tokenが失効したことを確認して`rotation_id`を記録する。
+2. secret-safeなmanaged recovery手順で、新しい4項目identityをcanonical `/etc/autostream-host-agent/identity.json`へ`root:autostream-host-agent 0640`でinstallする。Node IDとPanel URLは同じにし、Runtime Tokenはprevious/stagedのどちらとも異なる新tokenを使う。tokenをargv、log、shell historyへ出さない。
+3. root ledgerのphaseを確認して、root Local Executorで次を実行する。`claim_prepared`、`cancel_ready`、`activated`、`expired`は即時回復でき、staged fileがない`stage_bound`も即時回復できる。staged fileが存在する`stage_bound`と`staged`、`local_staged`、`proof_ready`はstaged credentialのTTL経過を待つ。
+
+```bash
+sudo /usr/local/libexec/autostream-local-executor \
+  recover-runtime-credential \
+  --rotation-id "<ROTATION_ID>" \
+  --confirm-emergency-revoked
+```
+
+このcommandはcaller指定path/tokenを受け付けず、固定identity、root ledger、policy SHA-256、host/policy/protocol fence、新identity digestを検証します。`manual_recovered`をdurableに保存してstaged identityをexact-digest wipeした後、Host Agentを新identityで再起動します。Agentはpoll後にUnix socketでfinalizeし、ledger cleanupと次rotationの解放を行います。失敗時にledgerやstaged fileを手動削除しないでください。
+
+legacy read-only fallbackからのrotationは行わず、先にcanonical identityへmanaged migrationしてください。mixed-version実host drill、公開release、deployはまだ実施していないため、これらの証拠なしにproduction-readyとは扱いません。
+
+## Host Agent / Local Executorの自己更新
+
+自己更新は通常のservice updateと別のdedicated directiveです。Control Panelはimmutable release metadataとoperationを固定した短命・1回限りのself-update grantだけを発行し、root Local Executorは固定A/B slot`/opt/autostream/host-agent/slots/{a,b}`へ同じverified Host ReleaseのHost AgentとExecutorをstageします。任意URL、path、unit、commandをpolicyやrequestから指定できません。
+
+自己更新の`recovery_protocol_version=2`はHost Agent capability、Host Release manifest、directive、grant、root plan、durable stateのすべてへexactに結びます。recovery protocol 1やmixed-version bindingはfail closedで拒否し、Control Panelもprotocol 2未満のHost Agentを自己更新readyとして扱いません。
+
+slot stagingはbinaryとmarkerだけでなく、`bin`、temporary slot、`slotsRoot`、新しく作成したstate rootとその親directory entryをfsyncしてから`staged`を確定します。syncまたはrenameに失敗した場合は旧slotを復元します。起動時は安全な単一`.old`だけを復元し、`.new`を回収します。複数・malformed・unsafe・durable stateと矛盾するartifactは自動推測せずmanual recoveryへfail closedにします。
+
+activate、resumed activating、rollback、`current`再構築の前に、slot root、`bin`、2 binary、markerのowner/modeと、generation、version、commit、artifact digest、release binding、4 protocol、2 binary SHA-256、実binaryの`--version`をfresh processで再検証します。`current`を切り替えた後も、新Host Agent heartbeatと新Executor probeがpending generation、release、protocol fenceに一致した場合だけcommitします。途中停止、network loss、activation deadline超過ではdurable stateからreconcileし、pending binary自身はrollbackを抑止できません。
+
+staging検証に失敗した場合は、旧healthy slotへ戻した`stable` stateと`failed_generation`をgrant収束より先に永続化します。そのgenerationへexactに一致する`prepared`、`consumed`、`applied`のstage grantは削除せず、`token_sha256`とexact bindingを保持し、receiptを持たないcredential-free terminal `phase=failed`へ収束させます。fresh processのstatusも同じ収束を完了します。socket response喪失後に同一IPC requestをreplayした場合はgrantを再consume・mutationを再applyせずno-op successを返し、異なるbindingのreplayと矛盾するgrantはfail closedにします。
+
+固定のroot recovery timer/supervisorはhealthy slotのExecutorとAgentを再起動し、unit、PID、`/proc/PID/exe`、`--version`に加えて固定Unix socketへ`root-only watchdog status`を要求します。このRPCはcredentialやmutation payloadを持たず、UID 0だけに許可し、2秒timeoutでdurable state、`current`、Executor version/protocol、no-action状態を照合します。Host Agent UIDからのstatus、root peerからの通常mutation、hung socket、status不一致は拒否し、rollback fenceを解除しません。
+
+自己更新のcancelをRuntime Token rotationのtwo-phase cancelと同じものとして扱いません。terminal cancelを許可するのはjobがqueuedかつstage claim前の場合だけです。stage grantのconsumeは同じdurable transactionでjobを`staging`へ予約してrevisionを進めるため、claim後のcancelはunsupportedとしてfail closedにし、durable reconcile/rollbackへ収束させます。Control Panelが先にterminal cancelへ進んだと推測してはいけません。
+
+P1のsource/focused testsが通っていても、公開Host Releaseのasset/checksum/attestation、実GitHub download、実systemdでのrestart/socket activation/process kill/reboot、amd64/arm64 canary、production release/deployは別の証拠であり、まだ実施していません。これらの外部availability gateが残るため、focused testだけで自己更新readyやproduction-readyと扱わないでください。
+
+## 既存`ssh_v1`環境
+
+`ssh_v1`はBridge期間の互換transportです。既存の中央`autostream-updater`、`/etc/autostream/updater.json`、host別SSH鍵、`autostream-update-host` helper、必要なstatus portは、対象ホストのownershipを`pull_v2`へ安全に切り替えるまで維持します。
+
+新しいHost Agentをinstallしても、legacy資産は自動削除されません。現在の`ssh_v1`更新手順は、そのreleaseに付属する検証済み`README.bootstrap.md`を使用してください。Bridge文書の`pull_v2`設定へlegacyのSSH項目や`8090`をコピーしないでください。
+
+SSH/8090資産を削除する条件は次のすべてです。削除はBridge releaseと同じ変更に含めず、bake期間後の別releaseで行います。
+
+- 全execution hostのownerが`pull_v2`で、正のepochをHost Agentが報告している。
+- systemdとDockerのsoftware update、systemd/Docker port apply、強制rollback、process/container再起動、Control Panel outage recoveryを実hostで確認した。
+- Host Agent / Local Executor自己更新とRuntime Token rotation drillを確認した。
+- active/recovery jobがなく、未移行host inventoryが空である。
+- Control Panel host自身を最後に移行し、戻し方を記録した。
+- legacy削除後に22/TCPと8090/TCPを閉じたE2Eを再実行した。
+
+## Host Agentを撤去する
+
+Host Agentのlocal purgeだけではControl Panel側のRuntime Tokenは失効しません。撤去は次の順序で行います。
+
+1. 新しいjob、rotation、自己更新を止め、active/recovery stateがないことを確認する。
+2. Control Panelで対象NodeのRuntime Tokenをrevokeし、Nodeをdisableまたは削除して、旧tokenが拒否されることを確認する。
+3. `uninstall-autostream-local-executor --purge`でLocal Executor、policy、executor stateを先に撤去する。
+4. `uninstall-autostream-host-agent --purge`でHost Agent所有のroot recovery timer/template、canonical/staged/legacy identity、state、A/B runtime、専用accountを撤去する。
+5. 全ホストのBridge gate完了後、別releaseで中央Updater、helper、SSH鍵、SSH設定、`8090`資産を撤去する。
+
+default uninstallは復旧用identity/stateを保持します。`--purge`はowner、mode、inode、pathを検証し、zero overwriteとfile/directory syncをbest-effortで試した後、identityのunlinkを必須で行います。identityが残ればpurgeは失敗します。unlinkに成功してもSSD、copy-on-write filesystem、snapshot、backup上の物理消去は保証しません。必要な媒体・snapshot廃棄は基盤側の手順で行ってください。
+
+## 運用確認
+
+`pull_v2` Host Agentでは次を確認します。
+
+- Host Agent serviceがnonrootの`autostream-host-agent`で動いている。
+- 物理ホスト内にHost Agentが1つだけある。
+- Control Panel URLへoutbound HTTPSで到達できる。
+- Host Agentが受信TCPを開いていない。
+- configが4項目だけで、owner/group/modeが正しい。
+- `execution_host_id`、`ownership_epoch`、target policyがconfigにない。
+- Local Executor socketが`root:autostream-host-agent 0660`、policyが`root:root 0600`である。
+- Host Agent capabilityの`recovery_protocol_version`が`2`で、Control Panelの自己更新minimum recovery protocolと一致する。
+- root recovery supervisorのwatchdog statusがUID 0専用・2秒timeoutで成功し、失敗時にrollback fenceを解除していない。
+- systemd targetのsidecarが固定path、root所有、正確な2行で、service unitがそのoptional EnvironmentFileを最後に読む。
+- Node登録の登録済み一覧にtransport、heartbeat、desired / applied / reported endpointが表示される。Application Infoのversion表示とは分けて確認する。
+- observer中はepoch `0`、切替後はControl Panelのexecution host ownerと同じ正のepochを報告する。
+
+更新適用が必要な場合は、対象ホストのactive transportが`ssh_v1`か、検証済み`pull_v2`かを必ず確認します。release、checksum、attestation、canary、rollback drillの証拠がない状態でfleetを切り替えないでください。

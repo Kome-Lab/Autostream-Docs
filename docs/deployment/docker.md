@@ -259,6 +259,41 @@ volumes:
   archives:
 ```
 
+### Node portを変更する
+
+上のCompose例はcontainer内listen portを`8080`にそろえていますが、通常Node serviceのportは`1024..65535`の任意番号へ変更できます。変更する場合は、同じserviceの次の値を一組として変更します。
+
+1. serviceのbind設定。例: `AUTOSTREAM_BIND_ADDR=0.0.0.0:18080`
+2. Composeのcontainer port。例: `"127.0.0.1:18081:18080"`の右側`18080`
+3. Control PanelのNode登録で指定するPort。Compose network内から接続する場合はcontainer portの`18080`
+4. reverse proxyを使う場合はupstreamのorigin port
+
+同じ「port」でも役割が異なります。
+
+| 値 | 例 | 意味 |
+| --- | --- | --- |
+| container listen port | `18080` | service processがcontainer内で待ち受けるport |
+| host published port | `18081` | hostのloopbackなどへ公開するport |
+| Node登録のPort | `18080` | Control Panel containerからserviceへ到達するport |
+| reverse proxy public port | `443` | browser向けHTTPS入口。Node service本来のportではない |
+| reverse proxy origin port | `18081` | proxyからhost上のserviceへ転送するport |
+
+Control Panelはendpointを`desired`、`applied`、`reported`に分けて扱います。Node編集でPortを保存した値が`desired`、hostへ最後に適用した値が`applied`、serviceのheartbeatやprobeで観測した値が`reported`です。
+
+固定Docker target policyと承認済みfrozen Compose baselineがあるWorker、Encoder Recorder、Discord Bot、Observabilityでは、専用`port_reconfigure` job/grant/Local Executor operationを使えます。jobは次の3値を別々に扱います。
+
+| job入力 | 範囲 | 境界 |
+| --- | --- | --- |
+| advertised port | `1..65535` | Control Panelから到達するNode endpoint |
+| host published port | `1024..65535` | hostは`127.0.0.1`固定。外部interfaceへ公開しない |
+| container listen port | `1024..65535` | service processがcontainer内で待ち受けるport |
+
+Local Executorは`/opt/autostream/local-executor/docker/ports/<service>.env`の固定env、固定Compose project/service、承認済みCompose revision/digestだけを使って対象containerをrecreateします。container ID、image ID、repository digest、env digest、healthを再検証し、失敗または応答不明時はdurable ledgerからrollback/reconcileします。UIのdesired/applied/reported endpointはadvertised側を示し、published/containerはverified current mapping、pending plan、完了履歴のold/new tripleで確認します。unavailable、busy、stale、drift、recovery中はblockします。
+
+Auto Configureが自動生成するのはsystemdのroot policy/sidecarだけです。Docker authorityはNode登録値から推測せず、既存のroot-owned fixed Docker target policyとapproved frozen Compose baselineがなければfail closedです。Control Panel自身とUpdate AgentはDocker port jobの対象外です。reverse proxy設定は自動変更しないため、originをpublished portへ追従させる場合はNginx/Caddy等を別手順で変更して確認してください。
+
+ローカルではDocker 29.6.2 / Compose 5.3.1のisolated root DIND上で`TestDockerPortDaemonSmoke`を実行し、初回・連続変更、実process crash後のfresh-process reconcile、grant二重消費なし、unhealthy mappingの旧値rollback、foreign containerによるpublished port占有のgrant前拒否を確認しました。これはローカル実daemonのPASSであり、全5image build、公開image、実Docker host canary、release/deployの証拠ではありません。
+
 Encoderプレビューは既存のEncoder Recorder API portと`archives` volumeを使います。プレビュー専用の追加port、追加env、追加volumeは不要です。Encoder imageのDebian `ffmpeg` packageがHLSを生成し、`archives` volume内の`tmp/<stream_id>/preview/`へrolling segmentを置きます。final artifactの保持設定だけでは終了済み`tmp` directoryの削除を保証しないため、volume容量監視には`tmp`も含めます。
 
 本番の配信出力は、YouTubeのstream keyをFFmpeg引数へ出さないため`output-relay`を経由します。Encoder Recorderとrelayは通常のCompose networkへ接続し、Encoder Recorderからservice DNS名`output-relay:1935`へ送ります。network namespaceは共有しません。全サービスを起動する前にEncoder Recorder repositoryの`relay/nginx-rtmp.conf.example`を`/opt/autostream/relay/nginx-rtmp.conf`へコピーし、upstreamを設定してください。この実値入りファイルはGit管理しません。
@@ -277,7 +312,9 @@ image: ${AUTOSTREAM_IMAGE_REGISTRY:-ghcr.io/kome-lab/autostream-docker}/control-
 
 service名は`control-panel`、`discord-bot`、`encoder-recorder`、`observability`、`worker`です。本番の`.env`では`latest`ではなく、`release-manifest.json`が付いた公開済みbundle tagを固定します。Docker bundle versionと各serviceのsource versionは別管理であり、表示差は異常ではありません。
 
-Control Panelから更新する場合、各hostの非常駐`autostream-update-host` helperだけがrootとしてDocker CLIを使います。中央Updater、Control Panel、各service containerへ`/var/run/docker.sock`をmountしないでください。helperはroot所有`/etc/autostream/update-host.json`の固定policyに従い、共有`.env`を更新せず、service targetごとのroot-owned `version_env_file`を`--env-file`で指定して`<bundle tag>@sha256:<verified multiarch digest>`を永続化します。Updater管理serviceへ手動でComposeを実行する場合も同じtarget専用fileが必要です。設定とDocker target例は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
+Bridge移行後の`pull_v2`では、Docker serviceごとではなく物理Docker hostごとに非rootの`autostream-host-agent`を1つだけ置きます。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCPや`8090`を開きません。Control Panel、Host Agent、各service containerへ`/var/run/docker.sock`をmountしないでください。
+
+privileged Docker software updateとport mapping変更は、Host AgentとはUnix socketで分離したroot Local Executorが固定Compose project、service、repository、version/port overlay、credential pathだけを使って実行します。Host Agent requestからDocker path、image、commandを指定できません。Docker port jobも上記のexact policy/baselineがあるhostだけで有効です。ローカルDINDが成功していても、公開release、全imageの公開証拠、実Docker canaryが揃うまでは、既存hostでlegacy `ssh_v1`を維持します。Host Agentの導入だけでlegacy helperやSSH資産を削除しないでください。移行状態とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
 
 ## 6. Control Panel だけ先に起動する
 
@@ -378,7 +415,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/control.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/control.example.com/privkey.pem;
 
-    # The update helper calls this endpoint directly on loopback.
+    # Keep the version probe on the local origin; do not publish it here.
     location = /updater/version {
         return 404;
     }
@@ -402,6 +439,8 @@ server {
 ```
 
 `AUTOSTREAM_PUBLIC_URL` はブラウザで開く URL と一致させます。
+
+reverse proxyが受ける公開`443`と、Control Panel containerのlisten port、host published portは別endpointです。この例ではbrowserは`https://control.example.com:443`、nginxのoriginは`127.0.0.1:8080`、container内のControl Panelも`8080`です。どれかを変更する場合は役割を取り違えず、Nodeの`desired`、実際の`applied`、serviceが`reported`した値を確認してください。
 
 `/stream-previews/` のpathには署名tokenが含まれます。nginxだけでなく、前段のCDN、WAF、load balancer、APMでもfull pathを記録しないかredactしてください。previewのplaylistとsegmentはControl Panelを通るため、同時preview数に応じたControl Panelの帯域も監視します。Encoder Recorderのportをinternetへ追加公開する必要はありません。
 

@@ -14,7 +14,7 @@ AutoStream は、Discord の音声を使った配信を、準備から録画、�
   <a class="doc-card" href="/runbooks/first-install"><strong>3. インストール</strong><span>サーバー準備、起動順、最初の確認まで進めます。</span></a>
   <a class="doc-card" href="/control-panel/"><strong>4. Control Panelを使う</strong><span>画面ごとの用途、入力項目、操作ボタン、確認ポイントを確認します。</span></a>
   <a class="doc-card" href="/configuration/provider-integrations"><strong>5. 外部連携</strong><span>Discord、YouTube、Google Drive、通知先の設定場所を確認します。</span></a>
-  <a class="doc-card" href="/services/host-operations"><strong>6. サービスを導入する</strong><span>Control Panel、Bot、Worker、Encoder、Observability、中央UpdaterをLinuxサーバーで動かします。</span></a>
+  <a class="doc-card" href="/services/host-operations"><strong>6. サービスを導入する</strong><span>Control Panel、Bot、Worker、Encoder、Observabilityと、物理ホスト単位のHost AgentをLinuxサーバーで動かします。</span></a>
   <a class="doc-card" href="/operations/incidents-notifications"><strong>7. 監視と通知</strong><span>異常検知、通知、インシデント対応の流れを確認します。</span></a>
   <a class="doc-card" href="/troubleshooting/"><strong>8. 困ったとき</strong><span>起動、接続、文字化けなどの確認手順に戻ります。</span></a>
 </div>

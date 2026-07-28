@@ -12,7 +12,7 @@ Control Panel は、AutoStream の運用で一番よく触る画面です。配�
 
 | 順番 | 画面 | ここでやること |
 | --- | --- | --- |
-| 1 | Node登録 | 通常service用`config.yml`、または中央Update AgentのAuto Configure commandを取得する |
+| 1 | Node登録 | 通常service用`config.yml`、または物理ホスト単位の`pull_v2` Host AgentのAuto Configure commandを取得する |
 | 2 | Service Health | 起動した Discord Bot、Worker、Encoder Recorder が online か確認する |
 | 3 | Integrations | OAuth provider、接続アカウント、Google Drive 保存先を登録する |
 | 4 | Discord Settings | Discord Bot token を保存し、登録済み Discord Bot Node を選ぶ |
@@ -44,7 +44,7 @@ Control Panel は、AutoStream の運用で一番よく触る画面です。配�
 | Roles | ロール名と権限を管理する | [ユーザーとセキュリティ](/control-panel/users-roles-security) |
 | Security Settings | password policy、MFA、Passkey、secret 更新を管理する | [ユーザーとセキュリティ](/control-panel/users-roles-security) |
 | 右上ユーザーメニュー | ログイン中ユーザーの情報表示、ログアウト、アカウント設定へ移動する | [ユーザーとセキュリティ](/control-panel/users-roles-security) |
-| Node登録 | 通常service用`config.yml`とtoken、中央Update AgentのAuto Configure commandを作成する | [Node Agent登録](/control-panel/node-agent-registration) |
+| Node登録 | 通常service用`config.yml`とtoken、endpointlessな`pull_v2` Host Agentの4項目identityを作成する | [Node Agent登録](/control-panel/node-agent-registration) |
 | API Tokens | 旧構成や移行時の service token を確認、rotate、revoke する | [監査ログとAPIトークン](/control-panel/audit-tokens) |
 | Audit Logs | 操作履歴を検索、CSV export する | [監査ログとAPIトークン](/control-panel/audit-tokens) |
 | Monitoring | Node状態、incident、診断、確認対象を追う | [監視と通知](/control-panel/observability) |

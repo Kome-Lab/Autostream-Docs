@@ -10,7 +10,7 @@ AutoStream をインターネットから使えるようにする場合の基本
 - 管理画面へアクセスできる人を制限する
 - サーバーの firewall を有効にする
 - OS と Docker image を定期的に更新する
-- Control Panelや配信serviceへDocker socketをmountせず、job制御は中央`autostream-updater`、privileged操作は各hostの非常駐`autostream-update-host` helperへ分離する
+- Control Panel、Host Agent、配信serviceへDocker socketをmountせず、物理ホストごとの非root `autostream-host-agent`とroot Local Executorを固定Unix socket境界で分離する
 
 ## 運用中に続けること
 
@@ -20,12 +20,13 @@ AutoStream をインターネットから使えるようにする場合の基本
 - ログやスクリーンショットに secret が出ていないか確認する
 - `/stream-previews/` の署名token付きpathをreverse proxy、CDN、WAF、APMのaccess logへ残さない
 - バックアップの保存先にもアクセス制限をかける
-- 中央`/etc/autostream/updater.json`は接続identityだけを保存してroot所有、group `autostream-updater`、mode `0640`にし、Updaterが生成するhost別SSH秘密鍵は中央state内で`0600`にする
-- 完全なSSHホスト公開鍵は独立した経路でfingerprintを確認してからシステム更新画面へ保存し、Managed更新に必須のGitHub Release Tokenは画面では書き込み専用、保存後非表示、job時だけ配布されるsecretとして扱う
-- 各hostの`/etc/autostream/update-host.json`はroot所有`0600`とし、unit、path、command、image repositoryを中央設定やControl Panelから変更できない状態を保つ
-- helperのSSH userはpassword lock、1host 1 Ed25519 key、source CIDR、forced command、exact sudoersで制限し、daemon、待受port、Runtime Tokenを追加しない
+- `/etc/autostream-host-agent/identity.json`は`panel_url`、`node_id`、`runtime_token`、`service_name`だけを保存し、`root:autostream-host-agent 0640`にする
+- legacy `/etc/autostream/host-agent.json`はcanonical identityがない場合のread-only fallbackだけに使い、両方が存在する場合はfail closedにする。書き込みやrotationの前にmanaged migrationする
+- `execution_host_id`と`ownership_epoch`はserver-ownedとし、Host Agent config、CLI、heartbeatから変更させない
+- Host AgentはControl Panelへoutbound HTTPSだけを使い、受信TCP、`8090`、SSH設定を追加しない
+- Local Executor policyとsystemd/Docker port sidecarをroot所有にし、`/etc/autostream`をexecutorから不可視にする。Docker published hostは`127.0.0.1`固定とし、固定policyと承認済みCompose baselineがなければfail closedにする。公開releaseと実host canaryが未確認ならsource実装だけでownershipを切り替えない
 
-中央Updaterは外向きにControl Panelへjobを取りに行き、host-key-pinned SSHで管理対象へ接続します。中央Updaterのstatus APIも管理network以外へ公開しないでください。管理対象hostのhelperには公開するportがありません。更新の権限境界とtoken scopeは[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
+Bridge期間のlegacy `ssh_v1`では、中央`updater.json`、host別SSH鍵、root `update-host.json`、forced command、exact sudoersを既存の境界で維持します。これらを新しい`pull_v2` configへコピーせず、全hostの移行、release/canary、rollback gateが完了するまで削除しません。更新の権限境界は[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
 
 ## 公開しない情報
 

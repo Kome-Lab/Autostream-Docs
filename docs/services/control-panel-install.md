@@ -22,7 +22,7 @@ secret と token の生成方法は [秘密情報とtoken生成](/security/token
 
 Control Panel自身を自動更新targetにする場合は、新しいhost releaseからarchive、archive sidecar、`release-manifest.json`、manifest sidecarを取得し、archive同梱の`README.install.md`に従って導入します。READMEはchecksumとmanifest identityを検証し、root所有の`/opt/autostream/control-panel/releases/<version>-<digest12>`を作り、`/opt/autostream/control-panel/current`を原子的に切り替えます。systemd unitは`current/bin/control-panel`、web assetは`current/share/autostream-control-panel`を参照します。詳しい検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
 
-中央Updaterを追加するだけなら、既存の`/usr/local/bin/control-panel`と`/usr/share/autostream-control-panel`を移行する必要はありません。既存のmanifestなしControl Panelを自動更新targetにする場合だけ、既存releaseへmanifestを後付けせず、manifest付きの新しいreleaseを初期managed releaseとして一度導入します。
+Bridge期間のlegacy `ssh_v1`中央Updaterを追加するだけなら、既存の`/usr/local/bin/control-panel`と`/usr/share/autostream-control-panel`を移行する必要はありません。既存のmanifestなしControl Panelを更新targetにする場合は、既存releaseへmanifestを後付けせず、manifest付きの新しいreleaseを初期managed releaseとして一度導入します。
 
 `/etc/autostream/control-panel.env` を編集します。
 
@@ -58,11 +58,11 @@ AUTOSTREAM_UPDATE_CHECK_TOKEN=
 TZ=Asia/Tokyo
 ```
 
-既存の直接配置を維持して中央Updaterだけを追加する場合は、`AUTOSTREAM_WEB_DIR=/usr/share/autostream-control-panel`のままにします。
+既存の直接配置を維持してlegacy `ssh_v1`中央Updaterだけを追加する場合は、`AUTOSTREAM_WEB_DIR=/usr/share/autostream-control-panel`のままにします。
 
 Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。systemd配備はControl Panel、Worker、Encoder/Recorder、Discord Bot、ObservabilityそれぞれのGitHub Releases API、Docker配備は`Autostream-Docker`のbundle releaseを確認します。private repo のため、本番ではreleaseを読めるGitHub tokenを `AUTOSTREAM_UPDATE_CHECK_TOKEN` に設定してください。これはversion表示用の確認tokenであり、システム更新画面へ保存する必須のGitHub Release Tokenとは別です。固定値や別endpointを使う場合は、上記のサービス別環境変数を設定します。URLはHTTPSを使います。固定latest-version値やcustom endpointは検出・表示専用です。GitHub Releaseの`release-manifest.json` assetを検証できないため、Application Infoからの自動更新は`manifest_unverified`として無効になります。
 
-Application Infoから実際に更新するには、中央管理ホストで常駐する`autostream-updater`が1つ必要です。各管理対象hostにはdaemonではなく、一度だけbootstrapする非常駐`autostream-update-host` helperを置きます。Control Panel自身の更新を含む構成は[Control Panelからサービスを更新する](/operations/system-updates)を参照してください。
+新規hostでは、物理ホストごとにendpointlessな`pull_v2` Update Agentを登録し、非rootの`autostream-host-agent`とroot Local Executorを1つずつ置きます。登録直後はepoch `0`のobserverで、Control Panel上の明示的なownership切替後だけ更新jobをclaimします。公開releaseと実host canaryが未確認の間、更新適用が必要な既存hostはBridge期間中のlegacy `ssh_v1`を維持します。Control Panel自身はfleetの最後に移行します。詳細は[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
 
 起動します。
 
@@ -104,9 +104,9 @@ Control Panel の [Node Agent登録](/control-panel/node-agent-registration) で
 | Worker | `worker` | `config.yml`、Configure Token、Node Runtime Token |
 | Encoder Recorder | `encoder_recorder` | `config.yml`、Configure Token、Node Runtime Token |
 | Observability | `observability` | `config.yml`、Configure Token、Node Runtime Token |
-| 中央Update Agent | `update_agent` | Auto Configureを1回実行して中央のroot所有`updater.json`へ接続identityを自動生成。管理設定はシステム更新画面で保存し、管理対象hostにはtokenを配布しない |
+| `pull_v2` Host Agent | `update_agent` | 物理ホストごとにAuto Configureを1回実行し、root所有`/etc/autostream-host-agent/identity.json`へ4項目identityだけを生成。受信TCP、`8090`、SSH設定なし |
 
-Configure TokenとNode Runtime Tokenは作成時だけ表示されます。紛失した場合はConfigurationから再生成し、通常serviceは`config.yml`を更新してください。中央Update Agentはidentity rotationが必要な場合だけ新しいConfigure TokenでAuto Configure commandを実行し、activation成功後に再起動します。host、target、Managed更新に必須のGitHub Release Token、SSHホスト公開鍵はシステム更新画面で保存します。GitHub Release Tokenは画面では書き込み専用で、保存後は再表示せず、更新job時だけ配布します。Updaterが設定を自動反映するため、通常の管理設定変更では再起動は不要です。
+Configure TokenとNode Runtime Tokenは作成時だけ表示されます。通常serviceはConfigurationから再生成して`config.yml`を更新します。未起動のHost AgentはConfigure Tokenを再発行して4項目identityを作り直せますが、activeな`pull_v2` Host AgentのRuntime Tokenをgeneric再生成してはいけません。専用のstage→claim→local ack→heartbeat proof→activateを使い、漏えい時のbreak-glassは`emergency-revoke`後に固定canonical identityとroot recovery commandで復旧します。`execution_host_id`と`ownership_epoch`はserver-ownedでconfigへ入れません。
 
 ## 他サービスを許可する
 
