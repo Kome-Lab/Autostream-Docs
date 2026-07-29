@@ -16,11 +16,26 @@ Worker の Observability signal は、Node Runtime Token で Control Panel に�
 
 ## host直接起動
 
-WorkerのGitHub Release assetは公開済みです。`v1.0.16`のLinux amd64/arm64 archiveは手動導入に利用できますが、immutableな`release-manifest.json`がないためUpdater管理には使いません。Control Panelから更新する新規構成では、manifest付きで新しく公開されたreleaseを選び、archive同梱の`README.install.md`に従って導入します。
+manifest付きhost releaseのarchive、sidecar、manifestを取得します。4 filesを
+root-owned directoryへ固定し、archive本体とmanifestの両方をGitHub Attestationで
+検証してからroot所有で展開します。archive直下で次を実行します。
 
-READMEはarchive、manifest、archive内fileを検証し、`/opt/autostream/worker/releases/<version>-<digest12>`を作って`/opt/autostream/worker/current`を切り替え、systemd unitとenvを配置します。`/usr/local/bin/autostream-worker`は`current/bin/autostream-worker`への互換symlinkです。詳しい検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
+```bash
+sudo ./install-autostream-worker
+```
 
-source checkoutからbuildしたlocal binaryは開発確認用です。既存releaseへmanifestやmarkerを後付けせず、自動更新に使うbinaryは新しいimmutable releaseとして公開してください。
+installerはreleaseを検証し、`autostream` account、rollback用の内部release、
+systemd unit、env placeholder、data directory、
+`/usr/local/bin/autostream-worker`を配置します。既存の直接配置binaryはmanaged配置へ
+移行し、既存envは保持します。旧fileは
+`/var/backups/autostream/install-migrations/worker`へroot専用で退避します。内部の
+`/opt/autostream/worker/current`やmarkerは
+手動編集しません。installerはserviceを開始せず、Docker Compose、container、
+imageは変更しません。詳しい取得と検証手順は
+[Linuxホストで直接動かす](/deployment/host)を参照してください。
+
+source checkoutからbuildしたlocal binaryは開発確認用です。既存releaseへmanifestや
+markerを後付けせず、自動更新に使うbinaryは新しいimmutable releaseとして公開してください。
 
 `/etc/autostream/worker.env` を編集します。
 
@@ -35,7 +50,8 @@ TZ=Asia/Tokyo
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now autostream-worker
+sudo systemctl enable autostream-worker
+sudo systemctl start autostream-worker
 sudo systemctl status autostream-worker
 ```
 

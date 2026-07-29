@@ -2,6 +2,9 @@
 
 この手順は、AutoStream を初めて Linux サーバーに入れて、Control Panel にログインし、各サービスが online になるところまでを対象にします。Docker でまとめて動かす場合は [Dockerでインストールする](../deployment/docker.md) を使ってください。
 
+このページのservice installerはhostへ直接置くsystemd serviceだけを対象にし、
+Docker Compose、container、image、Docker repositoryは変更しません。
+
 実 token、stream key、OAuth refresh token、webhook URL、SMTP password はこのページや Git 管理ファイルに書きません。ここでは placeholder を使い、実値は `/etc/autostream/*.env`、Control Panel の secret 設定、または secret manager に入れます。
 
 ## 1. 構成を決める
@@ -41,11 +44,11 @@ Ubuntu / Debian 系の例です。
 ```bash
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl tar git jq openssl mariadb-client ffmpeg
-sudo useradd --system --home /var/lib/autostream --shell /usr/sbin/nologin autostream || true
-sudo install -d -o root -g root -m 0755 /etc/autostream
-sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream
-sudo install -d -o autostream -g autostream -m 0750 /var/lib/autostream/archives
 ```
+
+service installerが`autostream` OS account、`/etc/autostream`、serviceごとの
+data directoryを必要に応じて作成します。`ffmpeg`、MariaDB、GitHub CLI、
+reverse proxyなどの外部packageや設定はinstallerの対象外です。
 
 GitHub Release から private repo の artifact を取得するため、GitHub CLI を使います。すでに `gh` が入っていてログイン済みなら、この block は `gh auth status` だけ確認してください。
 
@@ -109,46 +112,70 @@ Observability 用の別admin tokenや直接ingest tokenは作りません。Cont
 
 新方式では、各サービスの登録、heartbeat、Panel から Node への操作に使う token は Node登録後の `config.yml` で配布します。Worker / Encoder Recorder の stream ingest signing key も同じファイルへ入ります。`SERVICE_CALL_TOKEN` とNode側の署名鍵envは古い構成からの移行用 fallback としてだけ使います。
 
-## 5. 検証済みmanaged releaseを配置する
+## 5. 検証済みhost releaseをinstallerで配置する
 
 Control Panelからの更新を使う新規構成では、各serviceのmanifest付きhost releaseを初期releaseにします。service repositoryごとにsource versionは独立しているため、全serviceへ同じtagを指定しません。
 
-| service | release repo | managed path |
-| --- | --- | --- |
-| Control Panel | `Kome-Lab/Autostream-ControlPanel` | `/opt/autostream/control-panel/current` |
-| Discord Bot | `Kome-Lab/Autostream-DiscordBot` | `/opt/autostream/discord-bot/current` |
-| Encoder/Recorder | `Kome-Lab/Autostream-Encoder-Recorder` | `/opt/autostream/encoder-recorder/current` |
-| Observability | `Kome-Lab/Autostream-Observability` | `/opt/autostream/observability/current` |
-| Worker | `Kome-Lab/Autostream-Worker` | `/opt/autostream/worker/current` |
+| service | release repo | archive直下で実行 | 安定した実行path |
+| --- | --- | --- | --- |
+| Control Panel | `Kome-Lab/Autostream-ControlPanel` | `sudo ./install-autostream-control-panel` | `/usr/local/bin/control-panel` |
+| Discord Bot | `Kome-Lab/Autostream-DiscordBot` | `sudo ./install-autostream-discord-bot` | `/usr/local/bin/autostream-discord-bot` |
+| Encoder/Recorder | `Kome-Lab/Autostream-Encoder-Recorder` | `sudo ./install-autostream-encoder-recorder` | `/usr/local/bin/autostream-encoder-recorder` |
+| Observability | `Kome-Lab/Autostream-Observability` | `sudo ./install-autostream-observability` | `/usr/local/bin/autostream-observability` |
+| Worker | `Kome-Lab/Autostream-Worker` | `sudo ./install-autostream-worker` | `/usr/local/bin/autostream-worker` |
 
-対象repositoryごとに、公開済みのmanifest付きversionとarchitectureを指定してassetを取得します。次はControl Panelの形です。ほかのserviceでは`REPO`と`ASSET`を読み替えます。
+対象repositoryごとに、公開済みのmanifest付きversionとarchitectureを指定して
+assetを取得します。次はControl Panel amd64版の形です。`vX.Y.Z`だけを実際の
+release versionへ置き換えます。
 
 ```bash
-VERSION=vX.Y.Z
-ARCH=amd64 # arm64 hostではarm64
-REPO=Kome-Lab/Autostream-ControlPanel
-ASSET="autostream-control-panel_${VERSION}_linux_${ARCH}.tar.gz"
-
-sudo install -d -o root -g root -m 0755 /opt/autostream/releases
-sudo install -d -o "$USER" -g "$USER" -m 0755 /opt/autostream/releases/artifacts
-cd /opt/autostream/releases
-gh release download "$VERSION" --repo "$REPO" \
-  --pattern "$ASSET" --pattern "$ASSET.sha256" \
-  --pattern release-manifest.json --pattern release-manifest.json.sha256 \
-  --dir artifacts --clobber
-(cd artifacts && sha256sum --check --strict "$ASSET.sha256")
-(cd artifacts && sha256sum --check --strict release-manifest.json.sha256)
-tar -xzf "artifacts/$ASSET" -C /opt/autostream/releases
-cd "/opt/autostream/releases/${ASSET%.tar.gz}"
+cd /tmp
+gh release download vX.Y.Z --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz \
+  --pattern autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz.sha256 \
+  --pattern release-manifest.json \
+  --pattern release-manifest.json.sha256 \
+  --clobber
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz.sha256 /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/release-manifest.json /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/release-manifest.json.sha256 /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+gh attestation verify autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-ControlPanel \
+  --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
+gh attestation verify release-manifest.json \
+  --repo Kome-Lab/Autostream-ControlPanel \
+  --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz
+cd autostream-control-panel_vX.Y.Z_linux_amd64
+sudo ./install-autostream-control-panel
 ```
 
-展開した各archiveの`README.install.md`にある **Install a verified managed release** の配置blockを実行します。READMEはmanifest内のservice、source version、asset名、digest、archive内`checksums.txt`を照合し、root所有の`releases/<version>-<digest12>`、`.artifact-sha256`、`.version`、`current` symlink、systemd unit、envを作ります。env編集、service起動、`MainPID`確認は以降の対応service手順で行います。markerはlocal binaryから手作業で捏造しないでください。
+ほかのserviceでは最後のcommandをarchive直下にある
+`install-autostream-<service>`へ読み替えます。installerはmanifest identity、
+archive内`checksums.txt`、binary versionを確認してから、`autostream` account、
+検証済みrelease、systemd unit、env placeholder、data directory、安定した
+`/usr/local/bin` pathを配置します。Control Panelでは
+`/usr/share/autostream-control-panel`も配置します。
 
-既存のControl Panel/Node `v1.0.0`とWorker `v1.0.16`はmanual-onlyです。既存tagへmanifestを後付けせず、自動更新には新しいmanifest付きreleaseを使います。source checkoutからbuildしたbinaryも開発確認用であり、Updaterへ渡す前に新しいimmutable releaseとして公開します。
+内部の`/opt/autostream/<service>/releases/`、`current` symlink、digest、
+markerはinstallerとupdaterが管理します。手動で作成、編集しないでください。
+既存の直接配置binaryやControl Panel web assetsは初回実行時にmanaged配置へ
+移行し、既存envは上書きせず保持します。旧fileはserviceの書込範囲外にある
+`/var/backups/autostream/install-migrations/<service>`へroot専用で退避します。
+source checkoutからbuildしたbinaryや
+manifestなしreleaseは自動更新へ使わず、新しいimmutable releaseを公開します。
 
 ## 6. Control Panel を入れる
 
-前節のControl Panel `README.install.md`を実行すると、binary、web asset、systemd unit、envのplaceholderまで配置されます。`ExecStart`が`/opt/autostream/control-panel/current/bin/control-panel`を参照していることを確認してください。
+前節の`install-autostream-control-panel`を実行すると、binary、web asset、
+systemd unit、envのplaceholderまで配置されます。systemdは安定した
+`/usr/local/bin/control-panel`を実行します。installerはserviceを開始しないため、
+envを編集してから明示的に起動します。
 
 `/etc/autostream/control-panel.env` を編集します。
 
@@ -161,7 +188,7 @@ sudoedit /etc/autostream/control-panel.env
 ```text
 AUTOSTREAM_BIND_ADDR=127.0.0.1:8080
 AUTOSTREAM_PUBLIC_URL=https://control.example.com
-AUTOSTREAM_WEB_DIR=/opt/autostream/control-panel/current/share/autostream-control-panel
+AUTOSTREAM_WEB_DIR=/usr/share/autostream-control-panel
 AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
 AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
@@ -178,7 +205,8 @@ TZ=Asia/Tokyo
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now autostream-control-panel
+sudo systemctl enable autostream-control-panel
+sudo systemctl start autostream-control-panel
 sudo systemctl status autostream-control-panel
 journalctl -u autostream-control-panel -n 100 --no-pager
 ```
@@ -248,16 +276,19 @@ Configure Token と Node Runtime Token は作成直後だけ表示されます�
 
 ## 9. 各 service を入れる
 
-手順5で各archiveの`README.install.md`の配置blockを実行すると、次の`current` link、systemd unit、env placeholderが配置されます。
+手順5で各archiveのservice installerを実行すると、次の安定したbinary path、
+systemd unit、env placeholderが配置されます。
 
 | service | systemdが実行するbinary |
 | --- | --- |
-| Discord Bot | `/opt/autostream/discord-bot/current/bin/autostream-discord-bot` |
-| Worker | `/opt/autostream/worker/current/bin/autostream-worker` |
-| Encoder/Recorder | `/opt/autostream/encoder-recorder/current/bin/autostream-encoder-recorder` |
-| Observability | `/opt/autostream/observability/current/bin/autostream-observability` |
+| Discord Bot | `/usr/local/bin/autostream-discord-bot` |
+| Worker | `/usr/local/bin/autostream-worker` |
+| Encoder/Recorder | `/usr/local/bin/autostream-encoder-recorder` |
+| Observability | `/usr/local/bin/autostream-observability` |
 
-`/usr/local/bin/autostream-<service>`はAuto Configureなどの互換コマンド用symlinkです。systemd unitはこのsymlinkではなく`current`配下を実行します。envを編集してserviceを起動した後、各`README.install.md`の最後にある`MainPID`確認まで実行します。
+`/usr/local/bin/autostream-<service>`はoperator、systemd、Auto Configureが使う
+安定したpathです。その先のmanaged releaseはinstallerが管理します。envを編集後、
+serviceを明示的に起動し、各`README.install.md`の`MainPID`確認まで実行します。
 
 各 env を編集します。
 
@@ -299,10 +330,14 @@ Discord token、YouTube stream key、Google Drive folder、OAuth refresh token�
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now autostream-observability
-sudo systemctl enable --now autostream-encoder-recorder
-sudo systemctl enable --now autostream-worker
-sudo systemctl enable --now autostream-discord-bot
+sudo systemctl enable autostream-observability
+sudo systemctl enable autostream-encoder-recorder
+sudo systemctl enable autostream-worker
+sudo systemctl enable autostream-discord-bot
+sudo systemctl start autostream-observability
+sudo systemctl start autostream-encoder-recorder
+sudo systemctl start autostream-worker
+sudo systemctl start autostream-discord-bot
 
 systemctl status autostream-observability
 systemctl status autostream-encoder-recorder

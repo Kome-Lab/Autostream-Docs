@@ -19,9 +19,23 @@ Discord Bot service 用に AutoStream 側で手生成する token はありま�
 
 ## host直接起動
 
-自動更新対応の新しいhost releaseからarchive、sidecar、manifestを取得し、archive同梱の`README.install.md`に従って導入します。READMEは検証済みreleaseを`/opt/autostream/discord-bot/releases/<version>-<digest12>`へ配置し、`/opt/autostream/discord-bot/current`を切り替え、systemd unitとenvを配置します。`/usr/local/bin/autostream-discord-bot`は`current/bin/autostream-discord-bot`への互換symlinkです。詳しい検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
+manifest付きhost releaseのarchive、sidecar、manifestを取得します。4 filesを
+root-owned directoryへ固定し、archive本体とmanifestの両方をGitHub Attestationで
+検証してからroot所有で展開します。archive直下で次を実行します。
 
-manifestなしの旧releaseをbinary直置きで導入する構成はmanual-onlyです。Control Panelから更新する場合は、manifest付きreleaseを初期managed releaseにします。
+```bash
+sudo ./install-autostream-discord-bot
+```
+
+installerはreleaseを検証し、`autostream` account、rollback用の内部release、
+systemd unit、env placeholder、data directory、
+`/usr/local/bin/autostream-discord-bot`を配置します。既存の直接配置binaryは
+managed配置へ移行し、既存envは保持します。旧fileは
+`/var/backups/autostream/install-migrations/discord-bot`へroot専用で退避します。内部の
+`/opt/autostream/discord-bot/current`
+やmarkerは手動編集しません。installerはserviceを開始せず、Docker Compose、
+container、imageは変更しません。詳しい取得と検証手順は
+[Linuxホストで直接動かす](/deployment/host)を参照してください。
 
 `/etc/autostream/discord-bot.env` を編集します。
 
@@ -41,7 +55,8 @@ TZ=Asia/Tokyo
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now autostream-discord-bot
+sudo systemctl enable autostream-discord-bot
+sudo systemctl start autostream-discord-bot
 sudo systemctl status autostream-discord-bot
 ```
 

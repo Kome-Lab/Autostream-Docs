@@ -23,9 +23,24 @@ sudo apt-get update
 sudo apt-get install -y ffmpeg
 ```
 
-自動更新対応の新しいhost releaseからarchive、sidecar、manifestを取得し、archive同梱の`README.install.md`に従って導入します。READMEは検証済みreleaseを`/opt/autostream/encoder-recorder/releases/<version>-<digest12>`へ配置し、`/opt/autostream/encoder-recorder/current`を切り替え、systemd unitとenvを配置します。`/usr/local/bin/autostream-encoder-recorder`は`current/bin/autostream-encoder-recorder`への互換symlinkです。詳しい検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
+`ffmpeg`は外部packageのためservice installerでは導入しません。続いてmanifest付き
+host releaseのarchive、sidecar、manifestを取得します。4 filesをroot-owned
+directoryへ固定し、archive本体とmanifestの両方をGitHub Attestationで検証して
+からroot所有で展開します。archive直下で次を実行します。
 
-manifestなしの旧releaseをbinary直置きで導入する構成はmanual-onlyです。Control Panelから更新する場合は、manifest付きreleaseを初期managed releaseにします。
+```bash
+sudo ./install-autostream-encoder-recorder
+```
+
+installerはreleaseを検証し、`autostream` account、rollback用の内部release、
+systemd unit、env placeholder、録画/data directory、
+`/usr/local/bin/autostream-encoder-recorder`を配置します。既存の直接配置binaryは
+managed配置へ移行し、既存envは保持します。旧fileは
+`/var/backups/autostream/install-migrations/encoder-recorder`へroot専用で退避します。内部の
+`/opt/autostream/encoder-recorder/current`やmarkerは手動編集しません。
+installerはserviceを開始せず、output relay、reverse proxy、Docker Compose、
+container、imageは変更しません。詳しい取得と検証手順は
+[Linuxホストで直接動かす](/deployment/host)を参照してください。
 
 `/etc/autostream/encoder-recorder.env` を編集します。
 
@@ -44,7 +59,8 @@ AUTOSTREAM_OUTPUT_RELAY_URL=rtmp://127.0.0.1/autostream/{stream_id}
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now autostream-encoder-recorder
+sudo systemctl enable autostream-encoder-recorder
+sudo systemctl start autostream-encoder-recorder
 sudo systemctl status autostream-encoder-recorder
 ```
 

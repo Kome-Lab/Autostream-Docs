@@ -20,16 +20,39 @@ secret と token の生成方法は [秘密情報とtoken生成](/security/token
 
 ## host直接起動
 
-Control Panel自身を自動更新targetにする場合は、新しいhost releaseからarchive、archive sidecar、`release-manifest.json`、manifest sidecarを取得し、archive同梱の`README.install.md`に従って導入します。READMEはchecksumとmanifest identityを検証し、root所有の`/opt/autostream/control-panel/releases/<version>-<digest12>`を作り、`/opt/autostream/control-panel/current`を原子的に切り替えます。systemd unitは`current/bin/control-panel`、web assetは`current/share/autostream-control-panel`を参照します。詳しい検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
+新しいhost releaseからarchive、archive sidecar、`release-manifest.json`、
+manifest sidecarを取得します。4 filesをroot-owned directoryへ固定し、archive
+本体とmanifestの両方をGitHub Attestationで検証してからroot所有で展開します。
+archive直下で次を実行します。
 
-Bridge期間のlegacy `ssh_v1`中央Updaterを追加するだけなら、既存の`/usr/local/bin/control-panel`と`/usr/share/autostream-control-panel`を移行する必要はありません。既存のmanifestなしControl Panelを更新targetにする場合は、既存releaseへmanifestを後付けせず、manifest付きの新しいreleaseを初期managed releaseとして一度導入します。
+```bash
+sudo ./install-autostream-control-panel
+```
+
+installerはchecksum、manifest identity、binary versionを検証し、
+`autostream` account、rollback可能な内部release、systemd unit、env
+placeholder、backup executableとdirectory、MariaDB defaults placeholderを
+配置します。operatorとsystemdは`/usr/local/bin/control-panel`、web assetsは
+`/usr/share/autostream-control-panel`を使います。内部の
+`/opt/autostream/control-panel/current`、digest、markerはinstallerとupdaterが
+管理するため、手動で作成、編集しません。
+
+既存の直接配置binary/web assetsは初回実行時にmanaged配置へ移行し、既存envは
+上書きしません。旧fileは`/var/backups/autostream/install-migrations/control-panel`
+へroot専用で退避します。installerはserviceを開始せず、Docker Compose、container、
+image、Docker repository、MariaDB、reverse proxyを変更しません。詳しい取得と
+検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
+
+backup executableとroot-only defaults placeholderの配置は自動ですが、実際の
+MariaDB backup account、password、database grant、database nameはarchive同梱
+`README.install.md`に従ってoperatorが設定し、実dumpを確認してください。
 
 `/etc/autostream/control-panel.env` を編集します。
 
 ```text
 AUTOSTREAM_BIND_ADDR=127.0.0.1:8080
 AUTOSTREAM_PUBLIC_URL=https://<CONTROL_PANEL_HOST>
-AUTOSTREAM_WEB_DIR=/opt/autostream/control-panel/current/share/autostream-control-panel
+AUTOSTREAM_WEB_DIR=/usr/share/autostream-control-panel
 DATABASE_URL=mysql://<DB_USER>:<DB_PASSWORD>@tcp(<DB_HOST>:3306)/autostream_control_panel?parseTime=true
 AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
@@ -58,8 +81,6 @@ AUTOSTREAM_UPDATE_CHECK_TOKEN=
 TZ=Asia/Tokyo
 ```
 
-既存の直接配置を維持してlegacy `ssh_v1`中央Updaterだけを追加する場合は、`AUTOSTREAM_WEB_DIR=/usr/share/autostream-control-panel`のままにします。
-
 Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。systemd配備はControl Panel、Worker、Encoder/Recorder、Discord Bot、ObservabilityそれぞれのGitHub Releases API、Docker配備は`Autostream-Docker`のbundle releaseを確認します。private repo のため、本番ではreleaseを読めるGitHub tokenを `AUTOSTREAM_UPDATE_CHECK_TOKEN` に設定してください。これはversion表示用の確認tokenであり、システム更新画面へ保存する必須のGitHub Release Tokenとは別です。固定値や別endpointを使う場合は、上記のサービス別環境変数を設定します。URLはHTTPSを使います。固定latest-version値やcustom endpointは検出・表示専用です。GitHub Releaseの`release-manifest.json` assetを検証できないため、Application Infoからの自動更新は`manifest_unverified`として無効になります。
 
 新規hostでは、物理ホストごとにendpointlessな`pull_v2` Update Agentを登録し、非rootの`autostream-host-agent`とroot Local Executorを1つずつ置きます。登録直後はepoch `0`のobserverで、Control Panel上の明示的なownership切替後だけ更新jobをclaimします。公開releaseと実host canaryが未確認の間、更新適用が必要な既存hostはBridge期間中のlegacy `ssh_v1`を維持します。Control Panel自身はfleetの最後に移行します。詳細は[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
@@ -68,7 +89,8 @@ Control Panel の現在 version は画面左上とヘッダーに表示されま
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now autostream-control-panel
+sudo systemctl enable autostream-control-panel
+sudo systemctl start autostream-control-panel
 sudo systemctl status autostream-control-panel
 ```
 

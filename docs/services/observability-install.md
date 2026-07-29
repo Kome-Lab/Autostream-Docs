@@ -18,9 +18,27 @@ Webhook URL は Notification Channels から登録します。email通知のSMTP
 
 ## host直接起動
 
-自動更新対応の新しいhost releaseからarchive、sidecar、manifestを取得し、archive同梱の`README.install.md`に従って導入します。READMEは検証済みreleaseを`/opt/autostream/observability/releases/<version>-<digest12>`へ配置し、`/opt/autostream/observability/current`を切り替え、systemd unitとenvを配置します。`/usr/local/bin/autostream-observability`は`current/bin/autostream-observability`への互換symlinkです。詳しい検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
+manifest付きhost releaseのarchive、sidecar、manifestを取得します。4 filesを
+root-owned directoryへ固定し、archive本体とmanifestの両方をGitHub Attestationで
+検証してからroot所有で展開します。archive直下で次を実行します。
 
-manifestなしの旧releaseをbinary直置きで導入する構成はmanual-onlyです。Control Panelから更新する場合は、manifest付きreleaseを初期managed releaseにします。
+```bash
+sudo ./install-autostream-observability
+```
+
+installerはreleaseを検証し、`autostream` account、rollback用の内部release、
+systemd unit、env placeholder、data directory、
+`/usr/local/bin/autostream-observability`を配置します。backup executable、
+backup directory、root-only MariaDB defaults placeholderも配置しますが、実際の
+backup account、password、database grant、database nameは推測しません。
+archive同梱`README.install.md`に従ってoperatorが設定し、実dumpを確認してください。
+
+既存の直接配置binaryはmanaged配置へ移行し、既存envは保持します。旧fileは
+`/var/backups/autostream/install-migrations/observability`へroot専用で退避します。内部の
+`/opt/autostream/observability/current`やmarkerは手動編集しません。installerは
+serviceを開始せず、MariaDB、reverse proxy、Docker Compose、container、imageを
+変更しません。詳しい取得と検証手順は
+[Linuxホストで直接動かす](/deployment/host)を参照してください。
 
 `/etc/autostream/observability.env` を編集します。
 
@@ -37,7 +55,8 @@ TZ=Asia/Tokyo
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now autostream-observability
+sudo systemctl enable autostream-observability
+sudo systemctl start autostream-observability
 sudo systemctl status autostream-observability
 ```
 
