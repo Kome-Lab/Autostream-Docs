@@ -19,15 +19,43 @@ Discord Bot service 用に AutoStream 側で手生成する token はありま�
 
 ## host直接起動
 
-manifest付きhost releaseのarchive、sidecar、manifestを取得します。4 filesを
-root-owned directoryへ固定し、archive本体とmanifestの両方をGitHub Attestationで
-検証してからroot所有で展開します。archive直下で次を実行します。
+`artifact-manifest.json`を含むarchive-only形式のhost releaseを使います。管理端末で
+archive本体だけをdownloadしてGitHub Attestationを確認し、元`.tar.gz`だけを
+サーバーへ転送します。サーバーではbasenameを変更せずroot-owned directoryへ
+固定し、元archiveと展開directoryを隣接させて、archive直下で次を実行します。
+
+> [!CAUTION]
+> 2026-07-31現在、公開済み最新`v1.3.0`は旧4-file手動導入契約です。次の
+> `v1.3.1`は未公開のarchive-only候補なので、matching releaseが公開されるまで
+> 実行せず、`v1.3.0`へ読み替えないでください。
+
+管理端末:
 
 ```bash
-sudo ./install-autostream-discord-bot
+gh release download v1.3.1 --repo Kome-Lab/Autostream-DiscordBot \
+  --pattern 'autostream-discord-bot_v1.3.1_linux_amd64.tar.gz' \
+  --clobber
+gh attestation verify autostream-discord-bot_v1.3.1_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-DiscordBot \
+  --signer-workflow Kome-Lab/Autostream-DiscordBot/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
 ```
 
-installerはreleaseを検証し、`autostream` account、rollback用の内部release、
+確認済みの元archiveだけを`/tmp`へ転送した後のサーバー:
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-discord-bot_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+sudo test ! -e autostream-discord-bot_v1.3.1_linux_amd64
+sudo test ! -L autostream-discord-bot_v1.3.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-discord-bot_v1.3.1_linux_amd64.tar.gz
+sudo ./autostream-discord-bot_v1.3.1_linux_amd64/install-autostream-discord-bot
+```
+
+installerはarchive内部の`artifact-manifest.json`、`checksums.txt`、host
+architecture、binary versionを検証し、元archiveのSHA-256を記録してから、
+`autostream` account、rollback用の内部release、
 systemd unit、env placeholder、data directory、
 `/usr/local/bin/autostream-discord-bot`を配置します。既存の直接配置binaryは
 managed配置へ移行し、既存envは保持します。旧fileは
@@ -36,6 +64,14 @@ managed配置へ移行し、既存envは保持します。旧fileは
 やmarkerは手動編集しません。installerはserviceを開始せず、Docker Compose、
 container、imageは変更しません。詳しい取得と検証手順は
 [Linuxホストで直接動かす](/deployment/host)を参照してください。
+
+外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
+releaseには残りますが、手動導入ではdownloadもuploadもしません。既存のimmutableな
+`v1.3.0`は旧4-file手動導入契約です。`v1.2.x`から更新する場合もenvとNode
+`config.yml`、起動中の旧`MainPID`は保持されます。installer成功後に明示的に
+restartし、既存設定portのhealthと新versionを確認します。詳細は
+[既存環境を更新するとき](/deployment/host#既存環境を更新するとき)を参照して
+ください。service installerはHost Agentを自動導入しません。
 
 `/etc/autostream/discord-bot.env` を編集します。
 

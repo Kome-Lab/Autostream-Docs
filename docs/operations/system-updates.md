@@ -42,7 +42,7 @@ transportをホスト単位で切り替えます。同じホストの更新job�
 
 ## `pull_v2` Host Agentを登録する
 
-Control Panelの **Node登録** でNode typeに`Update Agent`、transportに`pull_v2`を選びます。物理ホストごとに固定Node IDを1つ割り当て、Configurationに表示されたAuto Configure commandをそのホストで実行します。
+Control Panelの **Node登録** でNode typeに`Update Agent`、transportに`pull_v2`を選びます。物理ホストごとに固定Node IDを1つ割り当て、Configurationに表示されたAuto Configure commandを取得します。このcommandは後述のarchive prepareが成功してから対象ホストで実行します。
 
 `pull_v2` Nodeの作成と初回credential発行には`api_tokens.create`、`secrets.update`、`system_updates.execute`が必要です。active Host Agentの専用Runtime Token rotation（stage/cancel/emergency）には旧tokenと新tokenの両方を管理するため、さらに`api_tokens.revoke`を含む4権限すべてが必要です。
 
@@ -74,11 +74,67 @@ Configure Tokenはargv、環境変数、shell historyへ入れず、promptまた
 
 `execution_host_id`と`ownership_epoch`はControl Panelがtokenとservice bindingから解決するserver-owned値です。Host Agentのconfig、CLI、heartbeatで上書きしません。
 
-package済みinstallerは専用の`autostream-host-agent` user/group、Host Agent、同じreleaseのLocal Executor、unit、root-owned directoryをprepareします。identityとpolicyは作らず、Host Agent、Local Executor、socketはinactive/disabledのままです。A/B self-updateの期限超過時に旧healthy slotへ戻せるよう、固定root recovery timerだけはこの時点でenable/startします。
+Host AgentはControl Panelやruntime serviceのinstallerから自動導入されません。
+`Kome-Lab/Autostream-ControlPanel`の別の
+`autostream-host-agent_v1.9.1_linux_amd64.tar.gz`に、Host Agent、Local
+Executor、両方のunitとinstallerが含まれます。archive-only形式では
+`artifact-manifest.json`もarchive内部に含まれます。
+
+> [!CAUTION]
+> 2026-07-31現在、公開済み最新のHost Agentは`v1.9.0`で、旧外部
+> checksum/manifest手動確認契約です。次の`v1.9.1`は未公開のarchive-only候補です。
+> matching releaseが公開されるまで次のcommandは実行せず、
+> `v1.9.0`へ読み替えないでください。
+
+`v1.9.1`の公開後、管理端末でHost Agent archive本体だけをdownloadし、その
+archiveのGitHub Attestationを確認します。
+
+```bash
+gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-host-agent_v1.9.1_linux_amd64.tar.gz' \
+  --clobber
+gh attestation verify autostream-host-agent_v1.9.1_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-ControlPanel \
+  --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
+```
+
+確認済みの元`.tar.gz`だけを安全な経路でサーバーの`/tmp`へ転送します。
+`.tar.gz.sha256`、`host-agent-manifest.json*`、`release-manifest.json*`は
+自動self-updateと旧client互換のrelease assetとして残りますが、手動導入では
+downloadもuploadもしません。サーバーではbasenameを変えずroot-owned
+directoryへ固定し、元archiveと展開directoryを隣接させます。
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-host-agent_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+sudo test ! -e autostream-host-agent_v1.9.1_linux_amd64
+sudo test ! -L autostream-host-agent_v1.9.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-host-agent_v1.9.1_linux_amd64.tar.gz
+cd autostream-host-agent_v1.9.1_linux_amd64
+```
+
+package済みinstallerは元archive、`artifact-manifest.json`、
+`checksums.txt`、architecture、両binaryのversionを検証し、専用の
+`autostream-host-agent` user/group、Host Agent、同じreleaseのLocal Executor、
+unit、root-owned directoryをprepareします。`--prepare`はidentity、policy、A/B
+runtimeがまだないfresh-onlyの導入です。identityとpolicyは作らず、Host Agent、
+Local Executor、socketはinactive/disabledのままです。A/B self-updateの期限超過時に
+旧healthy slotへ戻せるよう、固定root recovery timerだけはこの時点でenable/start
+します。
 
 ```bash
 sudo ./install/install-autostream-host-agent --prepare
 ```
+
+既存Host Agentへ`--prepare`を再実行しません。既存identity、policy、active unit、
+A/B runtimeがある場合はfail closedで拒否されます。既存Host AgentとLocal
+Executorは、ownership、policy、active job、rotation、recovery状態を確認して、
+後述の「Host Agent / Local Executorの自己更新」を使います。既存のimmutableな
+Host Agent `v1.9.0`は旧外部
+checksum/manifest手動確認契約のままなので、archive-only初回導入には
+`artifact-manifest.json`を含む新しく公開されたreleaseを使います。
 
 prepare後に上のAuto Configure commandを実行します。Control Panelは登録済みのpull policyと各systemd targetの`applied` endpoint/config stateからcanonical Local Executor policyを生成します。clientはroot path、unit、command、digestを指定できません。Docker authorityはAuto Configureで生成せず、Docker targetを含む自動projectionはfail closedです。Dockerは別途root所有の固定policyと承認済みfrozen Compose baselineを準備します。Configureは次を1つのtransactionとして扱います。
 
@@ -104,9 +160,12 @@ Configure成功後にLocal ExecutorとHost Agentを起動します。
 sudo ./install/install-autostream-local-executor \
   --policy /etc/autostream-local-executor/policy.json
 sudo systemctl enable --now autostream-host-agent.service
+sudo systemctl status autostream-host-agent.service
+sudo systemctl status autostream-local-executor.socket
+sudo systemctl status autostream-local-executor.service
 ```
 
-このfilesystem transactionのpure Go/HTTP testはありますが、実root Linuxでの初回configure/rollbackはまだ検証していません。導入前にrelease archive、checksum、manifest、attestationを検証してください。公開release assetが存在することや本番canaryが成功したことは、この文書だけでは証明できません。
+このfilesystem transactionのpure Go/HTTP testはありますが、実root Linuxでの初回configure/rollbackはまだ検証していません。管理端末で元archiveのAttestationを確認し、サーバー側installerによる`artifact-manifest.json`と内部checksum検証が成功した場合だけ続行してください。自動self-update用の外部manifest/checksum、公開release asset、本番canaryが存在・成功することは、この文書だけでは証明できません。
 
 導入後は次を確認します。
 

@@ -70,55 +70,67 @@ idempotentに作成します。事前に手動作成する必要はありませ�
 GitHub Release の host artifact は、archive の中に `bin/` が直接入るのではなく、archive 名と同じ top-level directory を 1 つ含みます。たとえば Control Panel の amd64 版は次の形です。
 
 ```text
-autostream-control-panel_vX.Y.Z_linux_amd64/
+autostream-control-panel_v1.9.1_linux_amd64/
   bin/control-panel
   bin/autostream-updater
   systemd/autostream-control-panel.service.example
   .env.example
+  artifact-manifest.json
   checksums.txt
   README.install.md
   install-autostream-control-panel
   share/autostream-control-panel/
 ```
 
-GitHub Releaseに添付されているarchiveの`.sha256`は、pathを含まないarchive basenameだけを1行で記録します。downloadした4 filesをroot-ownedの`artifacts/` directoryへ固定し、rootで展開する前にarchive本体と`release-manifest.json`の両方をGitHub Attestationで検証します。インストーラーはさらにsidecar、manifest内のartifact digest、archive内`checksums.txt`を検証します。private repoのrelease assetは生のURLでは`Not Found`になりやすいため、`gh auth login`済みのGitHub CLIを使います。
+archive-only形式の手動導入では、サーバーへ転送するrelease assetは元の
+`.tar.gz` 1つだけです。`artifact-manifest.json`はservice、version、commit、
+architecture、互換情報をarchive内部に持ち、`checksums.txt`はinstallerを含む
+同梱fileを覆います。
 
-既存のmanual-only releaseに旧形式のsidecarが残っている場合は、そのfileを
-書き換えず、canonical basename sidecarとimmutable manifestを持つ新releaseへ
-移行します。
+GitHub Releaseには自動Updaterと旧clientの互換用としてarchive sidecar、
+`release-manifest.json`、manifest sidecarも残ります。自動Updaterはこれらを
+取得・検証しますが、手動導入ではdownloadもサーバーへのuploadもしません。
+既存のimmutableなControl Panel / Host Agent `v1.9.0`とruntime service
+`v1.3.0`は旧4-file手動導入契約のままなので、archive-only手順には
+`artifact-manifest.json`を含む新しく公開されたreleaseを使います。
+
+> [!CAUTION]
+> 2026-07-31現在、次の`v1.9.1`は未公開のarchive-only候補です。matching releaseが
+> 公開されるまでは実行せず、現行`v1.9.0`へ読み替えないでください。
+
+管理端末でarchive本体だけをdownloadし、そのarchiveのGitHub Attestationを
+確認します。内部checksumはarchive内の整合性確認であり、GitHub由来の真正性は
+この転送前確認が担います。
 
 ```bash
-cd /tmp
-gh release download vX.Y.Z --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz \
-  --pattern autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz.sha256 \
-  --pattern release-manifest.json \
-  --pattern release-manifest.json.sha256 \
+gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
   --clobber
-sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz.sha256 /opt/autostream/releases/artifacts/
-sudo install -o root -g root -m 0644 /tmp/release-manifest.json /opt/autostream/releases/artifacts/
-sudo install -o root -g root -m 0644 /tmp/release-manifest.json.sha256 /opt/autostream/releases/artifacts/
-cd /opt/autostream/releases/artifacts
-gh attestation verify autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz \
+gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
-gh attestation verify release-manifest.json \
-  --repo Kome-Lab/Autostream-ControlPanel \
-  --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
-  --deny-self-hosted-runners
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz
-cd autostream-control-panel_vX.Y.Z_linux_amd64
-sudo ./install-autostream-control-panel
 ```
 
-ほかのserviceでは最後のcommandをarchive直下の
-`install-autostream-<service>`へ読み替えます。service installerは次を一続きで
-行います。
+成功した元archiveだけを安全な経路でサーバーの`/tmp`へ転送します。basenameを
+変更せずroot-owned directoryへ固定し、元archiveと展開directoryが隣接した状態で
+installerを実行します。
 
-1. manifest内のservice、source version、asset名、digest、archive内fileのchecksumを検証します。
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+```
+
+ほかのserviceを含むliteral commandは
+[最初のインストール](/runbooks/first-install)
+にまとめています。service installerは次を一続きで行います。
+
+1. 元archiveを安定して読み取り、`artifact-manifest.json`のservice、source version、asset名、architectureとarchive内fileのchecksum、binary versionを検証し、元archiveのSHA-256を記録します。
 2. `autostream` account、検証済みrelease、rollback用の内部linkとmarkerを作ります。
 3. `/usr/local/bin`の安定したcommand、systemd unit、env placeholder、data directoryを配置します。
 4. Control Panelでは`/usr/share/autostream-control-panel`を、Control PanelとObservabilityでは検証済みbackup executable、backup directory、root-only MariaDB defaults placeholderを配置します。
@@ -131,7 +143,7 @@ MariaDB backup account、password、database grant、database nameは推測し�
 service別READMEに従い、operatorが対話的に設定して実dumpを確認します。
 
 各repositoryのsource versionは独立しているため、ほかのserviceと同じtagがあると
-仮定せず、対象repositoryのmanifest付きrelease tagを指定してください。
+仮定せず、対象repositoryのarchive-only release tagを指定してください。
 
 ```bash
 sudo systemctl daemon-reload
@@ -158,22 +170,42 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 
 新規hostには物理ホストごとに非rootの`pull_v2` Host Agentとroot Local Executorを1つずつ置きます。Host Agentはoutbound HTTPSだけを使い、受信TCP、`8090`、SSH設定を持ちません。epoch `0`ではobserver、明示的ownership切替後だけjobをclaimします。systemd/Docker software updateとsystemd/Docker port変更のsource実装はありますが、公開releaseと実host canaryは未確認です。導入方法とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
 
-更新適用が必要な既存hostでは、Bridge期間のlegacy `ssh_v1`中央Updaterとhelperを維持します。どちらも配置していない場合も、manifest付きreleaseに同梱された`README.install.md`を使って手動更新できます。Application Infoの更新候補表示は引き続き利用できます。
+service installerはHost Agentを自動導入しません。Host Agentは
+`Kome-Lab/Autostream-ControlPanel`の別archiveにLocal Executorと一緒に含まれ、
+物理ホストごとに1つだけ導入します。`install-autostream-host-agent --prepare`は
+identity、policy、A/B runtimeがないfresh host専用です。既存Host Agentへ
+再実行せず、既存Agent / ExecutorはControl Panelの専用self-updateで更新します。
 
-1. 現在の version と設定を控えます。Node Agent は `autostream-<service> --version`、Control Panel は `control-panel --version` で build version / commit / build date を確認できます。
-2. 新しい release artifact を取得します。
-3. env に新しい必須項目が増えていないか `.env.example` と比較します。
-4. Control PanelまたはObservabilityではdatabaseをbackupします。
-5. 展開先で`sudo ./install-autostream-<service>`を実行します。installerが内部linkを切り替えても、起動中の旧processは変わりません。
+Control Panel `v1.8.x`またはruntime service `v1.2.x`から更新するときは、
+[Linuxホストで直接動かす](/deployment/host#既存環境を更新するとき)のdatabase
+backupとcredential path移行を先に実行します。更新適用が必要な既存hostでは、
+Bridge期間のlegacy `ssh_v1`中央Updater、helper、SSH/必要なstatus portを維持します。
+
+1. 現在のversion、設定、active状態、`MainPID`を控えます。Node Agentは
+   `autostream-<service> --version`、Control Panelは`control-panel --version`で
+   build version / commit / build dateを確認できます。
+2. 管理端末で新しいarchive本体だけを取得・Attestation確認し、サーバーへ転送します。
+3. Control PanelまたはObservabilityでは実database dumpを成功させます。
+4. 前節と同じく元archiveを隣接させたまま展開し、
+   `sudo ./install-autostream-<service>`を実行します。installerは既存envを
+   byte-for-byteで保持し、Node `config.yml`を変更しません。内部linkを
+   切り替えても起動中の旧`MainPID`は変わりません。
+5. binary更新とport/config revision変更を同時に行わず、envに新しい必須項目が
+   ないか`.env.example`と比較します。
 6. `systemctl daemon-reload`後に対象serviceを明示的にrestartします。
-7. `MainPID`、`/health`、`/updater/version`、Service Health、短いテスト配信を確認します。
+7. 新しい`MainPID`、`--version`、既存設定portの`/health`と
+   `/updater/version`、Service Health、短いテスト配信を確認します。
 
 `/usr/local/bin`へbinaryを直接上書きする旧手順は使いません。新installerが
 安定したpathをmanaged releaseへ接続します。既存releaseにmanifestやmarkerを
-後付けせず、新しいmanifest付きreleaseを初期managed releaseにしてください。
+後付けせず、`artifact-manifest.json`を含む新しいimmutable releaseを初期managed
+releaseにしてください。
 
-新processの起動に失敗した場合はControl Panelのrollbackまたはrelease同梱の
-回復手順を使い、内部`current`を直接編集しません。旧versionのhealthまで確認します。
+installer途中の失敗は同じtransaction内で旧配置へ戻しますが、installer成功後の
+restart/health失敗は自動rollbackされません。Control Panelのrollbackまたは
+release同梱の回復手順を使い、内部`current`を直接編集しません。旧versionの
+healthまで確認します。Control Panelのdatabase migration後にpre-059 binaryへ
+戻す場合はsingle-writer手順とbackup/restore判断が必要です。
 
 service installerはsystemd host配置だけを対象にします。`ffmpeg`、MariaDB、
 reverse proxyなどの外部packageや設定、Docker Compose、container、image、

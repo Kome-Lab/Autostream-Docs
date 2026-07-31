@@ -43,14 +43,19 @@ Ubuntu / Debian 系の例です。
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl tar git jq openssl mariadb-client ffmpeg
+sudo apt-get install -y ca-certificates coreutils curl findutils gawk jq openssl tar util-linux mariadb-client ffmpeg
 ```
 
 service installerが`autostream` OS account、`/etc/autostream`、serviceごとの
-data directoryを必要に応じて作成します。`ffmpeg`、MariaDB、GitHub CLI、
-reverse proxyなどの外部packageや設定はinstallerの対象外です。
+data directoryを必要に応じて作成します。`ffmpeg`、MariaDB、reverse proxyなどの
+外部packageや設定はinstallerの対象外です。GitHub CLIはarchiveを取得・検証する
+管理端末だけで使い、対象サーバーには導入しません。
 
-GitHub Release から private repo の artifact を取得するため、GitHub CLI を使います。すでに `gh` が入っていてログイン済みなら、この block は `gh auth status` だけ確認してください。
+### 管理端末にGitHub CLIを用意する
+
+GitHub Releaseからprivate repoのartifactを取得するため、管理端末でGitHub CLIを
+使います。次はUbuntu / Debian系の管理端末の例です。すでに`gh`が入っていて
+ログイン済みなら、このblockは`gh auth status`だけ確認してください。
 
 ```bash
 if ! command -v gh >/dev/null 2>&1; then
@@ -112,55 +117,164 @@ Observability 用の別admin tokenや直接ingest tokenは作りません。Cont
 
 新方式では、各サービスの登録、heartbeat、Panel から Node への操作に使う token は Node登録後の `config.yml` で配布します。Worker / Encoder Recorder の stream ingest signing key も同じファイルへ入ります。`SERVICE_CALL_TOKEN` とNode側の署名鍵envは古い構成からの移行用 fallback としてだけ使います。
 
-## 5. 検証済みhost releaseをinstallerで配置する
+## 5. 1つのhost release archiveをinstallerで配置する
 
-Control Panelからの更新を使う新規構成では、各serviceのmanifest付きhost releaseを初期releaseにします。service repositoryごとにsource versionは独立しているため、全serviceへ同じtagを指定しません。
+新しいarchive-only形式のhost releaseでは、手動導入のためにサーバーへ渡すrelease
+assetは対象serviceの`.tar.gz` 1つだけです。archiveには
+`artifact-manifest.json`、`checksums.txt`、installer、binary、unit、設定例が
+含まれます。service repositoryごとにsource versionは独立しているため、全serviceへ
+同じtagを指定しません。
 
-| service | release repo | archive直下で実行 | 安定した実行path |
+> [!CAUTION]
+> 2026-07-31現在、公開済み最新tagはControl Panel / Host Agentが`v1.9.0`、
+> 4つのruntime serviceが`v1.3.0`です。これらのimmutable archiveは旧4-file
+> 手動導入契約のままで、下記の1-archive手順には使えません。下記で直接指定する
+> `v1.9.1` / `v1.3.1`は、この仕様を含む次回候補tagで、現在は未公開です。
+> 各releaseが実際に公開されるまでは、下記commandは`release not found`になるため
+> 実行しないでください。
+
+| component | release repo | 公開後に使うarchive | 安定した実行path |
 | --- | --- | --- | --- |
-| Control Panel | `Kome-Lab/Autostream-ControlPanel` | `sudo ./install-autostream-control-panel` | `/usr/local/bin/control-panel` |
-| Discord Bot | `Kome-Lab/Autostream-DiscordBot` | `sudo ./install-autostream-discord-bot` | `/usr/local/bin/autostream-discord-bot` |
-| Encoder/Recorder | `Kome-Lab/Autostream-Encoder-Recorder` | `sudo ./install-autostream-encoder-recorder` | `/usr/local/bin/autostream-encoder-recorder` |
-| Observability | `Kome-Lab/Autostream-Observability` | `sudo ./install-autostream-observability` | `/usr/local/bin/autostream-observability` |
-| Worker | `Kome-Lab/Autostream-Worker` | `sudo ./install-autostream-worker` | `/usr/local/bin/autostream-worker` |
+| Control Panel | `Kome-Lab/Autostream-ControlPanel` | `autostream-control-panel_v1.9.1_linux_amd64.tar.gz` | `/usr/local/bin/control-panel` |
+| Host Agent + Local Executor | `Kome-Lab/Autostream-ControlPanel` | `autostream-host-agent_v1.9.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-host-agent` |
+| Discord Bot | `Kome-Lab/Autostream-DiscordBot` | `autostream-discord-bot_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-discord-bot` |
+| Encoder/Recorder | `Kome-Lab/Autostream-Encoder-Recorder` | `autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-encoder-recorder` |
+| Observability | `Kome-Lab/Autostream-Observability` | `autostream-observability_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-observability` |
+| Worker | `Kome-Lab/Autostream-Worker` | `autostream-worker_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-worker` |
 
-対象repositoryごとに、公開済みのmanifest付きversionとarchitectureを指定して
-assetを取得します。次はControl Panel amd64版の形です。`vX.Y.Z`だけを実際の
-release versionへ置き換えます。
+Host Agentは上表のservice installerから自動導入されません。
+Control Panelと同じrepositoryにある別の
+`autostream-host-agent_v1.9.1_linux_amd64.tar.gz`を使い、物理ホストごとに
+1つだけ導入します。このarchiveにはroot Local Executorも含まれます。
+`autostream-contracts`は各binaryが利用するsource contract repositoryであり、
+サーバーへ単独導入するdaemonやrelease archiveはありません。
+
+各候補releaseの公開後、releaseを取得できる管理端末で必要なarchive本体だけを
+downloadし、rootとして実行する前にGitHub Attestationを確認します。次は全component
+を同じ物理ホストへ置く場合のamd64用commandです。実際には、そのhostへ配置する
+componentだけを取得してください。
 
 ```bash
-cd /tmp
-gh release download vX.Y.Z --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz \
-  --pattern autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz.sha256 \
-  --pattern release-manifest.json \
-  --pattern release-manifest.json.sha256 \
+gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
   --clobber
-sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz.sha256 /opt/autostream/releases/artifacts/
-sudo install -o root -g root -m 0644 /tmp/release-manifest.json /opt/autostream/releases/artifacts/
-sudo install -o root -g root -m 0644 /tmp/release-manifest.json.sha256 /opt/autostream/releases/artifacts/
-cd /opt/autostream/releases/artifacts
-gh attestation verify autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz \
+gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
-gh attestation verify release-manifest.json \
+
+gh release download v1.3.1 --repo Kome-Lab/Autostream-Encoder-Recorder \
+  --pattern 'autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz' \
+  --clobber
+gh attestation verify autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-Encoder-Recorder \
+  --signer-workflow Kome-Lab/Autostream-Encoder-Recorder/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
+
+gh release download v1.3.1 --repo Kome-Lab/Autostream-Worker \
+  --pattern 'autostream-worker_v1.3.1_linux_amd64.tar.gz' \
+  --clobber
+gh attestation verify autostream-worker_v1.3.1_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-Worker \
+  --signer-workflow Kome-Lab/Autostream-Worker/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
+
+gh release download v1.3.1 --repo Kome-Lab/Autostream-DiscordBot \
+  --pattern 'autostream-discord-bot_v1.3.1_linux_amd64.tar.gz' \
+  --clobber
+gh attestation verify autostream-discord-bot_v1.3.1_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-DiscordBot \
+  --signer-workflow Kome-Lab/Autostream-DiscordBot/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
+
+gh release download v1.3.1 --repo Kome-Lab/Autostream-Observability \
+  --pattern 'autostream-observability_v1.3.1_linux_amd64.tar.gz' \
+  --clobber
+gh attestation verify autostream-observability_v1.3.1_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-Observability \
+  --signer-workflow Kome-Lab/Autostream-Observability/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
+
+gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-host-agent_v1.9.1_linux_amd64.tar.gz' \
+  --clobber
+gh attestation verify autostream-host-agent_v1.9.1_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz
-cd autostream-control-panel_vX.Y.Z_linux_amd64
-sudo ./install-autostream-control-panel
 ```
 
-ほかのserviceでは最後のcommandをarchive直下にある
-`install-autostream-<service>`へ読み替えます。installerはmanifest identity、
-archive内`checksums.txt`、binary versionを確認してから、`autostream` account、
-検証済みrelease、systemd unit、env placeholder、data directory、安定した
+成功した元の`.tar.gz`だけを安全な経路で該当サーバーの`/tmp`へ転送します。サーバーに
+GitHub CLI、`.tar.gz.sha256`、`release-manifest.json`、
+`release-manifest.json.sha256`を持ち込む必要はありません。サーバーでは元の
+basenameを変更せずroot所有directoryへ固定し、archiveと展開directoryが隣接した
+状態でinstallerを実行します。
+
+同じhostへ5 serviceを置く場合は、公開後に次を上から実行します。各installerは
+serviceを開始・再起動しないため、この時点で起動中processはありません。
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-worker_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-discord-bot_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-observability_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+
+sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+
+sudo test ! -e autostream-encoder-recorder_v1.3.1_linux_amd64
+sudo test ! -L autostream-encoder-recorder_v1.3.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz
+sudo ./autostream-encoder-recorder_v1.3.1_linux_amd64/install-autostream-encoder-recorder
+
+sudo test ! -e autostream-worker_v1.3.1_linux_amd64
+sudo test ! -L autostream-worker_v1.3.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-worker_v1.3.1_linux_amd64.tar.gz
+sudo ./autostream-worker_v1.3.1_linux_amd64/install-autostream-worker
+
+sudo test ! -e autostream-discord-bot_v1.3.1_linux_amd64
+sudo test ! -L autostream-discord-bot_v1.3.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-discord-bot_v1.3.1_linux_amd64.tar.gz
+sudo ./autostream-discord-bot_v1.3.1_linux_amd64/install-autostream-discord-bot
+
+sudo test ! -e autostream-observability_v1.3.1_linux_amd64
+sudo test ! -L autostream-observability_v1.3.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-observability_v1.3.1_linux_amd64.tar.gz
+sudo ./autostream-observability_v1.3.1_linux_amd64/install-autostream-observability
+```
+
+物理ホストごとにHost Agentも新規導入する場合は、そのhostで別archiveを配置して
+fresh-only prepareを実行します。既存Host Agentがあるhostでは実行せず、専用
+self-updateを使ってください。
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-host-agent_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+sudo test ! -e autostream-host-agent_v1.9.1_linux_amd64
+sudo test ! -L autostream-host-agent_v1.9.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-host-agent_v1.9.1_linux_amd64.tar.gz
+sudo ./autostream-host-agent_v1.9.1_linux_amd64/install/install-autostream-host-agent --prepare
+```
+
+prepare後もHost Agent / Local Executorは起動しません。Control Panelで`pull_v2`
+Update Agentを登録し、生成されたConfigure commandを実行してからLocal Executorを
+明示的にactivateします。完全な順序は
+[Host Agent Bridgeでサービスを更新する](/operations/system-updates#pull_v2-host-agentを登録する)
+を参照してください。
+
+installerは元archiveを安定して読み取り、
+`artifact-manifest.json`、archive内`checksums.txt`、host architecture、binary
+versionを確認し、元archiveのSHA-256を算出して記録してから、`autostream`
+account、managed release、systemd unit、env placeholder、data directory、安定した
 `/usr/local/bin` pathを配置します。Control Panelでは
-`/usr/share/autostream-control-panel`も配置します。
+`/usr/share/autostream-control-panel`も配置します。内部checksumはarchive内の
+整合性確認であり、GitHub由来の真正性は転送前のAttestation確認が担います。
 
 内部の`/opt/autostream/<service>/releases/`、`current` symlink、digest、
 markerはinstallerとupdaterが管理します。手動で作成、編集しないでください。
@@ -169,6 +283,16 @@ markerはinstallerとupdaterが管理します。手動で作成、編集しな�
 `/var/backups/autostream/install-migrations/<service>`へroot専用で退避します。
 source checkoutからbuildしたbinaryや
 manifestなしreleaseは自動更新へ使わず、新しいimmutable releaseを公開します。
+
+GitHub Releaseには、自動Updaterと旧clientの互換用としてarchive sidecar、
+`release-manifest.json`、manifest sidecarも引き続き公開されます。これらは
+自動Updaterが取得・検証するassetであり、archive-onlyの手動導入ではdownloadも
+uploadもしません。既存のimmutableなControl Panel / Host Agent `v1.9.0`と各
+runtime service `v1.3.0`は旧4-file手動導入契約のままです。既存assetを書き換えず、
+archive-only手順は上記候補tagが実際に公開されてから使用してください。Control
+Panel `v1.8.x`、runtime service `v1.2.x`から更新する
+場合は、[Linuxホストで直接動かす](/deployment/host#既存環境を更新するとき)の
+backupと再起動境界も先に確認します。
 
 ## 6. Control Panel を入れる
 

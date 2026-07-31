@@ -28,6 +28,9 @@ function requireMarkers(path, markers) {
 const operationsPath = 'docs/operations/system-updates.md';
 const registrationPath = 'docs/control-panel/node-agent-registration.md';
 const dockerPath = 'docs/deployment/docker.md';
+const hostDeploymentPath = 'docs/deployment/host.md';
+const firstInstallPath = 'docs/runbooks/first-install.md';
+const hostOperationsPath = 'docs/services/host-operations.md';
 
 const bridgeMarkers = [
   '`pull_v2`',
@@ -102,6 +105,9 @@ const operations = requireMarkers(operationsPath, [
   '`api_tokens.revoke`',
   '`secrets.update`',
   '`system_updates.execute`',
+  'gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel',
+  'autostream-host-agent_v1.9.1_linux_amd64.tar.gz',
+  '未公開のarchive-only候補',
 ]);
 
 const registration = requireMarkers(registrationPath, [
@@ -133,6 +139,8 @@ const registration = requireMarkers(registrationPath, [
   '`api_tokens.revoke`',
   '`secrets.update`',
   '`system_updates.execute`',
+  'autostream-host-agent_v1.9.1_linux_amd64.tar.gz',
+  '未公開',
 ]);
 
 const docker = requireMarkers(dockerPath, [
@@ -164,6 +172,158 @@ const docker = requireMarkers(dockerPath, [
   'ローカル実daemonのPASS',
   '全5image build',
 ]);
+
+const hostDeployment = requireMarkers(hostDeploymentPath, [
+  'runtime serviceを1つずつ明示的にrestartします',
+  '各commandの直後',
+  '成功してから次へ進みます',
+  '`OBSERVABILITY_BIND_ADDR`',
+  'Control Panelを最後に',
+  '公開済み最新tag',
+  '`v1.9.1` / `v1.3.1`は未公開',
+]);
+const firstInstall = requireMarkers(firstInstallPath, [
+  '公開済み最新tag',
+  '`v1.9.1` / `v1.3.1`',
+  '現在は未公開',
+  'gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel',
+  'gh release download v1.3.1 --repo Kome-Lab/Autostream-Encoder-Recorder',
+  'gh release download v1.3.1 --repo Kome-Lab/Autostream-Worker',
+  'gh release download v1.3.1 --repo Kome-Lab/Autostream-DiscordBot',
+  'gh release download v1.3.1 --repo Kome-Lab/Autostream-Observability',
+  'autostream-host-agent_v1.9.1_linux_amd64.tar.gz',
+  '`autostream-contracts`',
+  '単独導入するdaemonやrelease archiveはありません',
+]);
+const hostOperations = requireMarkers(hostOperationsPath, [
+  'autostream-control-panel_v1.9.1_linux_amd64/',
+  '2026-07-31現在',
+  '未公開のarchive-only候補',
+]);
+
+const literalServiceGuides = [
+  [
+    'docs/services/control-panel-install.md',
+    'v1.9.0',
+    'v1.9.1',
+    'gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel',
+    'autostream-control-panel_v1.9.1_linux_amd64.tar.gz',
+    'install-autostream-control-panel',
+  ],
+  [
+    'docs/services/encoder-recorder-install.md',
+    'v1.3.0',
+    'v1.3.1',
+    'gh release download v1.3.1 --repo Kome-Lab/Autostream-Encoder-Recorder',
+    'autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz',
+    'install-autostream-encoder-recorder',
+  ],
+  [
+    'docs/services/worker-install.md',
+    'v1.3.0',
+    'v1.3.1',
+    'gh release download v1.3.1 --repo Kome-Lab/Autostream-Worker',
+    'autostream-worker_v1.3.1_linux_amd64.tar.gz',
+    'install-autostream-worker',
+  ],
+  [
+    'docs/services/discord-bot-install.md',
+    'v1.3.0',
+    'v1.3.1',
+    'gh release download v1.3.1 --repo Kome-Lab/Autostream-DiscordBot',
+    'autostream-discord-bot_v1.3.1_linux_amd64.tar.gz',
+    'install-autostream-discord-bot',
+  ],
+  [
+    'docs/services/observability-install.md',
+    'v1.3.0',
+    'v1.3.1',
+    'gh release download v1.3.1 --repo Kome-Lab/Autostream-Observability',
+    'autostream-observability_v1.3.1_linux_amd64.tar.gz',
+    'install-autostream-observability',
+  ],
+];
+const literalServiceContents = literalServiceGuides.map(
+  ([path, currentTag, candidateTag, download, archive, installer]) => [
+    path,
+    requireMarkers(path, [
+      `公開済み最新\`${currentTag}\``,
+      `\`${candidateTag}\`は未公開`,
+      download,
+      archive,
+      installer,
+    ]),
+  ],
+);
+
+const literalArchiveGuides = [
+  [firstInstallPath, firstInstall],
+  [hostDeploymentPath, hostDeployment],
+  [hostOperationsPath, hostOperations],
+  [operationsPath, operations],
+  [registrationPath, registration],
+  ...literalServiceContents,
+];
+for (const [path, contents] of literalArchiveGuides) {
+  if (contents.includes('vX.Y.Z')) {
+    throw new Error(`${path} contains a forbidden archive version placeholder`);
+  }
+  if (
+    /(?:^|\n)\s*(?:export\s+)?(?:VERSION|TAG|RELEASE_TAG|RELEASE_VERSION)=/.test(
+      contents,
+    ) ||
+    /\$(?:\{(?:VERSION|TAG|RELEASE_TAG|RELEASE_VERSION)\}|VERSION|TAG|RELEASE_TAG|RELEASE_VERSION)\b/.test(
+      contents,
+    )
+  ) {
+    throw new Error(`${path} contains a forbidden shell release-version variable`);
+  }
+  if (/--pattern[^\n]*(?:sha256|release-manifest)/.test(contents)) {
+    throw new Error(`${path} downloads a manual-install sidecar`);
+  }
+}
+
+const upgradeSectionStart = hostDeployment.indexOf('## 既存環境を更新するとき');
+if (upgradeSectionStart < 0) {
+  throw new Error(`${hostDeploymentPath} is missing the existing-environment upgrade section`);
+}
+const upgradeSection = hostDeployment.slice(upgradeSectionStart);
+const orderedUpgradeInstalls = [
+  'sudo ./autostream-encoder-recorder_v1.3.1_linux_amd64/install-autostream-encoder-recorder',
+  'sudo ./autostream-worker_v1.3.1_linux_amd64/install-autostream-worker',
+  'sudo ./autostream-discord-bot_v1.3.1_linux_amd64/install-autostream-discord-bot',
+  'sudo ./autostream-observability_v1.3.1_linux_amd64/install-autostream-observability',
+  'sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel',
+];
+let previousUpgradeInstall = -1;
+for (const marker of orderedUpgradeInstalls) {
+  const index = upgradeSection.indexOf(marker);
+  if (index < 0) {
+    throw new Error(`${hostDeploymentPath} is missing upgrade install marker: ${marker}`);
+  }
+  if (index <= previousUpgradeInstall) {
+    throw new Error(`${hostDeploymentPath} has an unsafe upgrade install order at: ${marker}`);
+  }
+  previousUpgradeInstall = index;
+}
+const orderedUpgradeRestarts = [
+  'sudo systemctl restart autostream-encoder-recorder',
+  'sudo systemctl restart autostream-worker',
+  'sudo systemctl restart autostream-discord-bot',
+  'sudo systemctl restart autostream-observability',
+  'sudo systemctl restart autostream-control-panel',
+];
+let previousUpgradeRestart = -1;
+for (const marker of orderedUpgradeRestarts) {
+  const index = upgradeSection.indexOf(marker);
+  if (index < 0) {
+    throw new Error(`${hostDeploymentPath} is missing upgrade restart marker: ${marker}`);
+  }
+  if (index <= previousUpgradeRestart) {
+    throw new Error(`${hostDeploymentPath} has an unsafe upgrade restart order at: ${marker}`);
+  }
+  previousUpgradeRestart = index;
+}
 
 const exactIdentityKeys = ['panel_url', 'node_id', 'runtime_token', 'service_name'];
 for (const [path, contents] of [

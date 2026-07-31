@@ -7,9 +7,10 @@ Docker を使わず、release artifact を Linux サーバーに置いて直接�
 ## 用意するもの
 
 - Linux サーバー
-- 各サービスの release artifact
-- private repo の release artifact を読める GitHub CLI (`gh auth login` 済み)
-- manifestとchecksumを検証する`jq`、`sha256sum`
+- 各サービスのarchive-only形式のhost release `.tar.gz`
+- release artifactを取得し、転送前に確認する管理端末のGitHub CLI
+  (`gh auth login`済み)
+- サーバー側でarchive内部metadataとchecksumを検証する`jq`、`sha256sum`、`tar`
 - `.env.example` を元にした env ファイル
 - ffmpeg など、サービスごとに必要な host 側パッケージ
 
@@ -20,14 +21,24 @@ Encoder Recorder用の`ffmpeg`、reverse proxyなど、host共通の外部packag
 
 ## release artifact の実際の形
 
-Host Release workflow が作る archive は、`autostream-<service>_<version>_linux_<arch>.tar.gz` です。展開すると archive 名と同じ directory が 1 つ作られ、その中に次のファイルが入ります。
+この仕様を含む次回候補のamd64版Host Release archiveは次のとおりです。
+
+- `autostream-control-panel_v1.9.1_linux_amd64.tar.gz`
+- `autostream-host-agent_v1.9.1_linux_amd64.tar.gz`
+- `autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz`
+- `autostream-worker_v1.3.1_linux_amd64.tar.gz`
+- `autostream-discord-bot_v1.3.1_linux_amd64.tar.gz`
+- `autostream-observability_v1.3.1_linux_amd64.tar.gz`
+
+展開するとarchive名と同じdirectoryが1つ作られ、その中に次のfileが入ります。
 
 ```text
-autostream-control-panel_vX.Y.Z_linux_amd64/
+autostream-control-panel_v1.9.1_linux_amd64/
   bin/control-panel
   bin/autostream-updater
   systemd/autostream-control-panel.service.example
   .env.example
+  artifact-manifest.json
   checksums.txt
   README.install.md
   install-autostream-control-panel
@@ -36,53 +47,69 @@ autostream-control-panel_vX.Y.Z_linux_amd64/
 
 Node Agent の service も同じ形式で、`bin/autostream-discord-bot`、`bin/autostream-encoder-recorder`、`bin/autostream-observability`、`bin/autostream-worker` のように正規コマンド名の実行ファイルが入ります。互換用に旧名 binary が同梱される場合がありますが、Panel の Auto Configure command は `autostream-<service>` を使います。
 
-GitHub Releaseに添付されているarchiveの`.sha256`は、pathを含まないarchive basenameだけを1行で記録します。自動更新対応releaseには`release-manifest.json`とその`.sha256`も添付されます。private repoのrelease assetは生のURLでは`Not Found`になりやすいため、標準手順では`gh release download`を使います。download fileを`/opt/autostream/releases/artifacts/`へ置き、archive sidecarとmanifest sidecarをどちらもそのdirectoryでstrict検証します。
+archive-only形式では`artifact-manifest.json`がservice、version、commit、
+architecture、必要な互換情報をarchive内部に保持し、`checksums.txt`がinstallerを
+含む全同梱fileを覆います。手動導入のサーバーへ渡すrelease assetは元の
+`.tar.gz`だけです。サーバー上のinstallerは内部metadata、checksum、host
+architecture、binary versionを確認し、元archiveのSHA-256を記録します。
 
-既存のmanual-only releaseに旧形式のsidecarが残っている場合は、そのfileを書き換えず、新しいmanifest付きreleaseを初期managed releaseとして使います。
+GitHub Releaseには自動Updaterと旧clientの互換用として`.tar.gz.sha256`、
+`release-manifest.json`、`release-manifest.json.sha256`も引き続き添付します。
+自動Updaterはこれらを取得してrelease identityを検証しますが、archive-onlyの
+手動導入ではdownloadもサーバーへのuploadもしません。内部checksumだけをGitHub
+由来の証明とは扱わず、archive本体のAttestationを管理端末で確認してから安全な
+経路で転送します。
 
-次はControl Panel amd64版の形です。`vX.Y.Z`だけを実際のrelease versionへ
-置き換えて、そのまま上から実行します。
+既存のimmutableなControl Panel / Host Agent `v1.9.0`と各runtime service
+`v1.3.0`は旧4-file手動導入契約のままです。既存assetを書き換えず、
+archive-only手順は`artifact-manifest.json`を含む新しく公開されたreleaseから
+使用します。
+
+> [!CAUTION]
+> 2026-07-31現在、公開済み最新tagはControl Panel / Host Agentが`v1.9.0`、
+> runtime serviceが`v1.3.0`です。上記の`v1.9.1` / `v1.3.1`は未公開です。
+> 次のliteral commandは
+> matching releaseが公開された後だけ実行してください。公開前は`release not found`
+> になり、現行`v1.9.0` / `v1.3.0`へ読み替えて1-archive手順を実行してはいけません。
+
+公開後、管理端末でControl Panel archive本体だけを取得してAttestationを確認します。
 
 ```bash
-cd /tmp
-gh release download vX.Y.Z --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz \
-  --pattern autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz.sha256 \
-  --pattern release-manifest.json \
-  --pattern release-manifest.json.sha256 \
+gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
   --clobber
-sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz.sha256 /opt/autostream/releases/artifacts/
-sudo install -o root -g root -m 0644 /tmp/release-manifest.json /opt/autostream/releases/artifacts/
-sudo install -o root -g root -m 0644 /tmp/release-manifest.json.sha256 /opt/autostream/releases/artifacts/
-cd /opt/autostream/releases/artifacts
-gh attestation verify autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz \
+gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
-gh attestation verify release-manifest.json \
-  --repo Kome-Lab/Autostream-ControlPanel \
-  --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
-  --deny-self-hosted-runners
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_vX.Y.Z_linux_amd64.tar.gz
-cd autostream-control-panel_vX.Y.Z_linux_amd64
-sudo ./install-autostream-control-panel
 ```
 
-Control Panel以外では、最後のcommandをarchiveに入っている
-`install-autostream-discord-bot`、`install-autostream-encoder-recorder`、
-`install-autostream-observability`、`install-autostream-worker`へ読み替えます。
-serviceごとにsource versionは独立しているため、対象repositoryで公開済みの
-tagを指定してください。全serviceが同じversionとは限りません。
+確認済みの元archiveだけをサーバーの`/tmp`へ転送します。サーバーではbasenameを
+変更せずroot所有directoryへ固定し、archiveを残したまま同じdirectoryへ展開して
+installerを実行します。
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+```
+
+全componentのliteral download、Attestation、server-side install commandは
+[最初のインストール](/runbooks/first-install)
+にあります。既存環境では、下記のbackupを完了してから同じarchiveを決められた順序で
+配置します。
 
 ## 手順
 
-1. releaseから対象serviceの`linux_amd64`または`linux_arm64` artifact、archive sidecar、manifest、manifest sidecarをdownloadします。
-2. downloadした4 filesをroot-owned artifact directoryへ固定します。
-3. `gh attestation verify`でarchive本体とmanifestの両方を確認します。
-4. archiveをroot所有で展開し、そのdirectory直下の`install-autostream-<service>`を`sudo`で実行します。
-5. インストーラーがmanifest identityとarchive内`checksums.txt`を照合し、検証済みrelease、rollback用link、systemd unit、env placeholder、data directoryを配置します。
+1. 管理端末で対象serviceのarchive-only `linux_amd64` `.tar.gz`だけをdownloadします。
+2. 管理端末でarchive本体のGitHub Attestationを確認し、その元archiveだけを安全な経路でサーバーへ転送します。
+3. サーバーでarchive basenameを変更せず、root-owned artifact directoryへ固定します。
+4. 元archiveと展開directoryを隣接させてroot所有で展開し、そのdirectory直下の`install-autostream-<service>`を`sudo`で実行します。
+5. インストーラーが`artifact-manifest.json`とarchive内`checksums.txt`を照合し、managed release、rollback用link、systemd unit、env placeholder、data directoryを配置します。
 6. `/etc/autostream/<service>.env`を実環境に合わせて編集します。既存envは上書きされないため、更新時は新しい`.env.example`と比較します。
 7. `systemctl daemon-reload`後、serviceを明示的に起動または再起動します。インストーラー自身はserviceを開始しません。
 8. `MainPID`の実行file、`/health`、`/updater/version`、Control PanelのService Healthを確認します。
@@ -126,18 +153,171 @@ state directoryの外にあるroot専用directoryです。
 | Encoder Recorder | [Encoder Recorderを導入する](/services/encoder-recorder-install) |
 | Observability | [Observabilityを導入する](/services/observability-install) |
 
-## 更新するとき
+## 既存環境を更新するとき
 
 新規hostでは、物理ホストごとに非rootの`pull_v2` Host Agentを1つ置き、root Local Executorと固定Unix socketで分離します。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。登録直後はepoch `0`のobserverで、公開releaseと実host canaryを確認した後にだけownershipを切り替えます。systemd/Docker software updateと4 Node serviceの任意port変更はsource実装済みですが、実Linux/Docker gateは未確認です。Docker port変更には事前の固定policyと承認済みCompose baselineが必要で、reverse proxyは自動変更しません。設定とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
 
-更新適用が必要な既存hostでは、Bridge期間のlegacy `ssh_v1`として中央`autostream-updater`と`autostream-update-host` helperを維持します。どちらも使わず手動更新する場合も、manifest付きreleaseのservice installerを使います。
+Control Panel `v1.8.x`またはruntime service `v1.2.x`から更新するときも、
+uninstallや設定の作り直しは行いません。更新適用が必要な既存hostでは、Bridge期間の
+legacy `ssh_v1`中央`autostream-updater`、各host helper、SSH/必要なstatus portを
+維持します。Host Agentを追加してもこれらは自動削除されません。
 
-1. 現在のversionとenvを控えます。
-2. serviceを動かしたまま、新しいartifact、sidecar、manifestを取得して検証します。
-3. 展開先で`sudo ./install-autostream-<service>`を実行します。インストーラーが検証済みreleaseを配置し、内部linkを切り替えます。この時点では起動中の旧processは変わりません。
-4. env fileに新しい必須項目がないか確認し、databaseを持つserviceはbackupします。
-5. `systemctl daemon-reload`後にserviceを明示的にrestartします。
-6. `MainPID`、`/health`、`/updater/version`、Control Panelで確認します。失敗時はControl Panelのrollbackまたはrelease同梱の回復手順を使い、内部linkを直接編集しません。
+1. 現在のversion、unitのactive状態、`MainPID`、envとNode
+   `config.yml`のowner/mode/digestを控えます。
+2. Control PanelとObservabilityは、現在のbackup helperで実database dumpを成功させてからinstallerを実行します。既定database名なら次を使います。
+
+   ```bash
+   sudo /usr/local/sbin/autostream-backup-control-panel autostream_control_panel
+   sudo /usr/local/sbin/autostream-backup-observability autostream_observability
+   ```
+
+   database名を変更している場合は、envの実database名を上の引数へ直接指定します。
+3. Control Panel `v1.8.0` / `v1.8.1`とObservability `v1.2.0`のbackup
+   credentialは旧`/etc/autostream/mariadb-backup.cnf`にあります。Control Panel
+   `v1.8.2`以降とObservability `v1.2.1`以降はcanonical
+   `/etc/autostream-local-executor/mariadb-backup.cnf`です。旧pathだけが存在する
+   hostでは、新installerを実行する前にowner/modeを確認し、canonical pathが
+   未存在の場合だけ次のcopyを行います。
+
+   ```bash
+   sudo test "$(sudo stat -c '%U:%G:%a' /etc/autostream/mariadb-backup.cnf)" = "root:root:600" \
+     && sudo test ! -e /etc/autostream-local-executor/mariadb-backup.cnf \
+     && sudo install -d -o root -g root -m 0700 /etc/autostream-local-executor \
+     && sudo install -o root -g root -m 0600 /etc/autostream/mariadb-backup.cnf /etc/autostream-local-executor/mariadb-backup.cnf
+   ```
+
+   両方が存在する場合は上書きせず、内容と使用中helperを確認します。
+4. `v1.9.1` / `v1.3.1`が実際に公開された後、管理端末で次を上から実行します。
+   shellのversion変数や外部sidecarは使いません。
+
+   ```bash
+   gh release download v1.3.1 --repo Kome-Lab/Autostream-Encoder-Recorder \
+     --pattern 'autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz' \
+     --clobber
+   gh attestation verify autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz \
+     --repo Kome-Lab/Autostream-Encoder-Recorder \
+     --signer-workflow Kome-Lab/Autostream-Encoder-Recorder/.github/workflows/release-host.yml \
+     --deny-self-hosted-runners
+
+   gh release download v1.3.1 --repo Kome-Lab/Autostream-Worker \
+     --pattern 'autostream-worker_v1.3.1_linux_amd64.tar.gz' \
+     --clobber
+   gh attestation verify autostream-worker_v1.3.1_linux_amd64.tar.gz \
+     --repo Kome-Lab/Autostream-Worker \
+     --signer-workflow Kome-Lab/Autostream-Worker/.github/workflows/release-host.yml \
+     --deny-self-hosted-runners
+
+   gh release download v1.3.1 --repo Kome-Lab/Autostream-DiscordBot \
+     --pattern 'autostream-discord-bot_v1.3.1_linux_amd64.tar.gz' \
+     --clobber
+   gh attestation verify autostream-discord-bot_v1.3.1_linux_amd64.tar.gz \
+     --repo Kome-Lab/Autostream-DiscordBot \
+     --signer-workflow Kome-Lab/Autostream-DiscordBot/.github/workflows/release-host.yml \
+     --deny-self-hosted-runners
+
+   gh release download v1.3.1 --repo Kome-Lab/Autostream-Observability \
+     --pattern 'autostream-observability_v1.3.1_linux_amd64.tar.gz' \
+     --clobber
+   gh attestation verify autostream-observability_v1.3.1_linux_amd64.tar.gz \
+     --repo Kome-Lab/Autostream-Observability \
+     --signer-workflow Kome-Lab/Autostream-Observability/.github/workflows/release-host.yml \
+     --deny-self-hosted-runners
+
+   gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
+     --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
+     --clobber
+   gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
+     --repo Kome-Lab/Autostream-ControlPanel \
+     --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
+     --deny-self-hosted-runners
+   ```
+
+   Attestationに成功した元`.tar.gz`だけを対応するservice hostの`/tmp`へ転送します。
+5. 対象hostで元archiveをroot-owned directoryへ固定し、次の順序でinstallerを
+   実行します。serviceが別hostにある場合も、Encoder/Recorderの確認を終えてから
+   Worker、Discord Bot、Observabilityへ進み、Control Panelを最後に配置します。
+
+   ```bash
+   sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+   sudo install -o root -g root -m 0644 /tmp/autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+   sudo install -o root -g root -m 0644 /tmp/autostream-worker_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+   sudo install -o root -g root -m 0644 /tmp/autostream-discord-bot_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+   sudo install -o root -g root -m 0644 /tmp/autostream-observability_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+   sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+   cd /opt/autostream/releases/artifacts
+
+   sudo test ! -e autostream-encoder-recorder_v1.3.1_linux_amd64
+   sudo test ! -L autostream-encoder-recorder_v1.3.1_linux_amd64
+   sudo tar --no-same-owner --no-same-permissions -xzf autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz
+   sudo ./autostream-encoder-recorder_v1.3.1_linux_amd64/install-autostream-encoder-recorder
+
+   sudo test ! -e autostream-worker_v1.3.1_linux_amd64
+   sudo test ! -L autostream-worker_v1.3.1_linux_amd64
+   sudo tar --no-same-owner --no-same-permissions -xzf autostream-worker_v1.3.1_linux_amd64.tar.gz
+   sudo ./autostream-worker_v1.3.1_linux_amd64/install-autostream-worker
+
+   sudo test ! -e autostream-discord-bot_v1.3.1_linux_amd64
+   sudo test ! -L autostream-discord-bot_v1.3.1_linux_amd64
+   sudo tar --no-same-owner --no-same-permissions -xzf autostream-discord-bot_v1.3.1_linux_amd64.tar.gz
+   sudo ./autostream-discord-bot_v1.3.1_linux_amd64/install-autostream-discord-bot
+
+   sudo test ! -e autostream-observability_v1.3.1_linux_amd64
+   sudo test ! -L autostream-observability_v1.3.1_linux_amd64
+   sudo tar --no-same-owner --no-same-permissions -xzf autostream-observability_v1.3.1_linux_amd64.tar.gz
+   sudo ./autostream-observability_v1.3.1_linux_amd64/install-autostream-observability
+
+   sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
+   sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
+   sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
+   sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+   ```
+
+   各hostでは実際に配置しているserviceのarchive commandだけを実行します。
+6. installerは既存envをbyte-for-byteで保持し、Node `config.yml`を変更しません。
+   managed `current`を切り替えても、起動中の旧`MainPID`とprocessはこの時点では
+   変わりません。binary更新とport/config revision変更を同時に行わず、
+   Control Panelと通常のNode serviceで`AUTOSTREAM_BIND_ADDR`がない旧構成、
+   Observabilityで`OBSERVABILITY_BIND_ADDR`がない旧構成は、いずれも従来の
+   `127.0.0.1:8080`を維持します。
+7. `.env.example`と既存envを比較し、必要な設定だけを別の変更として反映します。
+   Control Panel `v1.8.0` / `v1.8.1`では新processの初回起動時にdatabase
+   migration 059が適用されます。`v1.8.2`には既に059があります。
+8. runtime serviceを1つずつ明示的にrestartします。各commandの直後に、その
+   serviceの既存設定portで`/health`と`/updater/version`、新しい`MainPID`の
+   実行file、`--version`を確認し、成功してから次へ進みます。
+
+   ```bash
+   sudo systemctl restart autostream-encoder-recorder
+   sudo systemctl restart autostream-worker
+   sudo systemctl restart autostream-discord-bot
+   sudo systemctl restart autostream-observability
+   ```
+
+   各hostでは実際に配置したunitのcommandだけを実行します。
+9. runtime serviceがすべて正常であることを確認してからControl Panelを最後に
+   restartします。Control Panel `v1.8.0` / `v1.8.1`からの更新では、この起動で
+   migration 059が適用されます。
+
+   ```bash
+   sudo systemctl restart autostream-control-panel
+   ```
+
+10. Control Panelも`systemctl status`、新しい`MainPID`の実行file、`--version`、
+   既存設定portの`/health`と`/updater/version`を確認します。最後にControl Panelの
+   Service Healthと短いテスト配信を確認します。
+
+installer実行中の失敗は同じtransaction内で旧配置へ戻しますが、installer成功後の
+service restartやhealth失敗は自動rollbackされません。Control Panelのrollbackまたは
+release同梱の回復手順を使い、内部`current`を直接編集しません。database migration
+後にpre-059 Control Panelへ戻す場合は、全Control Panel writerを止めた
+single-writer手順とdatabase backup/restore判断が必要です。旧binaryを新しい
+System Updates policyのwriterとして動かさないでください。
+
+Host Agentの`install-autostream-host-agent --prepare`はidentity、policy、A/B
+runtimeがないfresh host専用です。既存Host Agentへ再実行せず、既存Agent /
+Local ExecutorはControl Panelの専用self-updateで更新します。fresh hostでも
+service archiveとは別のHost Agent archiveを使い、物理ホストごとに1つだけ
+導入します。
 
 ## Dockerとの使い分け
 

@@ -23,16 +23,45 @@ sudo apt-get update
 sudo apt-get install -y ffmpeg
 ```
 
-`ffmpeg`は外部packageのためservice installerでは導入しません。続いてmanifest付き
-host releaseのarchive、sidecar、manifestを取得します。4 filesをroot-owned
-directoryへ固定し、archive本体とmanifestの両方をGitHub Attestationで検証して
-からroot所有で展開します。archive直下で次を実行します。
+`ffmpeg`は外部packageのためservice installerでは導入しません。続いて
+`artifact-manifest.json`を含むarchive-only形式のhost releaseを使います。
+管理端末でarchive本体だけをdownloadしてGitHub Attestationを確認し、元
+`.tar.gz`だけをサーバーへ転送します。サーバーではbasenameを変更せずroot-owned
+directoryへ固定し、元archiveと展開directoryを隣接させて、archive直下で次を
+実行します。
+
+> [!CAUTION]
+> 2026-07-31現在、公開済み最新`v1.3.0`は旧4-file手動導入契約です。次の
+> `v1.3.1`は未公開のarchive-only候補なので、matching releaseが公開されるまで
+> 実行せず、`v1.3.0`へ読み替えないでください。
+
+管理端末:
 
 ```bash
-sudo ./install-autostream-encoder-recorder
+gh release download v1.3.1 --repo Kome-Lab/Autostream-Encoder-Recorder \
+  --pattern 'autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz' \
+  --clobber
+gh attestation verify autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-Encoder-Recorder \
+  --signer-workflow Kome-Lab/Autostream-Encoder-Recorder/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
 ```
 
-installerはreleaseを検証し、`autostream` account、rollback用の内部release、
+確認済みの元archiveだけを`/tmp`へ転送した後のサーバー:
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+sudo test ! -e autostream-encoder-recorder_v1.3.1_linux_amd64
+sudo test ! -L autostream-encoder-recorder_v1.3.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz
+sudo ./autostream-encoder-recorder_v1.3.1_linux_amd64/install-autostream-encoder-recorder
+```
+
+installerはarchive内部の`artifact-manifest.json`、`checksums.txt`、host
+architecture、binary versionを検証し、元archiveのSHA-256を記録してから、
+`autostream` account、rollback用の内部release、
 systemd unit、env placeholder、録画/data directory、
 `/usr/local/bin/autostream-encoder-recorder`を配置します。既存の直接配置binaryは
 managed配置へ移行し、既存envは保持します。旧fileは
@@ -41,6 +70,14 @@ managed配置へ移行し、既存envは保持します。旧fileは
 installerはserviceを開始せず、output relay、reverse proxy、Docker Compose、
 container、imageは変更しません。詳しい取得と検証手順は
 [Linuxホストで直接動かす](/deployment/host)を参照してください。
+
+外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
+releaseには残りますが、手動導入ではdownloadもuploadもしません。既存のimmutableな
+`v1.3.0`は旧4-file手動導入契約です。`v1.2.x`から更新する場合もenvとNode
+`config.yml`、起動中の旧`MainPID`は保持されます。installer成功後に明示的に
+restartし、既存設定portのhealthと新versionを確認します。詳細は
+[既存環境を更新するとき](/deployment/host#既存環境を更新するとき)を参照して
+ください。service installerはHost Agentを自動導入しません。
 
 `/etc/autostream/encoder-recorder.env` を編集します。
 

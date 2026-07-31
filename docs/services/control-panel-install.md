@@ -20,16 +20,43 @@ secret と token の生成方法は [秘密情報とtoken生成](/security/token
 
 ## host直接起動
 
-新しいhost releaseからarchive、archive sidecar、`release-manifest.json`、
-manifest sidecarを取得します。4 filesをroot-owned directoryへ固定し、archive
-本体とmanifestの両方をGitHub Attestationで検証してからroot所有で展開します。
-archive直下で次を実行します。
+`artifact-manifest.json`を含むarchive-only形式のhost releaseを使います。管理端末で
+archive本体だけをdownloadしてGitHub Attestationを確認し、確認済みの元`.tar.gz`
+だけをサーバーへ転送します。サーバーではarchive basenameを変更せずroot-owned
+directoryへ固定し、元archiveと展開directoryを隣接させて、archive直下で次を
+実行します。
+
+> [!CAUTION]
+> 2026-07-31現在、公開済み最新`v1.9.0`は旧4-file手動導入契約です。次の
+> `v1.9.1`は未公開のarchive-only候補なので、matching releaseが公開されるまで
+> 実行せず、`v1.9.0`へ読み替えないでください。
+
+管理端末:
 
 ```bash
-sudo ./install-autostream-control-panel
+gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
+  --clobber
+gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-ControlPanel \
+  --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
+  --deny-self-hosted-runners
 ```
 
-installerはchecksum、manifest identity、binary versionを検証し、
+確認済みの元archiveだけを`/tmp`へ転送した後のサーバー:
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+```
+
+installerはarchive内部の`artifact-manifest.json`、`checksums.txt`、host
+architecture、binary versionを検証し、元archiveのSHA-256を記録してから、
 `autostream` account、rollback可能な内部release、systemd unit、env
 placeholder、backup executableとdirectory、MariaDB defaults placeholderを
 配置します。operatorとsystemdは`/usr/local/bin/control-panel`、web assetsは
@@ -43,9 +70,21 @@ placeholder、backup executableとdirectory、MariaDB defaults placeholderを
 image、Docker repository、MariaDB、reverse proxyを変更しません。詳しい取得と
 検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
 
+外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
+releaseには残りますが、この手動導入ではdownloadもuploadもしません。既存の
+immutableな`v1.9.0`は旧4-file手動導入契約なので、archive-only手順は
+`artifact-manifest.json`を含む新しく公開されたreleaseから使用します。
+
 backup executableとroot-only defaults placeholderの配置は自動ですが、実際の
 MariaDB backup account、password、database grant、database nameはarchive同梱
 `README.install.md`に従ってoperatorが設定し、実dumpを確認してください。
+
+Control Panel `v1.8.x`からの更新では既存envと起動中の旧`MainPID`を維持したまま
+installerを実行し、database backup、旧backup credential pathの確認、明示的な
+restartとhealth確認を行います。`v1.8.0` / `v1.8.1`からの初回起動ではmigration
+059が適用され、`v1.8.2`には既に059があります。手順は
+[既存環境を更新するとき](/deployment/host#既存環境を更新するとき)を参照して
+ください。service installerはHost Agentを自動導入しません。
 
 `/etc/autostream/control-panel.env` を編集します。
 

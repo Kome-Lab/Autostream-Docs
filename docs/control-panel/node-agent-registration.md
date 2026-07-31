@@ -103,11 +103,34 @@ Linux hostではサービスごとの`/etc/autostream-<service>/config.yml`へ�
 
 `pull_v2`はendpointlessなので、Host、Port、SSLを入力しません。受信TCPや`8090`も設定しません。Host AgentはControl Panelへoutbound HTTPSで接続します。
 
-検証済みHost Agent releaseを展開し、先に同じreleaseのHost Agent、Local Executor、systemd unitを`--prepare`で配置します。`--prepare`はserviceを起動せず、identityやpolicyを推測しません。
+Host AgentはControl Panelや各runtime serviceのinstallerから自動導入されません。
+`Kome-Lab/Autostream-ControlPanel`の別の
+`autostream-host-agent_v1.9.1_linux_amd64.tar.gz`を物理ホストごとに1つ使います。
+2026-07-31現在、この`v1.9.1`は未公開のarchive-only候補で、公開済み最新
+`v1.9.0`は旧外部checksum/manifest手動確認契約です。`v1.9.1`が実際に公開される
+まではcandidate commandを実行せず、`v1.9.0`へ読み替えないでください。
+`artifact-manifest.json`を含むarchive-only releaseでは、管理端末で
+元archive本体だけをdownloadしてGitHub Attestationを確認し、その`.tar.gz`だけを
+サーバーへ転送します。外部checksumとmanifestは自動Updater互換用であり、手動導入の
+サーバーへuploadしません。サーバーではbasenameを変更せずroot-owned
+directoryへ固定し、元archiveと展開directoryを隣接させます。詳しい取得・展開手順は
+[Host Agent Bridgeでサービスを更新する](/operations/system-updates)
+を参照してください。
+
+展開した同じreleaseからHost Agent、Local Executor、systemd unitを`--prepare`で
+配置します。`--prepare`はidentity、policy、A/B runtimeがないfresh-onlyの導入で、
+serviceを起動せずidentityやpolicyを推測しません。
 
 ```bash
 sudo ./install/install-autostream-host-agent --prepare
 ```
+
+既存Host Agentへ`--prepare`を再実行しません。既存identity、policy、active unit、
+A/B runtimeがある場合は拒否されるため、既存Agent / ExecutorはControl Panelの
+専用self-updateを使います。既存のimmutableなHost Agent `v1.9.0`は旧外部
+checksum/manifest手動確認契約のままです。archive-only手順は
+`artifact-manifest.json`を含む新しく公開されたreleaseから使用し、Bridge完了まで
+既存`ssh_v1` updater/helper/SSH資産を維持します。
 
 続いてConfigurationに表示されたAuto Configure commandを対象ホストで実行します。
 
