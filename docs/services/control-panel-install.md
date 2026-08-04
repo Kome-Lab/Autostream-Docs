@@ -26,15 +26,15 @@ archive本体だけをdownloadしてGitHub Attestationを確認し、確認済�
 directoryへ固定し、元archiveと展開directoryを隣接させて、archive直下で次を
 実行します。
 
-公開`v1.9.10`のarchive-only releaseを使用し、古いreleaseへ読み替えないでください。
+公開`v1.9.11`のarchive-only releaseを使用し、古いreleaseへ読み替えないでください。
 
 管理端末:
 
 ```bash
-gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern 'autostream-control-panel_v1.9.10_linux_amd64.tar.gz' \
+gh release download v1.9.11 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.11_linux_amd64.tar.gz' \
   --clobber
-gh attestation verify autostream-control-panel_v1.9.10_linux_amd64.tar.gz \
+gh attestation verify autostream-control-panel_v1.9.11_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
@@ -44,12 +44,12 @@ gh attestation verify autostream-control-panel_v1.9.10_linux_amd64.tar.gz \
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.10_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.11_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 cd /opt/autostream/releases/artifacts
-sudo test ! -e autostream-control-panel_v1.9.10_linux_amd64
-sudo test ! -L autostream-control-panel_v1.9.10_linux_amd64
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.10_linux_amd64.tar.gz
-sudo ./autostream-control-panel_v1.9.10_linux_amd64/install-autostream-control-panel
+sudo test ! -e autostream-control-panel_v1.9.11_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.11_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.11_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.11_linux_amd64/install-autostream-control-panel
 ```
 
 installerはarchive内部の`artifact-manifest.json`、`checksums.txt`、host
@@ -69,7 +69,7 @@ image、Docker repository、MariaDB、reverse proxyを変更しません。詳�
 
 外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
 releaseには残りますが、この手動導入ではdownloadもuploadもしません。手動導入には
-`artifact-manifest.json`を含む公開`v1.9.10` archiveだけを使用します。
+`artifact-manifest.json`を含む公開`v1.9.11` archiveだけを使用します。
 
 backup executableとroot-only defaults placeholderの配置は自動ですが、実際の
 MariaDB backup account、password、database grant、database nameはarchive同梱
@@ -81,6 +81,8 @@ restartとhealth確認を行います。`v1.8.0` / `v1.8.1`からの初回起動
 059が適用され、`v1.8.2`には既に059があります。手順は
 [既存環境を更新するとき](/deployment/host#既存環境を更新するとき)を参照して
 ください。service installerはHost Agentを自動導入しません。
+
+既存Host Agent / Local Executorも`v1.9.11`へ更新する場合は、このControl Panelを先に再起動し、`/updater/version`が`v1.9.11`になったことを確認してからHost runtimeへ進みます。通常はHost Agent archiveの`--upgrade`を使います。Panel更新が`99%`の中断状態にある場合だけ、同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pairとexact active jobをinstallerに検証させ、`--upgrade --recover-active-job`を使います。Configure Tokenは不要です。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。完全な直書き手順は[既存Host Agent / Local Executorを`v1.9.11`へ更新する](/operations/system-updates#upgrade-host-agent-v1911)を参照してください。
 
 `/etc/autostream/control-panel.env` を編集します。
 

@@ -41,6 +41,8 @@ $rng.GetBytes($bytes)
 
 通常serviceのNode Runtime Token/Configure Tokenを紛失した場合は、Control PanelのNode登録Configurationから再生成して`config.yml`を更新します。未起動Host AgentのConfigure Tokenは再発行できますが、activeな`pull_v2` Host Agentの即時Runtime Token再生成は`staged_runtime_token_rotation_required`で拒否されます。専用rotationはstage→旧tokenで1回だけclaim→`identity.staged.json`のlocal ack→staged token heartbeat proof→activate→canonical identity昇格→旧token revokeの順です。activate前はcancelでき、emergency revokeは通信断とlocal recoveryを伴うbreak-glass操作です。generic Rotateで旧tokenを先に失効させません。`execution_host_id`と`ownership_epoch`はserver-ownedなのでconfigへ入れません。
 
+既存Host Agent / Local Executorの`v1.9.11` manual upgradeはcredential発行やrotationではありません。Control Panel `v1.9.11`を先に稼働させ、通常の`--upgrade`またはexact `v1.9.9` / `v1.9.10` pair限定の`--upgrade --recover-active-job`を実行しても、canonical identityと既存Runtime Tokenを保持します。Configure Tokenを再発行せず、`autostream-host-agent configure`を再実行しないでください。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。
+
 ## サービス別の入力一覧
 
 | service | 手生成してenvに入れる値 | Control Panel が生成する値 | provider から取得する値 |
@@ -57,7 +59,7 @@ Host Agent用のNode Runtime Tokenはcanonical `/etc/autostream-host-agent/ident
 
 legacy `/etc/autostream/host-agent.json`はcanonical不在時のread-only fallbackだけです。非root Agentはcanonicalをowner、group、mode、regular-file条件、4項目JSONまで安全に読み終えた後のlegacy `EACCES`だけを許容します。canonical不在時のunreachable legacy、visible dual identity、その他のprobe errorはfail closedです。Auto ConfigureとRuntime Token rotation/recoveryはroot writerとして書き込み前後にlegacyが存在せずdangling symlinkでもないことを検証し、canonicalだけへ書き込みます。rotation前にlegacyをmanaged migrationしてください。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。
 
-Bridge期間のlegacy `ssh_v1`では、中央Updater用Node Runtime TokenとGitHub Release Token、SSH鍵を既存の境界で扱います。これらを`pull_v2`の4項目configへコピーしません。`pull_v2`は固定Kome-Lab repositoryの公開immutable releaseを匿名HTTPSで取得し、長期release tokenをHost Agentへ配送しません。公開`v1.9.10` releaseのAttestationと対象hostでの実canaryは別々に確認してください。
+Bridge期間のlegacy `ssh_v1`では、中央Updater用Node Runtime TokenとGitHub Release Token、SSH鍵を既存の境界で扱います。これらを`pull_v2`の4項目configへコピーしません。`pull_v2`は固定Kome-Lab repositoryの公開immutable releaseを匿名HTTPSで取得し、長期release tokenをHost Agentへ配送しません。公開`v1.9.11` releaseのAttestationと対象hostでの実canaryは別々に確認してください。
 
 ## 手入力しないtoken
 

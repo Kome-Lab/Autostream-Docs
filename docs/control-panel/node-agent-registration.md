@@ -8,7 +8,7 @@ Node Agent登録は、Control Panelが通常のNode serviceとUpdater transport�
 | `pull_v2` Host Agent | 物理ホストの`autostream-host-agent` | endpointless。Host、Port、SSL、`8090`を持たない |
 | `ssh_v1` Update Agent | Bridge期間の中央`autostream-updater` | legacy互換設定を維持 |
 
-新規ホストは`pull_v2`で登録します。登録・Auto Configure直後は`ownership_epoch=0`のobserverであり、register、heartbeat、policy refresh、target probeだけを行います。Local Executorと全targetがreadyになった後、管理者が「Host Agentへ切り替え」を実行したときだけ正のownership epochを取得して更新jobをclaimします。公開`v1.9.10`のAttestationを確認しても実host canaryは別の証拠です。canary完了までは本番の`ssh_v1`を維持してください。
+新規ホストは`pull_v2`で登録します。登録・Auto Configure直後は`ownership_epoch=0`のobserverであり、register、heartbeat、policy refresh、target probeだけを行います。Local Executorと全targetがreadyになった後、管理者が「Host Agentへ切り替え」を実行したときだけ正のownership epochを取得して更新jobをclaimします。公開`v1.9.11`のAttestationを確認しても実host canaryは別の証拠です。canary完了までは本番の`ssh_v1`を維持してください。
 
 ## 通常Nodeを登録する
 
@@ -105,8 +105,8 @@ Linux hostではサービスごとの`/etc/autostream-<service>/config.yml`へ�
 
 Host AgentはControl Panelや各runtime serviceのinstallerから自動導入されません。
 `Kome-Lab/Autostream-ControlPanel`の別の
-`autostream-host-agent_v1.9.10_linux_amd64.tar.gz`を物理ホストごとに1つ使います。
-公開`v1.9.10`のarchive-only releaseを使用し、古い`v1.9.9`へ読み替えないでください。
+`autostream-host-agent_v1.9.11_linux_amd64.tar.gz`を物理ホストごとに1つ使います。
+公開`v1.9.11`のarchive-only releaseを使用し、古い`v1.9.9`へ読み替えないでください。
 `artifact-manifest.json`を含むarchive-only releaseでは、管理端末で
 元archive本体だけをdownloadしてGitHub Attestationを確認し、その`.tar.gz`だけを
 サーバーへ転送します。外部checksumとmanifestは自動Updater互換用であり、手動導入の
@@ -126,8 +126,10 @@ sudo ./install/install-autostream-host-agent --prepare
 既存Host Agentへ`--prepare`を再実行しません。既存identity、policy、active unit、
 A/B runtimeがある場合は拒否されるため、既存Agent / ExecutorはControl Panelの
 専用self-updateを使います。archive-only手順は
-`artifact-manifest.json`を含む公開`v1.9.10` releaseから使用し、Bridge完了まで
+`artifact-manifest.json`を含む公開`v1.9.11` releaseから使用し、Bridge完了まで
 既存`ssh_v1` updater/helper/SSH資産を維持します。
+
+既存Host Agentの手動更新では、Control Panel `v1.9.11`を先に導入・再起動してから、通常は展開済みarchiveの`install-autostream-host-agent --upgrade`を使います。Panel更新が`99%`の中断状態にあり、installed Agent / Executorが同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pairの場合だけ、`--upgrade --recover-active-job`を使えます。このrescue modeはdurable stateを`reconcile`してexact terminal proofを確認するだけです。rescue modeは再stage・再applyしません。更新では既存identity/policyを保持するため、Configure Tokenの再発行や`configure`の再実行は不要です。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。詳しい直書きcommandは[Host Agent Bridgeでサービスを更新する](/operations/system-updates#upgrade-host-agent-v1911)を参照してください。
 
 続いてConfigurationに表示されたAuto Configure commandを対象ホストで実行します。
 
@@ -209,13 +211,13 @@ transportを省略した既存Update Agentは`ssh_v1`として扱います。中
 
 | 機能 | 状態 |
 | --- | --- |
-| `pull_v2`登録、4項目identity、exact policy、初期systemd sidecar、register/heartbeat/probe | 公開`v1.9.10` releaseあり。本番deployは別途検証が必要 |
+| `pull_v2`登録、4項目identity、exact policy、初期systemd sidecar、register/heartbeat/probe | 公開`v1.9.11` releaseあり。本番deployは別途検証が必要 |
 | root Local ExecutorとのUnix socket RPC | software update、systemd port apply/reconcile/rollback、UID 0専用self-update watchdog statusのsource/tests、Linux container tests、root fixtureあり。実systemd VM E2Eは未検証 |
-| `pull_v2`でのjob claim、stage、apply、report、rollback | 公開`v1.9.10` artifactあり。22/8090遮断canary未検証 |
+| `pull_v2`でのjob claim、stage、apply、report、rollback | 公開`v1.9.11` artifactあり。22/8090遮断canary未検証 |
 | `1024..65535`のport reservationとsystemd `port_reconfigure` | source/API/UI/testsあり。実systemd VM smoke未検証 |
 | Docker port mapping | advertised、localhost published、container listenの専用job/API/UI/unit testsあり。Docker 29.6.2 / Compose 5.3.1のisolated root DINDで連続変更、実process crash後のfresh-process reconcile、unhealthy rollback、foreign ownerのgrant前拒否を確認。固定Docker policyと承認済みbaselineが必須。公開imageと実Docker host canaryは未確認 |
 | staged Runtime Token rotation | stage/claim/local ack/staged heartbeat/activate/cancel/emergencyのHTTP/Store/Host Agent/Executor sourceとtestsあり。mixed-version実host drillとdeployは未実施 |
-| Host Agent / Executor自己更新 | recovery protocol 2、directory fsync、reserved artifact recovery、fresh-process slot検証、`failed_generation`とreceipt-free terminal `phase=failed` grant収束、同一IPC replayのno-op success、異binding拒否、stage claim後cancel拒否、root-only watchdog statusのsource/focused testsと公開`v1.9.10` artifactあり。実systemd process kill/reboot、amd64/arm64 canaryは未確認 |
+| Host Agent / Executor自己更新 | recovery protocol 2、directory fsync、reserved artifact recovery、fresh-process slot検証、`failed_generation`とreceipt-free terminal `phase=failed` grant収束、同一IPC replayのno-op success、異binding拒否、stage claim後cancel拒否、root-only watchdog statusのsource/focused testsと公開`v1.9.11` artifactあり。実systemd process kill/reboot、amd64/arm64 canaryは未確認 |
 | fleet canary、Control Panel hostの最終移行、SSH/`8090`撤去 | 未検証・未着手 |
 
 ## API
@@ -245,4 +247,4 @@ Panelから通常Node APIへ送るstart、stop、preflightもbearer tokenで認�
 - root writerのAuto ConfigureとRuntime Token rotation/recoveryは書き込み前後にlegacyが存在せずdangling symlinkでもないことを確認し、canonicalだけへatomicに書き込みます。
 - Host Agentはnonroot、受信TCPなし、Docker socket mountなしで動かします。
 - Local Executorは`/run/autostream-local-executor/executor.sock`だけでHost Agentと通信し、`/etc/autostream`を読めません。policyとDocker credentialは`/etc/autostream-local-executor`へ分離します。
-- 公開`v1.9.10` releaseとAttestationだけではownershipを切り替えません。実Linux canaryとrollback drillの証拠も必要です。
+- 公開`v1.9.11` releaseとAttestationだけではownershipを切り替えません。実Linux canaryとrollback drillの証拠も必要です。

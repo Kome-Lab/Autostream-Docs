@@ -25,14 +25,60 @@ function requireMarkers(path, markers) {
   return contents;
 }
 
+const exactRecoverySafetyMarkers = [
+  'rescue modeは再stage・再applyしません。',
+  'journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。',
+  'systemd conditionを回避しないでください。',
+];
+
+const forbiddenRecoverySafetyMarkers = [
+  'rescue modeは再stage・再applyします',
+  'rescue modeは再stage・再applyしてください',
+  'rescue modeは再stage・再applyしてよい',
+  'journal、ledger、checkpoint、marker、guardを手動削除・編集します',
+  'journal、ledger、checkpoint、marker、guardを手動削除・編集してください',
+  'journal、ledger、checkpoint、marker、guardを手動削除・編集してよい',
+  'systemd conditionを回避します',
+  'systemd conditionを回避してください',
+  'systemd conditionを回避してよい',
+];
+
+function requireExactRecoverySafetyContract(path) {
+  const contents = read(path);
+  for (const marker of exactRecoverySafetyMarkers) {
+    if (!contents.includes(marker)) {
+      throw new Error(`${path} is missing exact negative recovery safety marker: ${marker}`);
+    }
+  }
+  for (const marker of forbiddenRecoverySafetyMarkers) {
+    if (contents.includes(marker)) {
+      throw new Error(`${path} contains forbidden affirmative recovery safety marker: ${marker}`);
+    }
+  }
+}
+
 const operationsPath = 'docs/operations/system-updates.md';
 const registrationPath = 'docs/control-panel/node-agent-registration.md';
 const dockerPath = 'docs/deployment/docker.md';
 const hostDeploymentPath = 'docs/deployment/host.md';
 const firstInstallPath = 'docs/runbooks/first-install.md';
 const hostOperationsPath = 'docs/services/host-operations.md';
+const controlPanelInstallPath = 'docs/services/control-panel-install.md';
 const tokensPath = 'docs/security/tokens.md';
 const hardeningPath = 'docs/security/hardening.md';
+
+for (const path of [
+  operationsPath,
+  registrationPath,
+  hostDeploymentPath,
+  firstInstallPath,
+  hostOperationsPath,
+  controlPanelInstallPath,
+  tokensPath,
+  hardeningPath,
+]) {
+  requireExactRecoverySafetyContract(path);
+}
 
 const bridgeMarkers = [
   '`pull_v2`',
@@ -107,8 +153,8 @@ const operations = requireMarkers(operationsPath, [
   '`api_tokens.revoke`',
   '`secrets.update`',
   '`system_updates.execute`',
-  'gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel',
-  'autostream-host-agent_v1.9.10_linux_amd64.tar.gz',
+  'gh release download v1.9.11 --repo Kome-Lab/Autostream-ControlPanel',
+  'autostream-host-agent_v1.9.11_linux_amd64.tar.gz',
   '`/etc/autostream-host-agent/identity.json`が唯一のcanonical identity',
   '`root:root 0750`',
   'legacy probeが`EACCES`',
@@ -121,10 +167,19 @@ const operations = requireMarkers(operationsPath, [
   'sudo ./install/install-autostream-host-agent --upgrade',
   "sudo setfacl --remove 'u:autostream-host-agent'",
   "grep -Eq '^(default:)?user:autostream-host-agent:'",
-  'autostream-local-executor v1.9.10',
+  'autostream-local-executor v1.9.11',
   '`setfacl -b`',
   '`chmod 0751`',
   '`chgrp autostream-host-agent`',
+  'Control Panel `v1.9.11`を先に導入',
+  'sudo /opt/autostream/releases/artifacts/autostream-control-panel_v1.9.11_linux_amd64/install-autostream-control-panel',
+  'sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade',
+  'sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade --recover-active-job',
+  '両方ともexact `v1.9.9`または両方ともexact `v1.9.10`のpairだけ',
+  'rescue modeは再stage・再applyしません',
+  '/var/lib/autostream-host-agent/journal.clear-active.pending.json',
+  '/etc/systemd/system/autostream-host-agent.service.d/90-autostream-upgrade-recovery-guard.conf',
+  'Configure Tokenを再発行しません',
 ]);
 
 const registration = requireMarkers(registrationPath, [
@@ -156,12 +211,19 @@ const registration = requireMarkers(registrationPath, [
   '`api_tokens.revoke`',
   '`secrets.update`',
   '`system_updates.execute`',
-  'autostream-host-agent_v1.9.10_linux_amd64.tar.gz',
+  'autostream-host-agent_v1.9.11_linux_amd64.tar.gz',
   '`root:root 0750`',
   'canonicalをowner/mode/shapeまで安全に読み終えた後のlegacy `EACCES`',
   'canonical不在時にlegacyが見えない',
   'visible legacy',
   '書き込み前後にlegacyが存在せずdangling symlinkでもない',
+  'Control Panel `v1.9.11`を先に導入・再起動',
+  '`--upgrade --recover-active-job`',
+  '同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pair',
+  'rescue modeは再stage・再applyしません',
+  'Configure Tokenの再発行',
+  'journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください',
+  'systemd conditionを回避しないでください',
 ]);
 
 const docker = requireMarkers(dockerPath, [
@@ -200,7 +262,7 @@ const hostDeployment = requireMarkers(hostDeploymentPath, [
   '成功してから次へ進みます',
   '`OBSERVABILITY_BIND_ADDR`',
   'Control Panelを最後に',
-  'Control Panel / Host Agentが`v1.9.10`、runtime serviceが`v1.3.1`',
+  'Control Panel / Host Agentが`v1.9.11`、runtime serviceが`v1.3.1`',
   'componentごとにrepositoryとtagを一致',
   'canonical `/etc/autostream-host-agent/identity.json`',
   '`/etc/autostream`は`root:root 0750`',
@@ -208,17 +270,23 @@ const hostDeployment = requireMarkers(hostDeploymentPath, [
   'upgrade完了まで保持',
   'upgrade前から',
   '/operations/system-updates#remove-v199-acl',
+  'Control Panel `v1.9.11`を導入・再起動',
+  'sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade',
+  'sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade --recover-active-job',
+  '同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pair',
+  'rescue modeは再stage・再applyしません',
+  'Configure Tokenを使いません',
 ]);
 const firstInstall = requireMarkers(firstInstallPath, [
-  'Control Panel / Host Agentが`v1.9.10`',
+  'Control Panel / Host Agentが`v1.9.11`',
   '4つのruntime serviceが`v1.3.1`',
   '古いreleaseへ読み替えず',
-  'gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel',
+  'gh release download v1.9.11 --repo Kome-Lab/Autostream-ControlPanel',
   'gh release download v1.3.1 --repo Kome-Lab/Autostream-Encoder-Recorder',
   'gh release download v1.3.1 --repo Kome-Lab/Autostream-Worker',
   'gh release download v1.3.1 --repo Kome-Lab/Autostream-DiscordBot',
   'gh release download v1.3.1 --repo Kome-Lab/Autostream-Observability',
-  'autostream-host-agent_v1.9.10_linux_amd64.tar.gz',
+  'autostream-host-agent_v1.9.11_linux_amd64.tar.gz',
   '`autostream-contracts`',
   '単独導入するdaemonやrelease archiveはありません',
   '`/etc/autostream-host-agent/identity.json`だけ',
@@ -227,11 +295,22 @@ const firstInstall = requireMarkers(firstInstallPath, [
   'upgrade完了まで保持',
   'upgrade前から',
   '/operations/system-updates#remove-v199-acl',
+  'Control Panel `v1.9.11`を先に導入・再起動',
+  'sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade',
+  '`--upgrade --recover-active-job`',
+  '同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pair',
+  'Configure Tokenは不要',
+  'rescue modeは再stage・再applyしません',
 ]);
 const hostOperations = requireMarkers(hostOperationsPath, [
-  'autostream-control-panel_v1.9.10_linux_amd64/',
-  '公開`v1.9.10` archive-only release',
+  'autostream-control-panel_v1.9.11_linux_amd64/',
+  '公開`v1.9.11` archive-only release',
   'runtime serviceの現在のreleaseは`v1.3.1`',
+  'Control Panel `v1.9.11`を先に導入・再起動',
+  'sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade',
+  'sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade --recover-active-job',
+  'Configure Tokenは不要',
+  'rescue modeは再stage・再applyしません',
 ]);
 
 requireMarkers(tokensPath, [
@@ -241,6 +320,11 @@ requireMarkers(tokensPath, [
   'canonical不在時のunreachable legacy',
   'visible dual identity',
   '書き込み前後にlegacyが存在せずdangling symlinkでもない',
+  'Control Panel `v1.9.11`を先に稼働',
+  'exact `v1.9.9` / `v1.9.10` pair限定',
+  'Configure Tokenを再発行せず',
+  'journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください',
+  'systemd conditionを回避しないでください',
 ]);
 
 requireMarkers(hardeningPath, [
@@ -250,16 +334,32 @@ requireMarkers(hardeningPath, [
   'visible dual identity',
   '書き込み前後にlegacyの不在とdangling symlink不在',
   '`user:autostream-host-agent:--x` ACL',
-  'matching `v1.9.10` upgrade完了まで保持',
+  'matching `v1.9.11` upgrade完了まで保持',
   '`setfacl -b`',
+  'Control Panel `v1.9.11`を先に稼働',
+  '`--recover-active-job`は同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pair',
+  'rescue modeは再stage・再applyしません',
+  'journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください',
+  'systemd conditionを回避しないでください',
+]);
+
+requireMarkers(controlPanelInstallPath, [
+  'Control Panelを先に再起動',
+  '`/updater/version`が`v1.9.11`',
+  '同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pair',
+  '`--upgrade --recover-active-job`',
+  'Configure Tokenは不要',
+  'rescue modeは再stage・再applyしません',
+  'journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください',
+  'systemd conditionを回避しないでください',
 ]);
 
 const literalServiceGuides = [
   [
     'docs/services/control-panel-install.md',
-    'v1.9.10',
-    'gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel',
-    'autostream-control-panel_v1.9.10_linux_amd64.tar.gz',
+    'v1.9.11',
+    'gh release download v1.9.11 --repo Kome-Lab/Autostream-ControlPanel',
+    'autostream-control-panel_v1.9.11_linux_amd64.tar.gz',
     'install-autostream-control-panel',
   ],
   [
@@ -312,9 +412,9 @@ const literalArchiveGuides = [
   ...literalServiceContents,
 ];
 const staleReleaseClaims = [
-  '`v1.9.10`は未公開',
+  '`v1.9.11`は未公開',
   '`v1.3.1`は未公開',
-  '`v1.9.10` / `v1.3.1`は未公開',
+  '`v1.9.11` / `v1.3.1`は未公開',
   '未公開のarchive-only候補',
   '現在は未公開',
 ];
@@ -352,7 +452,7 @@ const orderedUpgradeInstalls = [
   'sudo ./autostream-worker_v1.3.1_linux_amd64/install-autostream-worker',
   'sudo ./autostream-discord-bot_v1.3.1_linux_amd64/install-autostream-discord-bot',
   'sudo ./autostream-observability_v1.3.1_linux_amd64/install-autostream-observability',
-  'sudo ./autostream-control-panel_v1.9.10_linux_amd64/install-autostream-control-panel',
+  'sudo ./autostream-control-panel_v1.9.11_linux_amd64/install-autostream-control-panel',
 ];
 let previousUpgradeInstall = -1;
 for (const marker of orderedUpgradeInstalls) {
@@ -405,8 +505,48 @@ for (const [path, contents] of [
   }
 }
 
+const hostManualUpgradeSectionStart = operations.indexOf(
+  '### 既存Host Agent / Local Executorを`v1.9.11`へ更新する',
+);
+const hostManualUpgradeSectionEnd = operations.indexOf(
+  '### `v1.9.9`の一時ACLを保持して`v1.9.11`へ更新する',
+  hostManualUpgradeSectionStart,
+);
+if (hostManualUpgradeSectionStart < 0 || hostManualUpgradeSectionEnd < 0) {
+  throw new Error(`${operationsPath} is missing the bounded v1.9.11 manual Host runtime upgrade section`);
+}
+const hostManualUpgradeSection = operations.slice(
+  hostManualUpgradeSectionStart,
+  hostManualUpgradeSectionEnd,
+);
+const orderedHostManualUpgradeMarkers = [
+  'Control Panel `v1.9.11`を先に導入して再起動',
+  'sudo /opt/autostream/releases/artifacts/autostream-control-panel_v1.9.11_linux_amd64/install-autostream-control-panel',
+  'sudo systemctl restart autostream-control-panel.service',
+  'sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade',
+  '両方ともexact `v1.9.9`または両方ともexact `v1.9.10`のpairだけ',
+  'sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade --recover-active-job',
+  'rescue modeは再stage・再applyしません',
+  '/var/lib/autostream-host-agent/journal.clear-active.pending.json',
+  '/etc/systemd/system/autostream-host-agent.service.d/90-autostream-upgrade-recovery-guard.conf',
+  'journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください',
+  'systemd conditionを回避しないでください',
+  'Configure Tokenを再発行しません',
+];
+let previousHostManualUpgradeIndex = -1;
+for (const marker of orderedHostManualUpgradeMarkers) {
+  const index = hostManualUpgradeSection.indexOf(
+    marker,
+    previousHostManualUpgradeIndex + 1,
+  );
+  if (index < 0) {
+    throw new Error(`${operationsPath} is missing ordered v1.9.11 manual Host runtime upgrade marker: ${marker}`);
+  }
+  previousHostManualUpgradeIndex = index;
+}
+
 const v199ACLSectionStart = operations.indexOf(
-  '### `v1.9.9`の一時ACLを保持して`v1.9.10`へ更新する',
+  '### `v1.9.9`の一時ACLを保持して`v1.9.11`へ更新する',
 );
 const v199ACLSectionEnd = operations.indexOf(
   '## Nodeポートの契約',
@@ -431,13 +571,13 @@ const orderedV199ACLMarkers = [
   'sudo -u autostream-host-agent',
   'sudo systemctl restart autostream-host-agent.service',
   'sudo systemctl is-active --quiet autostream-host-agent.service',
-  'cd /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.10_linux_amd64',
+  'cd /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64',
   'sudo ./install/install-autostream-host-agent --upgrade',
-  "grep -Fx 'autostream-host-agent v1.9.10'",
-  "grep -Fx 'autostream-local-executor v1.9.10'",
-  'matching `v1.9.10` upgradeが成功した後',
-  "grep -Fx 'autostream-host-agent v1.9.10'",
-  "grep -Fx 'autostream-local-executor v1.9.10'",
+  "grep -Fx 'autostream-host-agent v1.9.11'",
+  "grep -Fx 'autostream-local-executor v1.9.11'",
+  'matching `v1.9.11` upgradeが成功した後',
+  "grep -Fx 'autostream-host-agent v1.9.11'",
+  "grep -Fx 'autostream-local-executor v1.9.11'",
   'sudo -u autostream-host-agent',
   'sudo test ! -e /etc/autostream/host-agent.json',
   'sudo test ! -L /etc/autostream/host-agent.json',

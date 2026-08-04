@@ -70,7 +70,7 @@ idempotentに作成します。事前に手動作成する必要はありませ�
 GitHub Release の host artifact は、archive の中に `bin/` が直接入るのではなく、archive 名と同じ top-level directory を 1 つ含みます。たとえば Control Panel の amd64 版は次の形です。
 
 ```text
-autostream-control-panel_v1.9.10_linux_amd64/
+autostream-control-panel_v1.9.11_linux_amd64/
   bin/control-panel
   bin/autostream-updater
   systemd/autostream-control-panel.service.example
@@ -91,7 +91,7 @@ GitHub Releaseには自動Updaterと旧clientの互換用としてarchive sideca
 `release-manifest.json`、manifest sidecarも残ります。自動Updaterはこれらを
 取得・検証しますが、手動導入ではdownloadもサーバーへのuploadもしません。
 既存のimmutableな旧release assetは書き換えません。Control Panel / Host Agentには
-`artifact-manifest.json`を含む公開`v1.9.10` archive-only releaseを使い、
+`artifact-manifest.json`を含む公開`v1.9.11` archive-only releaseを使い、
 古いreleaseへ読み替えないでください。runtime serviceの現在のreleaseは`v1.3.1`です。
 
 管理端末でarchive本体だけをdownloadし、そのarchiveのGitHub Attestationを
@@ -99,10 +99,10 @@ GitHub Releaseには自動Updaterと旧clientの互換用としてarchive sideca
 この転送前確認が担います。
 
 ```bash
-gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern 'autostream-control-panel_v1.9.10_linux_amd64.tar.gz' \
+gh release download v1.9.11 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.11_linux_amd64.tar.gz' \
   --clobber
-gh attestation verify autostream-control-panel_v1.9.10_linux_amd64.tar.gz \
+gh attestation verify autostream-control-panel_v1.9.11_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
@@ -114,12 +114,12 @@ installerを実行します。
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.10_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.11_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 cd /opt/autostream/releases/artifacts
-sudo test ! -e autostream-control-panel_v1.9.10_linux_amd64
-sudo test ! -L autostream-control-panel_v1.9.10_linux_amd64
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.10_linux_amd64.tar.gz
-sudo ./autostream-control-panel_v1.9.10_linux_amd64/install-autostream-control-panel
+sudo test ! -e autostream-control-panel_v1.9.11_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.11_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.11_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.11_linux_amd64/install-autostream-control-panel
 ```
 
 ほかのserviceを含むliteral commandは
@@ -170,7 +170,22 @@ service installerはHost Agentを自動導入しません。Host Agentは
 `Kome-Lab/Autostream-ControlPanel`の別archiveにLocal Executorと一緒に含まれ、
 物理ホストごとに1つだけ導入します。`install-autostream-host-agent --prepare`は
 identity、policy、A/B runtimeがないfresh host専用です。既存Host Agentへ
-再実行せず、既存Agent / ExecutorはControl Panelの専用self-updateで更新します。
+再実行せず、既存Agent / ExecutorはControl Panelの専用self-updateまたは検証済み
+Host Agent archiveのmanual upgradeで更新します。
+
+manual upgradeはControl Panel `v1.9.11`を先に導入・再起動してから行います。通常hostは次です。
+
+```bash
+sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade
+```
+
+Panel更新が`99%`の中断状態にある場合だけ、Agent / Executorが同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pairで、exact active jobをinstallerが証明できるhostに次を使います。
+
+```bash
+sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade --recover-active-job
+```
+
+どちらも既存identity/policyを保持するためConfigure Tokenは不要です。rescue modeはreconcileとexact terminal proofの確認だけを行います。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。詳しいfail-closed条件は[既存Host Agent / Local Executorを`v1.9.11`へ更新する](/operations/system-updates#upgrade-host-agent-v1911)を参照してください。
 
 Control Panel `v1.8.x`またはruntime service `v1.2.x`から更新するときは、
 [Linuxホストで直接動かす](/deployment/host#既存環境を更新するとき)のdatabase
