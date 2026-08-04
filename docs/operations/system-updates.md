@@ -3,7 +3,7 @@
 AutoStreamのUpdaterは、中央管理ホストから各ホストへSSH接続する`ssh_v1`から、各物理ホストのHost AgentがControl Panelへ接続する`pull_v2`へ段階的に移行します。Bridge期間中は両方式を残し、ホストごとに明示的に実行権限を切り替えます。
 
 > [!IMPORTANT]
-> この作業ツリーには`pull_v2`のjob claim、root Local Executor、systemd/Dockerポート変更、staged Runtime Token rotation、自己更新directive/grant/rollbackのsource実装があります。自己更新のP1電源断境界はdirectory fsync、slot再検証、grant収束、root-only watchdog statusまでsource/focused testsで閉じ、Docker port jobもローカルの実daemon DIND smokeでfresh-process reconcile、unhealthy rollback、foreign owner拒否を確認しました。ただし、公開Host Releaseのasset・checksum・attestation、実Linux/systemdでのprocess kill/reboot canary、全Docker imageの公開証拠、22/TCPと8090/TCPを閉じたE2E、fleet移行は未実施です。ローカル検証をproduction proofと読み替えず、これらのavailability gateを通過するまで本番ホストの実行権限は`ssh_v1`から切り替えないでください。
+> 公開`v1.9.10` Host Releaseはasset、checksum、manifest、attestationを提供します。自己更新のP1電源断境界はdirectory fsync、slot再検証、grant収束、root-only watchdog statusまでsource/focused testsで閉じ、Docker port jobもローカルの実daemon DIND smokeでfresh-process reconcile、unhealthy rollback、foreign owner拒否を確認しました。ただし、実Linux/systemdでのprocess kill/reboot canary、全Docker imageの公開証拠、22/TCPと8090/TCPを閉じたE2E、fleet移行は別の証拠であり未実施です。公開releaseをproduction proofと読み替えず、これらのavailability gateを通過するまで本番ホストの実行権限は`ssh_v1`から切り替えないでください。
 
 ## 移行後の構成
 
@@ -76,24 +76,18 @@ Configure Tokenはargv、環境変数、shell historyへ入れず、promptまた
 
 Host AgentはControl Panelやruntime serviceのinstallerから自動導入されません。
 `Kome-Lab/Autostream-ControlPanel`の別の
-`autostream-host-agent_v1.9.1_linux_amd64.tar.gz`に、Host Agent、Local
+`autostream-host-agent_v1.9.10_linux_amd64.tar.gz`に、Host Agent、Local
 Executor、両方のunitとinstallerが含まれます。archive-only形式では
 `artifact-manifest.json`もarchive内部に含まれます。
 
-> [!CAUTION]
-> 2026-07-31現在、公開済み最新のHost Agentは`v1.9.0`で、旧外部
-> checksum/manifest手動確認契約です。次の`v1.9.1`は未公開のarchive-only候補です。
-> matching releaseが公開されるまで次のcommandは実行せず、
-> `v1.9.0`へ読み替えないでください。
-
-`v1.9.1`の公開後、管理端末でHost Agent archive本体だけをdownloadし、その
-archiveのGitHub Attestationを確認します。
+公開`v1.9.10`のHost Agent archive本体だけを管理端末へdownloadし、そのarchiveの
+GitHub Attestationを確認します。古い`v1.9.9`へ読み替えないでください。
 
 ```bash
-gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern 'autostream-host-agent_v1.9.1_linux_amd64.tar.gz' \
+gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-host-agent_v1.9.10_linux_amd64.tar.gz' \
   --clobber
-gh attestation verify autostream-host-agent_v1.9.1_linux_amd64.tar.gz \
+gh attestation verify autostream-host-agent_v1.9.10_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
@@ -107,12 +101,12 @@ directoryへ固定し、元archiveと展開directoryを隣接させます。
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-host-agent_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-host-agent_v1.9.10_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 cd /opt/autostream/releases/artifacts
-sudo test ! -e autostream-host-agent_v1.9.1_linux_amd64
-sudo test ! -L autostream-host-agent_v1.9.1_linux_amd64
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-host-agent_v1.9.1_linux_amd64.tar.gz
-cd autostream-host-agent_v1.9.1_linux_amd64
+sudo test ! -e autostream-host-agent_v1.9.10_linux_amd64
+sudo test ! -L autostream-host-agent_v1.9.10_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-host-agent_v1.9.10_linux_amd64.tar.gz
+cd autostream-host-agent_v1.9.10_linux_amd64
 ```
 
 package済みinstallerは元archive、`artifact-manifest.json`、
@@ -131,10 +125,8 @@ sudo ./install/install-autostream-host-agent --prepare
 既存Host Agentへ`--prepare`を再実行しません。既存identity、policy、active unit、
 A/B runtimeがある場合はfail closedで拒否されます。既存Host AgentとLocal
 Executorは、ownership、policy、active job、rotation、recovery状態を確認して、
-後述の「Host Agent / Local Executorの自己更新」を使います。既存のimmutableな
-Host Agent `v1.9.0`は旧外部
-checksum/manifest手動確認契約のままなので、archive-only初回導入には
-`artifact-manifest.json`を含む新しく公開されたreleaseを使います。
+後述の「Host Agent / Local Executorの自己更新」を使います。archive-only初回導入には
+`artifact-manifest.json`を含む公開`v1.9.10` releaseを使います。
 
 prepare後に上のAuto Configure commandを実行します。Control Panelは登録済みのpull policyと各systemd targetの`applied` endpoint/config stateからcanonical Local Executor policyを生成します。clientはroot path、unit、command、digestを指定できません。Docker authorityはAuto Configureで生成せず、Docker targetを含む自動projectionはfail closedです。Dockerは別途root所有の固定policyと承認済みfrozen Compose baselineを準備します。Configureは次を1つのtransactionとして扱います。
 
@@ -179,7 +171,95 @@ sudo ss -lntup
 
 Host Agentがlistening socket一覧に出ないことを確認します。systemd unitの`SocketBindDeny=any`を弱めないでください。
 
-`/etc/autostream/host-agent.json`は旧releaseのlegacy pathです。canonical identityがない場合に限り、runtimeはこの旧pathをread-only fallbackとして読めます。installerのmanaged migrationはsourceのinode、owner、mode、digestを固定してcanonical pathへinstallします。その後、zero overwrite/syncをbest-effortで試して旧secretを必ずunlinkし、unlinkに失敗した場合はcanonicalを保持したままAgentを停止します。canonicalとlegacyが同時に存在する場合は、どちらかを推測せず起動・設定・rotationをfail closedにします。新規設定、書き込み、Runtime Token rotationは常にcanonical pathを使ってください。
+`/etc/autostream-host-agent/identity.json`が唯一のcanonical identityです。`/etc/autostream`は通常serviceのsecret境界なので`root:root 0750`を維持し、Host Agent userへdirectory traverse権限を恒久付与しません。legacy `/etc/autostream/host-agent.json`はcanonical不在時だけのread-only fallbackです。
+
+非root Agentは、canonical identityのowner、group、mode、regular-file条件と4項目JSONを安全に読み終えた後に限り、`/etc/autostream`をtraverseできないためlegacy probeが`EACCES`になってもcanonicalを使用できます。canonicalがない状態でlegacyが見えない場合、legacyが見える状態でcanonicalも存在する場合、またはprobeが`EACCES`以外の予期しないerrorになった場合は、identityを推測せずfail closedです。installerのmanaged migrationはsourceのinode、owner、mode、digestを固定してcanonical pathへinstallし、旧secretをunlinkできない場合はAgentを停止します。
+
+rootでidentityを書く`autostream-host-agent configure`とRuntime Token rotation/recoveryは、書き込み前とatomic replace後の両方でlegacy pathが存在せずdangling symlinkでもないことを確認します。legacyが存在する、検査できない、または書き込み中に現れた場合はcanonicalをactiveにせずfail closedです。新規設定、書き込み、rotationは常にcanonical pathだけを使ってください。
+
+### `v1.9.9`の一時ACLを保持して`v1.9.10`へ更新する {#remove-v199-acl}
+
+この手順は、`v1.9.9` Host Agentと`root:root 0750`の`/etc/autostream`を使うaffected hostだけが対象です。Agentが現在activeでも、exact access-only named ACL `user:autostream-host-agent:--x`を`v1.9.10` upgrade完了まで保持します。`--upgrade`はhealthy A/B runtimeを前提にし、candidateの起動に失敗した場合は旧slotへ戻して`v1.9.9`を再起動するためです。先にACLを削除するとrollback verificationまで失敗します。
+
+管理端末で`v1.9.10` Control Panel / Host Agent archiveとAttestationを確認し、archiveを安全に配置・展開してから、対象hostで次を実行します。最初にinstalled Agentがexact `v1.9.9`であること、canonical identity、legacy pathの通常fileとdangling symlink双方の不在、parentがnon-symlink `root:root 0750` directoryであることを確認します。Ubuntuではbounded bridgeの追加・確認に`acl` packageが必要です。
+
+```bash
+set -euo pipefail
+sudo /usr/local/bin/autostream-host-agent --version |
+  grep -Fx 'autostream-host-agent v1.9.9'
+sudo /usr/local/bin/autostream-host-agent validate-config \
+  --config /etc/autostream-host-agent/identity.json
+sudo test ! -e /etc/autostream/host-agent.json
+sudo test ! -L /etc/autostream/host-agent.json
+sudo test -d /etc/autostream
+sudo test ! -L /etc/autostream
+sudo env LC_ALL=C stat -c '%F %U:%G %a' -- /etc/autostream |
+  grep -Fx 'directory root:root 750'
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends acl
+command -v getfacl
+command -v setfacl
+sudo getfacl -cp -- /etc/autostream
+! sudo getfacl -cp -- /etc/autostream |
+  grep -q '^default:user:autostream-host-agent:'
+if sudo getfacl -cp -- /etc/autostream |
+  grep -q '^user:autostream-host-agent:'; then
+  sudo getfacl -cp -- /etc/autostream |
+    grep -Fx 'user:autostream-host-agent:--x'
+else
+  sudo setfacl --modify 'u:autostream-host-agent:--x' -- /etc/autostream
+fi
+sudo getfacl -cp -- /etc/autostream |
+  grep -Fx 'user:autostream-host-agent:--x'
+sudo -u autostream-host-agent \
+  /usr/local/bin/autostream-host-agent validate-config \
+  --config /etc/autostream-host-agent/identity.json
+sudo systemctl restart autostream-host-agent.service
+sudo systemctl is-active --quiet autostream-host-agent.service
+cd /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.10_linux_amd64
+sudo ./install/install-autostream-host-agent --upgrade
+sudo /usr/local/bin/autostream-host-agent --version |
+  grep -Fx 'autostream-host-agent v1.9.10'
+sudo /usr/local/libexec/autostream-local-executor --version |
+  grep -Fx 'autostream-local-executor v1.9.10'
+```
+
+directoryがexact non-symlink `root:root 0750`でない、Host Agentのdefault ACLがある、または既存access ACLがexact `--x`でない場合は、permissionを変更せず停止してください。package repositoryへ到達できない、または`acl` packageの導入が許可されていない場合も、directory modeやgroupを緩めず停止します。
+
+matching `v1.9.10` upgradeが成功した後、削除直前に同じcanonical/legacy/parent/ACL条件を再assertします。exact access ACLだけを削除し、access/defaultどちらにもHost Agent ACLが残っていないことを確認してから、ACLなしの非root validationとAgent restartを行います。
+
+```bash
+set -euo pipefail
+sudo /usr/local/bin/autostream-host-agent --version |
+  grep -Fx 'autostream-host-agent v1.9.10'
+sudo /usr/local/libexec/autostream-local-executor --version |
+  grep -Fx 'autostream-local-executor v1.9.10'
+sudo -u autostream-host-agent \
+  /usr/local/bin/autostream-host-agent validate-config \
+  --config /etc/autostream-host-agent/identity.json
+sudo test ! -e /etc/autostream/host-agent.json
+sudo test ! -L /etc/autostream/host-agent.json
+sudo test -d /etc/autostream
+sudo test ! -L /etc/autostream
+sudo env LC_ALL=C stat -c '%F %U:%G %a' -- /etc/autostream |
+  grep -Fx 'directory root:root 750'
+! sudo getfacl -cp -- /etc/autostream |
+  grep -q '^default:user:autostream-host-agent:'
+sudo getfacl -cp -- /etc/autostream |
+  grep -Fx 'user:autostream-host-agent:--x'
+sudo setfacl --remove 'u:autostream-host-agent' -- /etc/autostream
+! sudo getfacl -cp -- /etc/autostream |
+  grep -Eq '^(default:)?user:autostream-host-agent:'
+sudo env LC_ALL=C stat -c '%F %U:%G %a' -- /etc/autostream |
+  grep -Fx 'directory root:root 750'
+sudo -u autostream-host-agent \
+  /usr/local/bin/autostream-host-agent validate-config \
+  --config /etc/autostream-host-agent/identity.json
+sudo systemctl restart autostream-host-agent.service
+sudo systemctl is-active --quiet autostream-host-agent.service
+```
+
+`setfacl -b`でACL全体を消さず、`chmod 0751`、`chgrp autostream-host-agent`、Host Agentの通常service groupへの追加、read permission付与を行わないでください。unrelated ACLはoperatorの所有物です。exact named entryをこのworkaroundとして追加・確認できないhostでは削除commandも実行せず停止してください。Ubuntuの`acl` packageはこのbounded `v1.9.9` bridgeとcleanupだけに必要で、Host Agentのruntime dependencyではありません。
 
 ## Nodeポートの契約
 
@@ -244,14 +324,14 @@ reverse proxyの自動書き換えはこのreleaseの対象外です。proxy ori
 | gate | 完了条件 | 現在の扱い |
 | --- | --- | --- |
 | 1. Bridge contract | `ssh_v1` / `pull_v2`、host ownership、desired/applied/reportedを保存できる | source実装とlocal DB/API testsあり。deploy未確認 |
-| 2. Observer導入 | register、heartbeat、policy refresh、exact Local Executor policy/target probe。受信TCPなし | source、unit、installerあり。公開release/canary未確認 |
+| 2. Observer導入 | register、heartbeat、policy refresh、exact Local Executor policy/target probe。受信TCPなし | 公開`v1.9.10` releaseあり。実host canary未確認 |
 | 3. Local Executor | root executor、Unix socket認証、固定operation、grant、durable recovery | systemd/Docker software updateとsystemd/Docker port operationのsource/tests、Linux container tests、root fixtureあり。実systemd VM canaryは未確認 |
-| 4. 更新適用 | `pull_v2`でclaim、stage、grant、apply、report、rollback/reconcile | source/testsあり。公開artifactと22/8090遮断canary未確認 |
+| 4. 更新適用 | `pull_v2`でclaim、stage、grant、apply、report、rollback/reconcile | 公開`v1.9.10` artifactあり。22/8090遮断canary未確認 |
 | 5. systemd Port apply | reservation、preflight、`port_reconfigure`、health、rollback、旧port解放 | source/UI/testsあり。実systemd VMでのnon-default port smoke未確認 |
-| 6. Agent / Executor自己更新 | 同一releaseの2-slot更新、dedicated directive/grant、Agent heartbeatとExecutor probe、root recovery supervisor、失敗時rollback/reconcile | recovery protocol 2、directory fsync、reserved artifact recovery、fresh-process slot検証、failed generationとgrant収束、root-only watchdog statusのsource/focused testsあり。公開artifact、実systemd process kill/reboot、amd64/arm64 canaryは未確認 |
-| 7. Runtime Token rotation | stage→claim→local ack→staged heartbeat proof→activate→旧token revoke | HTTP/Store/Host Agent/Local Executor sourceとtestsあり。mixed-version実host drillとrelease/deployは未確認 |
+| 6. Agent / Executor自己更新 | 同一releaseの2-slot更新、dedicated directive/grant、Agent heartbeatとExecutor probe、root recovery supervisor、失敗時rollback/reconcile | recovery protocol 2と公開`v1.9.10` artifactあり。実systemd process kill/reboot、amd64/arm64 canaryは未確認 |
+| 7. Runtime Token rotation | stage→claim→local ack→staged heartbeat proof→activate→旧token revoke | HTTP/Store/Host Agent/Local Executor sourceとtestsあり。mixed-version実host drillとdeployは未確認 |
 | 8. Docker port mapping | advertised、localhost published、container listenを別々にtransactional変更 | source/API/UI/unit testsあり。Docker 29.6.2 / Compose 5.3.1のisolated root DINDで連続変更、実process crash後のfresh-process reconcile、unhealthy rollback、foreign ownerのgrant前拒否を確認。公開imageと実Docker host canaryは未確認 |
-| 9. Fleet移行 | host単位canary、Control Panel hostを最後に移行、rollback drill | release/fleet gate CLIと`pull_v2 → ssh_v1 → pull_v2`のsource契約・local testsあり。公開release、実host canary、fleet証拠は未検証 |
+| 9. Fleet移行 | host単位canary、Control Panel hostを最後に移行、rollback drill | 公開`v1.9.10`とfleet gate CLIあり。実host canaryとfleet証拠は未検証 |
 | 10. Legacy撤去 | 全host移行、active jobなし、SSH鍵/helper/中央Updater/8090を別releaseで撤去 | 未着手 |
 
 Gate 1〜5のsourceが存在しても、Gate 6〜9とrelease proofが完了するまでは本番のownershipを切り替えません。Host Agentを`ownership_epoch=0`のobserverとして並行導入し、SSH経路を残したままreadinessを確認できます。
@@ -329,7 +409,7 @@ sudo /usr/local/libexec/autostream-local-executor \
 
 このcommandはcaller指定path/tokenを受け付けず、固定identity、root ledger、policy SHA-256、host/policy/protocol fence、新identity digestを検証します。`manual_recovered`をdurableに保存してstaged identityをexact-digest wipeした後、Host Agentを新identityで再起動します。Agentはpoll後にUnix socketでfinalizeし、ledger cleanupと次rotationの解放を行います。失敗時にledgerやstaged fileを手動削除しないでください。
 
-legacy read-only fallbackからのrotationは行わず、先にcanonical identityへmanaged migrationしてください。mixed-version実host drill、公開release、deployはまだ実施していないため、これらの証拠なしにproduction-readyとは扱いません。
+legacy read-only fallbackからのrotationは行わず、先にcanonical identityへmanaged migrationしてください。公開`v1.9.10`があってもmixed-version実host drillとdeployは別の証拠なので、これらの証拠なしにproduction-readyとは扱いません。
 
 ## Host Agent / Local Executorの自己更新
 
@@ -347,7 +427,7 @@ staging検証に失敗した場合は、旧healthy slotへ戻した`stable` stat
 
 自己更新のcancelをRuntime Token rotationのtwo-phase cancelと同じものとして扱いません。terminal cancelを許可するのはjobがqueuedかつstage claim前の場合だけです。stage grantのconsumeは同じdurable transactionでjobを`staging`へ予約してrevisionを進めるため、claim後のcancelはunsupportedとしてfail closedにし、durable reconcile/rollbackへ収束させます。Control Panelが先にterminal cancelへ進んだと推測してはいけません。
 
-P1のsource/focused testsが通っていても、公開Host Releaseのasset/checksum/attestation、実GitHub download、実systemdでのrestart/socket activation/process kill/reboot、amd64/arm64 canary、production release/deployは別の証拠であり、まだ実施していません。これらの外部availability gateが残るため、focused testだけで自己更新readyやproduction-readyと扱わないでください。
+公開`v1.9.10` Host Releaseのasset/checksum/attestationはrelease baselineです。一方、対象環境からの実GitHub download、実systemdでのrestart/socket activation/process kill/reboot、amd64/arm64 canary、production deployは別の証拠です。これらの外部availability gateが残るため、公開releaseやfocused testだけで自己更新ready、production-readyと扱わないでください。
 
 ## 既存`ssh_v1`環境
 

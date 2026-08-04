@@ -125,18 +125,15 @@ assetは対象serviceの`.tar.gz` 1つだけです。archiveには
 含まれます。service repositoryごとにsource versionは独立しているため、全serviceへ
 同じtagを指定しません。
 
-> [!CAUTION]
-> 2026-07-31現在、公開済み最新tagはControl Panel / Host Agentが`v1.9.0`、
-> 4つのruntime serviceが`v1.3.0`です。これらのimmutable archiveは旧4-file
-> 手動導入契約のままで、下記の1-archive手順には使えません。下記で直接指定する
-> `v1.9.1` / `v1.3.1`は、この仕様を含む次回候補tagで、現在は未公開です。
-> 各releaseが実際に公開されるまでは、下記commandは`release not found`になるため
-> 実行しないでください。
+> [!IMPORTANT]
+> 現在のarchive-only Host ReleaseはControl Panel / Host Agentが`v1.9.10`、
+> 4つのruntime serviceが`v1.3.1`です。componentごとにrepositoryとtagを一致させ、
+> 古いreleaseへ読み替えず、次のliteral commandをそのまま使ってください。
 
-| component | release repo | 公開後に使うarchive | 安定した実行path |
+| component | release repo | 使うarchive | 安定した実行path |
 | --- | --- | --- | --- |
-| Control Panel | `Kome-Lab/Autostream-ControlPanel` | `autostream-control-panel_v1.9.1_linux_amd64.tar.gz` | `/usr/local/bin/control-panel` |
-| Host Agent + Local Executor | `Kome-Lab/Autostream-ControlPanel` | `autostream-host-agent_v1.9.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-host-agent` |
+| Control Panel | `Kome-Lab/Autostream-ControlPanel` | `autostream-control-panel_v1.9.10_linux_amd64.tar.gz` | `/usr/local/bin/control-panel` |
+| Host Agent + Local Executor | `Kome-Lab/Autostream-ControlPanel` | `autostream-host-agent_v1.9.10_linux_amd64.tar.gz` | `/usr/local/bin/autostream-host-agent` |
 | Discord Bot | `Kome-Lab/Autostream-DiscordBot` | `autostream-discord-bot_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-discord-bot` |
 | Encoder/Recorder | `Kome-Lab/Autostream-Encoder-Recorder` | `autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-encoder-recorder` |
 | Observability | `Kome-Lab/Autostream-Observability` | `autostream-observability_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-observability` |
@@ -144,21 +141,21 @@ assetは対象serviceの`.tar.gz` 1つだけです。archiveには
 
 Host Agentは上表のservice installerから自動導入されません。
 Control Panelと同じrepositoryにある別の
-`autostream-host-agent_v1.9.1_linux_amd64.tar.gz`を使い、物理ホストごとに
+`autostream-host-agent_v1.9.10_linux_amd64.tar.gz`を使い、物理ホストごとに
 1つだけ導入します。このarchiveにはroot Local Executorも含まれます。
 `autostream-contracts`は各binaryが利用するsource contract repositoryであり、
 サーバーへ単独導入するdaemonやrelease archiveはありません。
 
-各候補releaseの公開後、releaseを取得できる管理端末で必要なarchive本体だけを
+releaseを取得できる管理端末で必要なarchive本体だけを
 downloadし、rootとして実行する前にGitHub Attestationを確認します。次は全component
 を同じ物理ホストへ置く場合のamd64用commandです。実際には、そのhostへ配置する
 componentだけを取得してください。
 
 ```bash
-gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
+gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.10_linux_amd64.tar.gz' \
   --clobber
-gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
+gh attestation verify autostream-control-panel_v1.9.10_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
@@ -195,10 +192,10 @@ gh attestation verify autostream-observability_v1.3.1_linux_amd64.tar.gz \
   --signer-workflow Kome-Lab/Autostream-Observability/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
 
-gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern 'autostream-host-agent_v1.9.1_linux_amd64.tar.gz' \
+gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-host-agent_v1.9.10_linux_amd64.tar.gz' \
   --clobber
-gh attestation verify autostream-host-agent_v1.9.1_linux_amd64.tar.gz \
+gh attestation verify autostream-host-agent_v1.9.10_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
@@ -210,22 +207,22 @@ GitHub CLI、`.tar.gz.sha256`、`release-manifest.json`、
 basenameを変更せずroot所有directoryへ固定し、archiveと展開directoryが隣接した
 状態でinstallerを実行します。
 
-同じhostへ5 serviceを置く場合は、公開後に次を上から実行します。各installerは
+同じhostへ5 serviceを置く場合は、次を上から実行します。各installerは
 serviceを開始・再起動しないため、この時点で起動中processはありません。
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.10_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 sudo install -o root -g root -m 0644 /tmp/autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 sudo install -o root -g root -m 0644 /tmp/autostream-worker_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 sudo install -o root -g root -m 0644 /tmp/autostream-discord-bot_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 sudo install -o root -g root -m 0644 /tmp/autostream-observability_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 cd /opt/autostream/releases/artifacts
 
-sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
-sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
-sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+sudo test ! -e autostream-control-panel_v1.9.10_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.10_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.10_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.10_linux_amd64/install-autostream-control-panel
 
 sudo test ! -e autostream-encoder-recorder_v1.3.1_linux_amd64
 sudo test ! -L autostream-encoder-recorder_v1.3.1_linux_amd64
@@ -254,12 +251,12 @@ self-updateを使ってください。
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-host-agent_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-host-agent_v1.9.10_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 cd /opt/autostream/releases/artifacts
-sudo test ! -e autostream-host-agent_v1.9.1_linux_amd64
-sudo test ! -L autostream-host-agent_v1.9.1_linux_amd64
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-host-agent_v1.9.1_linux_amd64.tar.gz
-sudo ./autostream-host-agent_v1.9.1_linux_amd64/install/install-autostream-host-agent --prepare
+sudo test ! -e autostream-host-agent_v1.9.10_linux_amd64
+sudo test ! -L autostream-host-agent_v1.9.10_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-host-agent_v1.9.10_linux_amd64.tar.gz
+sudo ./autostream-host-agent_v1.9.10_linux_amd64/install/install-autostream-host-agent --prepare
 ```
 
 prepare後もHost Agent / Local Executorは起動しません。Control Panelで`pull_v2`
@@ -267,6 +264,17 @@ Update Agentを登録し、生成されたConfigure commandを実行してから
 明示的にactivateします。完全な順序は
 [Host Agent Bridgeでサービスを更新する](/operations/system-updates#pull_v2-host-agentを登録する)
 を参照してください。
+
+Auto Configureが書くHost Agent identityはcanonical
+`/etc/autostream-host-agent/identity.json`だけです。通常serviceのsecret directory
+`/etc/autostream`は`root:root 0750`を維持し、Host Agent userへACLやgroupで恒久的な
+traverse権限を追加しません。legacy `/etc/autostream/host-agent.json`はcanonical不在時の
+read-only fallbackだけです。このlegacy pathが存在する、
+dangling symlinkである、または安全に検査できない場合は、先にmanaged migrationを
+完了してください。affected `v1.9.9` hostではcandidate rollback時にも旧Agentを
+再起動できるよう、exact access-only ACLをmatching `v1.9.10` upgrade完了まで保持します。
+upgrade前から[ACL bridgeとcleanupの一続きの手順](/operations/system-updates#remove-v199-acl)
+を実行してください。
 
 installerは元archiveを安定して読み取り、
 `artifact-manifest.json`、archive内`checksums.txt`、host architecture、binary
@@ -287,10 +295,9 @@ manifestなしreleaseは自動更新へ使わず、新しいimmutable releaseを
 GitHub Releaseには、自動Updaterと旧clientの互換用としてarchive sidecar、
 `release-manifest.json`、manifest sidecarも引き続き公開されます。これらは
 自動Updaterが取得・検証するassetであり、archive-onlyの手動導入ではdownloadも
-uploadもしません。既存のimmutableなControl Panel / Host Agent `v1.9.0`と各
-runtime service `v1.3.0`は旧4-file手動導入契約のままです。既存assetを書き換えず、
-archive-only手順は上記候補tagが実際に公開されてから使用してください。Control
-Panel `v1.8.x`、runtime service `v1.2.x`から更新する
+uploadもしません。既存のimmutableな旧release assetは書き換えません。新規導入では
+公開Control Panel / Host Agent `v1.9.10`とruntime service `v1.3.1`のarchive-only
+releaseを使用してください。Control Panel `v1.8.x`、runtime service `v1.2.x`から更新する
 場合は、[Linuxホストで直接動かす](/deployment/host#既存環境を更新するとき)の
 backupと再起動境界も先に確認します。
 
@@ -489,7 +496,7 @@ curl -fsS http://127.0.0.1:8084/health  # Worker の local port 例
 3. Services / Assignments で stream 用の primary service を割り当てます。
 4. Integrations で Discord、YouTube、Google Drive、notification channel を登録します。
 5. Start readiness を実行し、不足している設定がないことを確認します。
-6. Host Agent Bridgeを準備する場合は、配信serviceのhealth確認後に[Host Agent Bridgeでサービスを更新する](/operations/system-updates)へ進みます。物理ホストごとにendpointlessな`pull_v2` Update Agent Nodeを1つ登録し、非rootの`autostream-host-agent`とroot Local Executorを導入します。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。初回はepoch `0`のobserverとして起動し、公開release、実host canary、rollback drillを確認するまではownershipを切り替えず、legacy `ssh_v1`を維持してください。
+6. Host Agent Bridgeを準備する場合は、配信serviceのhealth確認後に[Host Agent Bridgeでサービスを更新する](/operations/system-updates)へ進みます。物理ホストごとにendpointlessな`pull_v2` Update Agent Nodeを1つ登録し、非rootの`autostream-host-agent`とroot Local Executorを導入します。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。初回はepoch `0`のobserverとして起動し、公開`v1.9.10`のAttestation、実host canary、rollback drillを確認するまではownershipを切り替えず、legacy `ssh_v1`を維持してください。
 
 ## 12. 初回確認コマンド
 

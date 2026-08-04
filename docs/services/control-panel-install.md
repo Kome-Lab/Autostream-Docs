@@ -26,18 +26,15 @@ archive本体だけをdownloadしてGitHub Attestationを確認し、確認済�
 directoryへ固定し、元archiveと展開directoryを隣接させて、archive直下で次を
 実行します。
 
-> [!CAUTION]
-> 2026-07-31現在、公開済み最新`v1.9.0`は旧4-file手動導入契約です。次の
-> `v1.9.1`は未公開のarchive-only候補なので、matching releaseが公開されるまで
-> 実行せず、`v1.9.0`へ読み替えないでください。
+公開`v1.9.10`のarchive-only releaseを使用し、古いreleaseへ読み替えないでください。
 
 管理端末:
 
 ```bash
-gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
+gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.10_linux_amd64.tar.gz' \
   --clobber
-gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
+gh attestation verify autostream-control-panel_v1.9.10_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
@@ -47,12 +44,12 @@ gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.10_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 cd /opt/autostream/releases/artifacts
-sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
-sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
-sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+sudo test ! -e autostream-control-panel_v1.9.10_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.10_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.10_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.10_linux_amd64/install-autostream-control-panel
 ```
 
 installerはarchive内部の`artifact-manifest.json`、`checksums.txt`、host
@@ -71,9 +68,8 @@ image、Docker repository、MariaDB、reverse proxyを変更しません。詳�
 検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
 
 外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
-releaseには残りますが、この手動導入ではdownloadもuploadもしません。既存の
-immutableな`v1.9.0`は旧4-file手動導入契約なので、archive-only手順は
-`artifact-manifest.json`を含む新しく公開されたreleaseから使用します。
+releaseには残りますが、この手動導入ではdownloadもuploadもしません。手動導入には
+`artifact-manifest.json`を含む公開`v1.9.10` archiveだけを使用します。
 
 backup executableとroot-only defaults placeholderの配置は自動ですが、実際の
 MariaDB backup account、password、database grant、database nameはarchive同梱

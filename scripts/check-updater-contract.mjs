@@ -31,6 +31,8 @@ const dockerPath = 'docs/deployment/docker.md';
 const hostDeploymentPath = 'docs/deployment/host.md';
 const firstInstallPath = 'docs/runbooks/first-install.md';
 const hostOperationsPath = 'docs/services/host-operations.md';
+const tokensPath = 'docs/security/tokens.md';
+const hardeningPath = 'docs/security/hardening.md';
 
 const bridgeMarkers = [
   '`pull_v2`',
@@ -97,7 +99,7 @@ const operations = requireMarkers(operationsPath, [
   '`root-only watchdog status`',
   '2秒timeout',
   'fresh-process reconcile',
-  'ローカル検証をproduction proofと読み替えず',
+  '公開releaseをproduction proofと読み替えず',
   'local purgeだけではControl Panel側のRuntime Tokenは失効しません',
   'SSD、copy-on-write filesystem、snapshot、backup上の物理消去は保証しません',
   'identityが残ればpurgeは失敗します',
@@ -105,9 +107,24 @@ const operations = requireMarkers(operationsPath, [
   '`api_tokens.revoke`',
   '`secrets.update`',
   '`system_updates.execute`',
-  'gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel',
-  'autostream-host-agent_v1.9.1_linux_amd64.tar.gz',
-  '未公開のarchive-only候補',
+  'gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel',
+  'autostream-host-agent_v1.9.10_linux_amd64.tar.gz',
+  '`/etc/autostream-host-agent/identity.json`が唯一のcanonical identity',
+  '`root:root 0750`',
+  'legacy probeが`EACCES`',
+  'canonicalがない状態でlegacyが見えない',
+  '書き込み前とatomic replace後',
+  'dangling symlink',
+  "grep -Fx 'autostream-host-agent v1.9.9'",
+  'sudo apt-get install -y --no-install-recommends acl',
+  "sudo setfacl --modify 'u:autostream-host-agent:--x'",
+  'sudo ./install/install-autostream-host-agent --upgrade',
+  "sudo setfacl --remove 'u:autostream-host-agent'",
+  "grep -Eq '^(default:)?user:autostream-host-agent:'",
+  'autostream-local-executor v1.9.10',
+  '`setfacl -b`',
+  '`chmod 0751`',
+  '`chgrp autostream-host-agent`',
 ]);
 
 const registration = requireMarkers(registrationPath, [
@@ -139,8 +156,12 @@ const registration = requireMarkers(registrationPath, [
   '`api_tokens.revoke`',
   '`secrets.update`',
   '`system_updates.execute`',
-  'autostream-host-agent_v1.9.1_linux_amd64.tar.gz',
-  '未公開',
+  'autostream-host-agent_v1.9.10_linux_amd64.tar.gz',
+  '`root:root 0750`',
+  'canonicalをowner/mode/shapeまで安全に読み終えた後のlegacy `EACCES`',
+  'canonical不在時にlegacyが見えない',
+  'visible legacy',
+  '書き込み前後にlegacyが存在せずdangling symlinkでもない',
 ]);
 
 const docker = requireMarkers(dockerPath, [
@@ -179,40 +200,70 @@ const hostDeployment = requireMarkers(hostDeploymentPath, [
   '成功してから次へ進みます',
   '`OBSERVABILITY_BIND_ADDR`',
   'Control Panelを最後に',
-  '公開済み最新tag',
-  '`v1.9.1` / `v1.3.1`は未公開',
+  'Control Panel / Host Agentが`v1.9.10`、runtime serviceが`v1.3.1`',
+  'componentごとにrepositoryとtagを一致',
+  'canonical `/etc/autostream-host-agent/identity.json`',
+  '`/etc/autostream`は`root:root 0750`',
+  '`chmod 0751`',
+  'upgrade完了まで保持',
+  'upgrade前から',
+  '/operations/system-updates#remove-v199-acl',
 ]);
 const firstInstall = requireMarkers(firstInstallPath, [
-  '公開済み最新tag',
-  '`v1.9.1` / `v1.3.1`',
-  '現在は未公開',
-  'gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel',
+  'Control Panel / Host Agentが`v1.9.10`',
+  '4つのruntime serviceが`v1.3.1`',
+  '古いreleaseへ読み替えず',
+  'gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel',
   'gh release download v1.3.1 --repo Kome-Lab/Autostream-Encoder-Recorder',
   'gh release download v1.3.1 --repo Kome-Lab/Autostream-Worker',
   'gh release download v1.3.1 --repo Kome-Lab/Autostream-DiscordBot',
   'gh release download v1.3.1 --repo Kome-Lab/Autostream-Observability',
-  'autostream-host-agent_v1.9.1_linux_amd64.tar.gz',
+  'autostream-host-agent_v1.9.10_linux_amd64.tar.gz',
   '`autostream-contracts`',
   '単独導入するdaemonやrelease archiveはありません',
+  '`/etc/autostream-host-agent/identity.json`だけ',
+  '`/etc/autostream`は`root:root 0750`',
+  'dangling symlink',
+  'upgrade完了まで保持',
+  'upgrade前から',
+  '/operations/system-updates#remove-v199-acl',
 ]);
 const hostOperations = requireMarkers(hostOperationsPath, [
-  'autostream-control-panel_v1.9.1_linux_amd64/',
-  '2026-07-31現在',
-  '未公開のarchive-only候補',
+  'autostream-control-panel_v1.9.10_linux_amd64/',
+  '公開`v1.9.10` archive-only release',
+  'runtime serviceの現在のreleaseは`v1.3.1`',
+]);
+
+requireMarkers(tokensPath, [
+  '/etc/autostream-host-agent/identity.json',
+  '`root:root 0750`',
+  'canonicalをowner、group、mode、regular-file条件、4項目JSONまで安全に読み終えた後のlegacy `EACCES`',
+  'canonical不在時のunreachable legacy',
+  'visible dual identity',
+  '書き込み前後にlegacyが存在せずdangling symlinkでもない',
+]);
+
+requireMarkers(hardeningPath, [
+  '`root:root 0750`',
+  '`chmod 0751`',
+  'canonicalを安全に読み終えた後のlegacy `EACCES`',
+  'visible dual identity',
+  '書き込み前後にlegacyの不在とdangling symlink不在',
+  '`user:autostream-host-agent:--x` ACL',
+  'matching `v1.9.10` upgrade完了まで保持',
+  '`setfacl -b`',
 ]);
 
 const literalServiceGuides = [
   [
     'docs/services/control-panel-install.md',
-    'v1.9.0',
-    'v1.9.1',
-    'gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel',
-    'autostream-control-panel_v1.9.1_linux_amd64.tar.gz',
+    'v1.9.10',
+    'gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel',
+    'autostream-control-panel_v1.9.10_linux_amd64.tar.gz',
     'install-autostream-control-panel',
   ],
   [
     'docs/services/encoder-recorder-install.md',
-    'v1.3.0',
     'v1.3.1',
     'gh release download v1.3.1 --repo Kome-Lab/Autostream-Encoder-Recorder',
     'autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz',
@@ -220,7 +271,6 @@ const literalServiceGuides = [
   ],
   [
     'docs/services/worker-install.md',
-    'v1.3.0',
     'v1.3.1',
     'gh release download v1.3.1 --repo Kome-Lab/Autostream-Worker',
     'autostream-worker_v1.3.1_linux_amd64.tar.gz',
@@ -228,7 +278,6 @@ const literalServiceGuides = [
   ],
   [
     'docs/services/discord-bot-install.md',
-    'v1.3.0',
     'v1.3.1',
     'gh release download v1.3.1 --repo Kome-Lab/Autostream-DiscordBot',
     'autostream-discord-bot_v1.3.1_linux_amd64.tar.gz',
@@ -236,7 +285,6 @@ const literalServiceGuides = [
   ],
   [
     'docs/services/observability-install.md',
-    'v1.3.0',
     'v1.3.1',
     'gh release download v1.3.1 --repo Kome-Lab/Autostream-Observability',
     'autostream-observability_v1.3.1_linux_amd64.tar.gz',
@@ -244,11 +292,10 @@ const literalServiceGuides = [
   ],
 ];
 const literalServiceContents = literalServiceGuides.map(
-  ([path, currentTag, candidateTag, download, archive, installer]) => [
+  ([path, releaseTag, download, archive, installer]) => [
     path,
     requireMarkers(path, [
-      `公開済み最新\`${currentTag}\``,
-      `\`${candidateTag}\`は未公開`,
+      `公開\`${releaseTag}\``,
       download,
       archive,
       installer,
@@ -263,6 +310,13 @@ const literalArchiveGuides = [
   [operationsPath, operations],
   [registrationPath, registration],
   ...literalServiceContents,
+];
+const staleReleaseClaims = [
+  '`v1.9.10`は未公開',
+  '`v1.3.1`は未公開',
+  '`v1.9.10` / `v1.3.1`は未公開',
+  '未公開のarchive-only候補',
+  '現在は未公開',
 ];
 for (const [path, contents] of literalArchiveGuides) {
   if (contents.includes('vX.Y.Z')) {
@@ -281,6 +335,11 @@ for (const [path, contents] of literalArchiveGuides) {
   if (/--pattern[^\n]*(?:sha256|release-manifest)/.test(contents)) {
     throw new Error(`${path} downloads a manual-install sidecar`);
   }
+  for (const claim of staleReleaseClaims) {
+    if (contents.includes(claim)) {
+      throw new Error(`${path} contains a stale release claim: ${claim}`);
+    }
+  }
 }
 
 const upgradeSectionStart = hostDeployment.indexOf('## 既存環境を更新するとき');
@@ -293,7 +352,7 @@ const orderedUpgradeInstalls = [
   'sudo ./autostream-worker_v1.3.1_linux_amd64/install-autostream-worker',
   'sudo ./autostream-discord-bot_v1.3.1_linux_amd64/install-autostream-discord-bot',
   'sudo ./autostream-observability_v1.3.1_linux_amd64/install-autostream-observability',
-  'sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel',
+  'sudo ./autostream-control-panel_v1.9.10_linux_amd64/install-autostream-control-panel',
 ];
 let previousUpgradeInstall = -1;
 for (const marker of orderedUpgradeInstalls) {
@@ -344,6 +403,62 @@ for (const [path, contents] of [
       `${path} Host Agent identity must have exactly: ${exactIdentityKeys.join(', ')}`,
     );
   }
+}
+
+const v199ACLSectionStart = operations.indexOf(
+  '### `v1.9.9`の一時ACLを保持して`v1.9.10`へ更新する',
+);
+const v199ACLSectionEnd = operations.indexOf(
+  '## Nodeポートの契約',
+  v199ACLSectionStart,
+);
+if (v199ACLSectionStart < 0 || v199ACLSectionEnd < 0) {
+  throw new Error(`${operationsPath} is missing the bounded v1.9.9 ACL bridge section`);
+}
+const v199ACLSection = operations.slice(v199ACLSectionStart, v199ACLSectionEnd);
+const orderedV199ACLMarkers = [
+  "grep -Fx 'autostream-host-agent v1.9.9'",
+  'sudo /usr/local/bin/autostream-host-agent validate-config',
+  'sudo test ! -e /etc/autostream/host-agent.json',
+  'sudo test ! -L /etc/autostream/host-agent.json',
+  'sudo test ! -L /etc/autostream',
+  "grep -Fx 'directory root:root 750'",
+  'sudo apt-get install -y --no-install-recommends acl',
+  "grep -q '^default:user:autostream-host-agent:'",
+  'if sudo getfacl -cp -- /etc/autostream',
+  "sudo setfacl --modify 'u:autostream-host-agent:--x'",
+  "grep -Fx 'user:autostream-host-agent:--x'",
+  'sudo -u autostream-host-agent',
+  'sudo systemctl restart autostream-host-agent.service',
+  'sudo systemctl is-active --quiet autostream-host-agent.service',
+  'cd /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.10_linux_amd64',
+  'sudo ./install/install-autostream-host-agent --upgrade',
+  "grep -Fx 'autostream-host-agent v1.9.10'",
+  "grep -Fx 'autostream-local-executor v1.9.10'",
+  'matching `v1.9.10` upgradeが成功した後',
+  "grep -Fx 'autostream-host-agent v1.9.10'",
+  "grep -Fx 'autostream-local-executor v1.9.10'",
+  'sudo -u autostream-host-agent',
+  'sudo test ! -e /etc/autostream/host-agent.json',
+  'sudo test ! -L /etc/autostream/host-agent.json',
+  'sudo test ! -L /etc/autostream',
+  "grep -Fx 'directory root:root 750'",
+  "grep -q '^default:user:autostream-host-agent:'",
+  "grep -Fx 'user:autostream-host-agent:--x'",
+  "sudo setfacl --remove 'u:autostream-host-agent'",
+  "grep -Eq '^(default:)?user:autostream-host-agent:'",
+  "grep -Fx 'directory root:root 750'",
+  'sudo -u autostream-host-agent',
+  'sudo systemctl restart autostream-host-agent.service',
+  'sudo systemctl is-active --quiet autostream-host-agent.service',
+];
+let previousV199ACLIndex = -1;
+for (const marker of orderedV199ACLMarkers) {
+  const index = v199ACLSection.indexOf(marker, previousV199ACLIndex + 1);
+  if (index < 0) {
+    throw new Error(`${operationsPath} is missing ordered v1.9.9 ACL marker: ${marker}`);
+  }
+  previousV199ACLIndex = index;
 }
 
 const orderedOperationsMarkers = [

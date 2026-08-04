@@ -70,7 +70,7 @@ idempotentに作成します。事前に手動作成する必要はありませ�
 GitHub Release の host artifact は、archive の中に `bin/` が直接入るのではなく、archive 名と同じ top-level directory を 1 つ含みます。たとえば Control Panel の amd64 版は次の形です。
 
 ```text
-autostream-control-panel_v1.9.1_linux_amd64/
+autostream-control-panel_v1.9.10_linux_amd64/
   bin/control-panel
   bin/autostream-updater
   systemd/autostream-control-panel.service.example
@@ -90,23 +90,19 @@ architecture、互換情報をarchive内部に持ち、`checksums.txt`はinstall
 GitHub Releaseには自動Updaterと旧clientの互換用としてarchive sidecar、
 `release-manifest.json`、manifest sidecarも残ります。自動Updaterはこれらを
 取得・検証しますが、手動導入ではdownloadもサーバーへのuploadもしません。
-既存のimmutableなControl Panel / Host Agent `v1.9.0`とruntime service
-`v1.3.0`は旧4-file手動導入契約のままなので、archive-only手順には
-`artifact-manifest.json`を含む新しく公開されたreleaseを使います。
-
-> [!CAUTION]
-> 2026-07-31現在、次の`v1.9.1`は未公開のarchive-only候補です。matching releaseが
-> 公開されるまでは実行せず、現行`v1.9.0`へ読み替えないでください。
+既存のimmutableな旧release assetは書き換えません。Control Panel / Host Agentには
+`artifact-manifest.json`を含む公開`v1.9.10` archive-only releaseを使い、
+古いreleaseへ読み替えないでください。runtime serviceの現在のreleaseは`v1.3.1`です。
 
 管理端末でarchive本体だけをdownloadし、そのarchiveのGitHub Attestationを
 確認します。内部checksumはarchive内の整合性確認であり、GitHub由来の真正性は
 この転送前確認が担います。
 
 ```bash
-gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
+gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.10_linux_amd64.tar.gz' \
   --clobber
-gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
+gh attestation verify autostream-control-panel_v1.9.10_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
@@ -118,12 +114,12 @@ installerを実行します。
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.10_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 cd /opt/autostream/releases/artifacts
-sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
-sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
-sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+sudo test ! -e autostream-control-panel_v1.9.10_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.10_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.10_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.10_linux_amd64/install-autostream-control-panel
 ```
 
 ほかのserviceを含むliteral commandは

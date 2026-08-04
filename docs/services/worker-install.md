@@ -21,10 +21,7 @@ archive本体だけをdownloadしてGitHub Attestationを確認し、元`.tar.gz
 サーバーへ転送します。サーバーではbasenameを変更せずroot-owned directoryへ
 固定し、元archiveと展開directoryを隣接させて、archive直下で次を実行します。
 
-> [!CAUTION]
-> 2026-07-31現在、公開済み最新`v1.3.0`は旧4-file手動導入契約です。次の
-> `v1.3.1`は未公開のarchive-only候補なので、matching releaseが公開されるまで
-> 実行せず、`v1.3.0`へ読み替えないでください。
+公開`v1.3.1`のarchive-only releaseを使用し、古いreleaseへ読み替えないでください。
 
 管理端末:
 
@@ -63,8 +60,8 @@ imageは変更しません。詳しい取得と検証手順は
 [Linuxホストで直接動かす](/deployment/host)を参照してください。
 
 外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
-releaseには残りますが、手動導入ではdownloadもuploadもしません。既存のimmutableな
-`v1.3.0`は旧4-file手動導入契約です。`v1.2.x`から更新する場合もenvとNode
+releaseには残りますが、手動導入ではdownloadもuploadもしません。手動導入には
+公開`v1.3.1` archiveを使用します。`v1.2.x`から更新する場合もenvとNode
 `config.yml`、起動中の旧`MainPID`は保持されます。installer成功後に明示的に
 restartし、既存設定portのhealthと新versionを確認します。詳細は
 [既存環境を更新するとき](/deployment/host#既存環境を更新するとき)を参照して

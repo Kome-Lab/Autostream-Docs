@@ -21,10 +21,10 @@ Encoder Recorder用の`ffmpeg`、reverse proxyなど、host共通の外部packag
 
 ## release artifact の実際の形
 
-この仕様を含む次回候補のamd64版Host Release archiveは次のとおりです。
+現在のamd64版Host Release archiveは次のとおりです。
 
-- `autostream-control-panel_v1.9.1_linux_amd64.tar.gz`
-- `autostream-host-agent_v1.9.1_linux_amd64.tar.gz`
+- `autostream-control-panel_v1.9.10_linux_amd64.tar.gz`
+- `autostream-host-agent_v1.9.10_linux_amd64.tar.gz`
 - `autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz`
 - `autostream-worker_v1.3.1_linux_amd64.tar.gz`
 - `autostream-discord-bot_v1.3.1_linux_amd64.tar.gz`
@@ -33,7 +33,7 @@ Encoder Recorder用の`ffmpeg`、reverse proxyなど、host共通の外部packag
 展開するとarchive名と同じdirectoryが1つ作られ、その中に次のfileが入ります。
 
 ```text
-autostream-control-panel_v1.9.1_linux_amd64/
+autostream-control-panel_v1.9.10_linux_amd64/
   bin/control-panel
   bin/autostream-updater
   systemd/autostream-control-panel.service.example
@@ -60,25 +60,17 @@ GitHub Releaseには自動Updaterと旧clientの互換用として`.tar.gz.sha25
 由来の証明とは扱わず、archive本体のAttestationを管理端末で確認してから安全な
 経路で転送します。
 
-既存のimmutableなControl Panel / Host Agent `v1.9.0`と各runtime service
-`v1.3.0`は旧4-file手動導入契約のままです。既存assetを書き換えず、
-archive-only手順は`artifact-manifest.json`を含む新しく公開されたreleaseから
-使用します。
+既存のimmutableな旧release assetは書き換えません。現在のarchive-only releaseは
+Control Panel / Host Agentが`v1.9.10`、runtime serviceが`v1.3.1`です。
+componentごとにrepositoryとtagを一致させ、古いreleaseへ読み替えないでください。
 
-> [!CAUTION]
-> 2026-07-31現在、公開済み最新tagはControl Panel / Host Agentが`v1.9.0`、
-> runtime serviceが`v1.3.0`です。上記の`v1.9.1` / `v1.3.1`は未公開です。
-> 次のliteral commandは
-> matching releaseが公開された後だけ実行してください。公開前は`release not found`
-> になり、現行`v1.9.0` / `v1.3.0`へ読み替えて1-archive手順を実行してはいけません。
-
-公開後、管理端末でControl Panel archive本体だけを取得してAttestationを確認します。
+管理端末でControl Panel archive本体だけを取得してAttestationを確認します。
 
 ```bash
-gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
+gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel \
+  --pattern 'autostream-control-panel_v1.9.10_linux_amd64.tar.gz' \
   --clobber
-gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
+gh attestation verify autostream-control-panel_v1.9.10_linux_amd64.tar.gz \
   --repo Kome-Lab/Autostream-ControlPanel \
   --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
@@ -90,12 +82,12 @@ installerを実行します。
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.10_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
 cd /opt/autostream/releases/artifacts
-sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
-sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
-sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+sudo test ! -e autostream-control-panel_v1.9.10_linux_amd64
+sudo test ! -L autostream-control-panel_v1.9.10_linux_amd64
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.10_linux_amd64.tar.gz
+sudo ./autostream-control-panel_v1.9.10_linux_amd64/install-autostream-control-panel
 ```
 
 全componentのliteral download、Attestation、server-side install commandは
@@ -155,7 +147,15 @@ state directoryの外にあるroot専用directoryです。
 
 ## 既存環境を更新するとき
 
-新規hostでは、物理ホストごとに非rootの`pull_v2` Host Agentを1つ置き、root Local Executorと固定Unix socketで分離します。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。登録直後はepoch `0`のobserverで、公開releaseと実host canaryを確認した後にだけownershipを切り替えます。systemd/Docker software updateと4 Node serviceの任意port変更はsource実装済みですが、実Linux/Docker gateは未確認です。Docker port変更には事前の固定policyと承認済みCompose baselineが必要で、reverse proxyは自動変更しません。設定とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
+新規hostでは、物理ホストごとに非rootの`pull_v2` Host Agentを1つ置き、root Local Executorと固定Unix socketで分離します。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。登録直後はepoch `0`のobserverで、公開`v1.9.10`のAttestationと実host canaryを確認した後にだけownershipを切り替えます。systemd/Docker software updateと4 Node serviceの任意port変更はsource実装済みですが、実Linux/Docker gateは未確認です。Docker port変更には事前の固定policyと承認済みCompose baselineが必要で、reverse proxyは自動変更しません。設定とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
+
+Host Agent identityはcanonical `/etc/autostream-host-agent/identity.json`だけへ書きます。
+`/etc/autostream`は`root:root 0750`を維持し、Host Agent用の恒久ACL、`chmod 0751`、
+`chgrp`、通常service groupへの追加を行いません。affected `v1.9.9` hostはcandidate
+rollbackで旧Agentを再起動できるよう、exact access-only ACLをmatching `v1.9.10`
+upgrade完了まで保持します。upgrade前から
+[ACL add-or-verify、matched upgrade、exact cleanup](/operations/system-updates#remove-v199-acl)
+を一続きで実行してください。
 
 Control Panel `v1.8.x`またはruntime service `v1.2.x`から更新するときも、
 uninstallや設定の作り直しは行いません。更新適用が必要な既存hostでは、Bridge期間の
@@ -187,7 +187,7 @@ legacy `ssh_v1`中央`autostream-updater`、各host helper、SSH/必要なstatus
    ```
 
    両方が存在する場合は上書きせず、内容と使用中helperを確認します。
-4. `v1.9.1` / `v1.3.1`が実際に公開された後、管理端末で次を上から実行します。
+4. 公開`v1.9.10` / `v1.3.1`を管理端末で次の順に取得します。
    shellのversion変数や外部sidecarは使いません。
 
    ```bash
@@ -223,10 +223,10 @@ legacy `ssh_v1`中央`autostream-updater`、各host helper、SSH/必要なstatus
      --signer-workflow Kome-Lab/Autostream-Observability/.github/workflows/release-host.yml \
      --deny-self-hosted-runners
 
-   gh release download v1.9.1 --repo Kome-Lab/Autostream-ControlPanel \
-     --pattern 'autostream-control-panel_v1.9.1_linux_amd64.tar.gz' \
+   gh release download v1.9.10 --repo Kome-Lab/Autostream-ControlPanel \
+     --pattern 'autostream-control-panel_v1.9.10_linux_amd64.tar.gz' \
      --clobber
-   gh attestation verify autostream-control-panel_v1.9.1_linux_amd64.tar.gz \
+   gh attestation verify autostream-control-panel_v1.9.10_linux_amd64.tar.gz \
      --repo Kome-Lab/Autostream-ControlPanel \
      --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
      --deny-self-hosted-runners
@@ -243,7 +243,7 @@ legacy `ssh_v1`中央`autostream-updater`、各host helper、SSH/必要なstatus
    sudo install -o root -g root -m 0644 /tmp/autostream-worker_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
    sudo install -o root -g root -m 0644 /tmp/autostream-discord-bot_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
    sudo install -o root -g root -m 0644 /tmp/autostream-observability_v1.3.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
-   sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.1_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+   sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v1.9.10_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
    cd /opt/autostream/releases/artifacts
 
    sudo test ! -e autostream-encoder-recorder_v1.3.1_linux_amd64
@@ -266,10 +266,10 @@ legacy `ssh_v1`中央`autostream-updater`、各host helper、SSH/必要なstatus
    sudo tar --no-same-owner --no-same-permissions -xzf autostream-observability_v1.3.1_linux_amd64.tar.gz
    sudo ./autostream-observability_v1.3.1_linux_amd64/install-autostream-observability
 
-   sudo test ! -e autostream-control-panel_v1.9.1_linux_amd64
-   sudo test ! -L autostream-control-panel_v1.9.1_linux_amd64
-   sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.1_linux_amd64.tar.gz
-   sudo ./autostream-control-panel_v1.9.1_linux_amd64/install-autostream-control-panel
+   sudo test ! -e autostream-control-panel_v1.9.10_linux_amd64
+   sudo test ! -L autostream-control-panel_v1.9.10_linux_amd64
+   sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v1.9.10_linux_amd64.tar.gz
+   sudo ./autostream-control-panel_v1.9.10_linux_amd64/install-autostream-control-panel
    ```
 
    各hostでは実際に配置しているserviceのarchive commandだけを実行します。

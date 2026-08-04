@@ -21,10 +21,13 @@ AutoStream をインターネットから使えるようにする場合の基本
 - `/stream-previews/` の署名token付きpathをreverse proxy、CDN、WAF、APMのaccess logへ残さない
 - バックアップの保存先にもアクセス制限をかける
 - `/etc/autostream-host-agent/identity.json`は`panel_url`、`node_id`、`runtime_token`、`service_name`だけを保存し、`root:autostream-host-agent 0640`にする
-- legacy `/etc/autostream/host-agent.json`はcanonical identityがない場合のread-only fallbackだけに使い、両方が存在する場合はfail closedにする。書き込みやrotationの前にmanaged migrationする
+- `/etc/autostream`は通常serviceのsecret境界として`root:root 0750`を維持する。Host Agent向けに`chmod 0751`、`chgrp`、group追加を行わない
+- legacy `/etc/autostream/host-agent.json`はcanonical identityがない場合のread-only fallbackだけに使う。非root Agentはcanonicalを安全に読み終えた後のlegacy `EACCES`だけを許容し、canonical不在時のunreachable legacy、visible dual identity、予期しないprobe errorはfail closedにする
+- root writerのAuto ConfigureとRuntime Token rotation/recoveryは書き込み前後にlegacyの不在とdangling symlink不在を検証する。書き込みやrotationの前にlegacyをmanaged migrationする
+- affected `v1.9.9` hostの`user:autostream-host-agent:--x` ACLはcandidate rollbackで旧Agentを再起動するため、matching `v1.9.10` upgrade完了まで保持する。upgrade前にexact access/default ACLとcanonical/legacy/parentを検査し、完了後に同じ条件を再assertしてそのaccess entryだけを削除する。`setfacl -b`で他のACLまで消さない
 - `execution_host_id`と`ownership_epoch`はserver-ownedとし、Host Agent config、CLI、heartbeatから変更させない
 - Host AgentはControl Panelへoutbound HTTPSだけを使い、受信TCP、`8090`、SSH設定を追加しない
-- Local Executor policyとsystemd/Docker port sidecarをroot所有にし、`/etc/autostream`をexecutorから不可視にする。Docker published hostは`127.0.0.1`固定とし、固定policyと承認済みCompose baselineがなければfail closedにする。公開releaseと実host canaryが未確認ならsource実装だけでownershipを切り替えない
+- Local Executor policyとsystemd/Docker port sidecarをroot所有にし、`/etc/autostream`をexecutorから不可視にする。Docker published hostは`127.0.0.1`固定とし、固定policyと承認済みCompose baselineがなければfail closedにする。公開`v1.9.10`のAttestationだけでownershipを切り替えず、実host canaryも確認する
 
 Bridge期間のlegacy `ssh_v1`では、中央`updater.json`、host別SSH鍵、root `update-host.json`、forced command、exact sudoersを既存の境界で維持します。これらを新しい`pull_v2` configへコピーせず、全hostの移行、release/canary、rollback gateが完了するまで削除しません。更新の権限境界は[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
 
