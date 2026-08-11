@@ -202,6 +202,9 @@ services:
       AUTOSTREAM_ENV: production
       AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       AUTOSTREAM_OUTPUT_RELAY_URL: rtmp://output-relay:1935/autostream/{stream_id}
+      AUTOSTREAM_OUTPUT_RELAY_MODE: legacy_stream_key
+      # Docker Compose内のこのservice DNSだけをrelayとして許可します。
+      AUTOSTREAM_COMPOSE_OUTPUT_RELAY: "1"
     ports:
       - "127.0.0.1:8081:8080"
     volumes:
@@ -296,7 +299,27 @@ Auto Configureが自動生成するのはsystemdのroot policy/sidecarだけで�
 
 Encoderプレビューは既存のEncoder Recorder API portと`archives` volumeを使います。プレビュー専用の追加port、追加env、追加volumeは不要です。Encoder imageのDebian `ffmpeg` packageがHLSを生成し、`archives` volume内の`tmp/<stream_id>/preview/`へrolling segmentを置きます。final artifactの保持設定だけでは終了済み`tmp` directoryの削除を保証しないため、volume容量監視には`tmp`も含めます。
 
-本番の配信出力は、YouTubeのstream keyをFFmpeg引数へ出さないため`output-relay`を経由します。Encoder Recorderとrelayは通常のCompose networkへ接続し、Encoder Recorderからservice DNS名`output-relay:1935`へ送ります。network namespaceは共有しません。全サービスを起動する前にEncoder Recorder repositoryの`relay/nginx-rtmp.conf.example`を`/opt/autostream/relay/nginx-rtmp.conf`へコピーし、upstreamを設定してください。この実値入りファイルはGit管理しません。
+本番の配信出力は、YouTubeのstream keyをFFmpeg引数へ出さないため`output-relay`を経由します。Encoder Recorderとrelayは通常のCompose networkへ接続し、Encoder Recorderからservice DNS名`output-relay:1935`へ送ります。`AUTOSTREAM_COMPOSE_OUTPUT_RELAY: "1"`はこのCompose内の固定service DNSだけをrelayとして許可するDocker専用の制限です。host/systemd配置へコピーしたり、任意のhost名を許可する値として使ったりしません。network namespaceは共有しません。全サービスを起動する前にEncoder Recorder repositoryの`relay/nginx-rtmp.conf.example`を`/opt/autostream/relay/nginx-rtmp.conf`へコピーし、upstreamを設定してください。この実値入りファイルはGit管理しません。
+
+上のCompose例は、既存の固定key relayを維持する`legacy_stream_key`です。既存hostで`AUTOSTREAM_OUTPUT_RELAY_URL`だけを設定してmodeを省略した場合も、移行互換として同じmodeになります。`legacy_stream_key`ではYouTube Outputの`stream_key`だけを使い、通常の`live_api`や`live_api_dry_run`を固定relayへ流すことはできません。
+
+固定relayで新しいYouTube Live API方式を使う場合は、ComposeのEncoder環境を次のように明示的に切り替えます。これは既存の`stream_key` profileやrelayの固定keyを変換する手順ではありません。先にControl Panelで別の`live_api_relay_static` Output、Google OAuth account、再利用するYouTube Live Stream ID、同じ`relay-` + 小文字UUID形式の非secret binding IDをreadyにしてから適用してください。
+
+```yaml
+      AUTOSTREAM_OUTPUT_RELAY_URL: rtmp://output-relay:1935/autostream/{stream_id}
+      AUTOSTREAM_OUTPUT_RELAY_MODE: live_api_static
+      AUTOSTREAM_OUTPUT_RELAY_BINDING_ID: ${AUTOSTREAM_OUTPUT_RELAY_BINDING_ID:-}
+```
+
+`live_api_static`へ切り替える前に、`.env`へ同じbinding IDを設定します。
+
+```text
+AUTOSTREAM_OUTPUT_RELAY_BINDING_ID=relay-123e4567-e89b-42d3-a456-426614174000
+```
+
+bindingは`relay-` + 小文字UUID形式だけを使い、stream key、外部RTMPS URL、視聴URL、任意の説明名を入れません。bindingが空・形式不正・不一致の場合は、Compose interpolationで既存stackを起動不能にするのではなく、relay `unavailable`としてEncoderのpreflight/startがfail closedします。`direct`へ読み替えたりrelay URLを無視したりしません。`live_api_static`はURLと正しいbinding IDを必要とし、`relay_binding_id`が完全一致する`live_api_relay_static`だけを開始できます。URLありの`direct`、URLなしの`legacy_stream_key`/`live_api_static`、未知のmodeも同様にfail closedします。relayを使わない`direct`はURLを設定せず、この`output-relay` Compose例を使わない別構成にします。
+
+切替前に配信枠がinactiveであることを確認し、切替後はService Health / preflightと小さな開始・停止を確認します。戻す必要がある場合は、まず新方式の配信を停止し、不明な開始結果があればControl Panelの固定Relay回復を完了します。その後でOutput選択を旧`stream_key` profileへ戻し、Composeを`legacy_stream_key`へ戻して再作成します。同じbindingを別の配信枠へ再利用したり、relay設定からkeyを読み出してControl Panelへ貼り付けたりしません。
 
 ```bash
 sudo install -d -m 0750 /opt/autostream/relay

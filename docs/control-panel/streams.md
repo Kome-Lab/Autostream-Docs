@@ -113,9 +113,9 @@ Streamsの作成画面で `Primary Encoder Node` と `Primary Worker Node` を�
 
 自動運用では、対象 Discord VC へのユーザー参加が開始トリガーです。配信枠で `Discord VC参加で自動開始` をONにし、`created`、`draft`、`ready` の待機状態にしておきます。参加を検知したDiscord BotはVCへ参加して音声取得を開始し、Control Panel の service-auth endpoint に開始を要求します。Control Panel は primary assignment、`streams.start` scope、保存済みの auto-start trigger を確認してから、WorkerとEncoder Recorderを含む通常の start dispatch を行います。日時による予約実行は行いません。
 
-YouTube 側の自動開始は YouTube Output の mode に依存します。`Live API` mode で `Enable auto start` を有効にした場合は、Control Panel が YouTube broadcast / live stream を作成し、YouTube API の auto-start 設定を渡します。`Existing stream key` mode は RTMPS 送信だけなので、YouTube Studio 側で手動開始が必要な構成があります。
+YouTube 側の自動開始は YouTube Output の mode に依存します。`Live API` mode で `Enable auto start` を有効にした場合は、Control Panel が YouTube broadcast / live stream を作成し、YouTube API の auto-start 設定を渡します。`Existing stream key` mode は RTMPS 送信だけなので、YouTube Studio 側で手動開始が必要な構成があります。`Live API`と`Live API dry-run`はrelayなしの`direct` Encoderで使います。固定relayを使う場合、既存relayは`legacy_stream_key`と`Existing stream key`だけを組み合わせます。`live_api_relay_static`はEncoderの`live_api_static`、同じbinding ID、再利用Live Streamがreadyのときだけ使え、通常の`Live API`を旧固定relayへfallbackしません。詳細は[YouTube OutputsとDiscord設定](/control-panel/discord-youtube#固定relayの互換経路と新方式)を参照してください。
 
-Chat Channel IDが設定され、有効なYouTube視聴URLがある本番配信では、すべてのservice startが成功して状態が`live`になった後、Discord Botがそのchannelへ視聴URLを投稿します。`Live API dry-run`では投稿しません。投稿失敗は配信を停止またはrollbackしないため、Streamsの開始結果とDiscord Bot logで通知結果を別に確認してください。
+Chat Channel IDが設定され、有効なYouTube視聴URLがある本番配信では、すべてのservice startが成功して状態が`live`になった後、Discord Botがそのchannelへ視聴URLを投稿します。`stream_key`ではYouTube Outputに保存したURLを使い、`Live API`と`live_api_relay_static`ではControl Panelがbroadcastから生成したpublic runtime URLを使います。固定Relay profileに`watch_url`を入力する必要はありません。`Live API dry-run`では投稿しません。投稿失敗は配信を停止またはrollbackしないため、Streamsの開始結果とDiscord Bot logで通知結果を別に確認してください。
 
 ## Encoderプレビュー
 

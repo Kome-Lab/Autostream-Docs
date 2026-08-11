@@ -83,6 +83,7 @@ AUTOSTREAM_NODE_CONFIG=/etc/autostream-encoder-recorder/config.yml
 AUTOSTREAM_ENV=production
 AUTOSTREAM_BIND_ADDR=127.0.0.1:8081
 AUTOSTREAM_OUTPUT_RELAY_URL=rtmp://127.0.0.1/autostream/{stream_id}
+AUTOSTREAM_OUTPUT_RELAY_MODE=legacy_stream_key
 ```
 
 録画先は既定で`/var/lib/autostream/archives`、FFmpeg実行名は既定で`ffmpeg`です。`TZ`を含め、既定値と異なるhostだけで追加設定します。
@@ -122,7 +123,35 @@ Encoderプレビューは`AUTOSTREAM_ARCHIVE_DIR/tmp/<stream_id>/preview/`へ約
 3. relay 側の非公開設定で YouTube など外部配信先へ push します。
 4. relay 設定ファイルはGit管理せず、権限を絞ります。
 
-Docker構成では、Encoder Recorderと`output-relay`を通常のCompose networkへ接続し、`AUTOSTREAM_OUTPUT_RELAY_URL=rtmp://output-relay:1935/autostream/{stream_id}`でservice DNSを使います。`network_mode: service:encoder-recorder`によるnetwork namespace共有やDocker内の`127.0.0.1`は使いません。
+Docker構成では、Encoder Recorderと`output-relay`を通常のCompose networkへ接続し、`AUTOSTREAM_OUTPUT_RELAY_URL=rtmp://output-relay:1935/autostream/{stream_id}`でservice DNSを使います。この固定service DNSを使うComposeだけで`AUTOSTREAM_COMPOSE_OUTPUT_RELAY=1`を設定します。この値は任意hostを許可せず、host/systemd配置へコピーしません。`network_mode: service:encoder-recorder`によるnetwork namespace共有やDocker内の`127.0.0.1`は使いません。
+
+### 配送モードを選ぶ
+
+固定relayを使うhostは、`AUTOSTREAM_OUTPUT_RELAY_URL`と`AUTOSTREAM_OUTPUT_RELAY_MODE`を組にして設定します。modeは非secretであり、YouTubeのstream key、外部RTMPS URL、視聴URLを入れる場所ではありません。
+
+| mode | 必要なenv | 使用できるYouTube Output | 目的 |
+| --- | --- | --- | --- |
+| `direct` | `AUTOSTREAM_OUTPUT_RELAY_URL`を設定しない。`AUTOSTREAM_OUTPUT_RELAY_MODE=direct`は任意 | `stream_key`、`live_api`、`live_api_dry_run`（`live_api_relay_static`は不可） | relayなしの構成。productionでrelay必須にしているhostはpreflight/startで停止します |
+| `legacy_stream_key` | relay URL。modeは`legacy_stream_key`を明示するか、既存hostでは未設定 | 既存の`stream_key`だけ | 固定relayが既存の固定keyへpushする構成を維持します |
+| `live_api_static` | relay URL、`AUTOSTREAM_OUTPUT_RELAY_MODE=live_api_static`、`relay-` + 小文字UUID形式の`AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` | `live_api_relay_static`だけ | 固定relayと再利用するYouTube Live Streamを、binding IDで固定対応させます |
+
+`live_api_static`の例は次のとおりです。`relay-123e4567-e89b-42d3-a456-426614174000`はControl PanelのYouTube Outputに設定する`relay_binding_id`と完全一致させる、`relay-` + 小文字UUID形式の非secret識別子です。stream key、外部RTMPS URL、視聴URL、任意の説明名ではありません。
+
+```text
+AUTOSTREAM_OUTPUT_RELAY_URL=rtmp://127.0.0.1/autostream/{stream_id}
+AUTOSTREAM_OUTPUT_RELAY_MODE=live_api_static
+AUTOSTREAM_OUTPUT_RELAY_BINDING_ID=relay-123e4567-e89b-42d3-a456-426614174000
+```
+
+URLありで`direct`を選ぶ、URLなしで`legacy_stream_key`または`live_api_static`を選ぶ、未知のmodeを使う、または`live_api_static`のbinding形式・一致条件を満たさない設定は、relay `unavailable`としてpreflight/startでfail closedします。`direct`へ読み替えたり、relay URLを無視したりしません。`managed`のような推測用のmodeは設定しません。URLありでmodeが未設定の既存hostだけは、互換のため`legacy_stream_key`として扱われます。
+
+### 既存の固定relayを安全に移行・戻す
+
+既存の`stream_key` profileと固定nginx-rtmp relayを使っているhostは、profile、root管理されたrelay設定、既存のkeyを変更せずに継続できます。Encoder Recorderを更新しても、relay URLありかつmode未設定は`legacy_stream_key`互換です。更新時に意図を明確にするなら、同じrelay URLのまま`AUTOSTREAM_OUTPUT_RELAY_MODE=legacy_stream_key`を設定して再起動します。
+
+`live_api_static`へ切り替える場合は、既存profileを自動変換しません。停止済みであることを確認した上で、別のYouTube Outputに`live_api_relay_static`、Google OAuth account、`relay-` + 小文字UUID形式の`relay_binding_id`、再利用するYouTube Live Stream IDを設定します。relay側がすでにその再利用Live Streamへ固定対応していることを、keyを表示せずに確認してから、Encoder環境のmodeとbinding IDを`live_api_static`へ変更します。形式不正・不一致のrelay設定は`unavailable`であり`direct`へのfallbackではありません。Service Health / preflightがreadyになってから、別の配信枠で小さな開始・停止確認を行います。
+
+戻す場合は、まず新方式の配信枠を停止してinactiveであることを確認します。開始結果が不明ならControl Panelの固定Relay回復を完了してから、配信枠の出力選択を既存の`stream_key` profileへ戻し、Encoderのmodeを`legacy_stream_key`（または既存URLのmode未設定）へ戻して再起動します。`live_api_static`のbindingを別の配信枠へ使い回したり、relay設定からkeyを抽出してprofileへ貼り戻したりしません。
 
 ## Control Panelで登録する
 

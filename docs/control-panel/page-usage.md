@@ -259,7 +259,9 @@ Integrations はSettingsグループ内にあり、OAuth Provider、YouTube・Dr
 5. Control Panel に戻ったら、入力した表示名と `利用可能な用途` でconnected accountが増えているか確認します。
 6. YouTube OutputsにはYouTube対応、Drive保存先にはDrive対応のaccountだけが表示されることを確認して選びます。両対応のaccountは両方に表示されます。
 
-`利用可能な用途` は実際に許可されたOAuth scopeから判定します。用途を変更する場合は対象accountを削除し、必要な接続用途を選んで再接続します。旧バージョンで接続時の表示名が保存されずメールアドレスが残っているaccountは、一覧と選択欄で `OAuth Provider の設定名 + 短いアカウント識別子` を表示します。同じProviderに複数accountがあっても区別できます。個別の表示名へ変更する場合は、対象行の編集ボタンから `アカウント表示名` を更新します。
+`利用可能な用途` は実際に許可されたOAuth scopeから判定します。認可をやり直す場合は対象行の `再連携` を使い、既存accountを削除せずに同じ行のtokenを更新します。用途を変更する場合も、必要な接続用途を選んで再連携します。旧バージョンで接続時の表示名が保存されずメールアドレスが残っているaccountは、一覧と選択欄で `OAuth Provider の設定名 + 短いアカウント識別子` を表示します。同じProviderに複数accountがあっても区別できます。個別の表示名へ変更する場合は、対象行の編集ボタンから `アカウント表示名` を更新します。
+
+一覧では `Access Token最終自動更新` と `Refresh Token登録/更新` を分けて表示します。前者は常駐Control Panelが短期アクセストークンを自動更新した最後の成功時刻、後者はOAuth接続またはrefresh tokenローテーションの時刻です。raw tokenは保存・表示しません。
 
 ### Google Drive Destination
 

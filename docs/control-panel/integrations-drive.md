@@ -50,7 +50,9 @@ Connected Account は手入力ではなく、OAuth の callback で作成しま�
 
 ### 変更できるもの
 
-Connected Account の refresh token、subject、利用可能な用途は手入力で変更できません。画面から変更できるのは label だけです。用途を変更したい場合や認可し直したい場合は、削除して必要な接続用途で再接続します。
+Connected Account の refresh token、subject、利用可能な用途は手入力で変更できません。画面から変更できるのは label だけです。認可をやり直す場合は、既存アカウントの `再連携` を使います。再連携では同じアカウント行を更新し、YouTube / Drive の参照設定を付け直す必要はありません。用途を変更する場合だけ、必要な接続用途を選んで再連携します。
+
+Google の短期アクセストークンは Control Panel が常駐プロセス内で自動更新します。Connected Account 一覧の `Access Token最終自動更新` はその更新が最後に成功した時刻、`Refresh Token登録/更新` はOAuth接続またはrefresh tokenローテーションが最後に行われた時刻です。アクセストークンやrefresh tokenのraw値は画面やAPIに表示しません。
 
 ## Google Drive Destination
 

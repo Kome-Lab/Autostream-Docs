@@ -78,6 +78,7 @@ Streams は、配信を作り、設定を紐づけ、開始・停止する画面
 | 開始準備を再確認 | 不足設定、service、外部連携を確認 | 開始の直前 |
 | 開始 | 必要サービスへ配信開始を指示 | 開始準備が通った後 |
 | 停止 | 必要サービスへ配信停止を指示 | 配信終了時 |
+| 固定Relay回復を実行 | 不確実な固定Relay開始を確認付きで解決する。未dispatchの既知Broadcastは`Delete`、dispatchされた可能性がある既知Broadcastは割り当て済みEncoderの停止証跡後に`Complete`する。不明なBroadcastはYouTube Studioでの外部cleanup確認が必要で、stream keyは表示しない | 固定Relayの復旧が必要と表示され、配信枠がinactiveのとき |
 | Retry Upload | 録画ファイルの upload を再試行 | Drive upload だけ失敗したとき |
 | Retry YouTube Complete | YouTube Live API の終了処理を再試行 | Stop 後の complete だけ失敗したとき |
 | View Stream Audit | 選択 stream の操作履歴を見る | 誰が変更したか確認するとき |
@@ -162,11 +163,13 @@ YouTube Outputs は、配信先を管理します。
 | 項目 | 入れるもの | いつ使うか | 保存後の確認 |
 | --- | --- | --- | --- |
 | Name | 出力名 | Streams で選ぶ | YouTube Output一覧 |
-| Mode | stream key / Live API dry-run / Live API | 配信方式を選ぶ | Check Readiness |
+| Mode | stream key / Live API dry-run / Live API / 固定Relay（YouTube Live API） | 配信方式を選ぶ | Check Readiness |
 | RTMPS URL | YouTube ingest URL | stream key方式 | configured |
 | Stream key | YouTube stream key | stream key方式 | 設定済み状態 |
-| YouTube視聴URL | 視聴者が開く `https://www.youtube.com/watch?v=...` | stream key方式の新規設定、Discord開始通知 | canonical URL表示 |
+| YouTube視聴URL | 視聴者が開く `https://www.youtube.com/watch?v=...` | `stream_key`方式の新規設定ではprofile入力とDiscord開始通知に使う。`Live API`と固定Relay（YouTube Live API）は開始後にpublic runtime URLを生成し、固定Relay profileの`watch_url`入力は受け付けない | canonical URL表示 |
 | OAuth connected account | Google接続アカウント | Live API方式 | Integrations |
+| 固定RelayバインディングID | `relay-` + 小文字UUID形式（例: `relay-123e4567-e89b-42d3-a456-426614174000`）で、Encoderの`live_api_static`と固定Relayホストの非secret `AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` に一致する `relay_binding_id` | 固定Relay（YouTube Live API）方式 | Relay側設定との一致 |
+| 再利用するYouTube Live Stream ID | 再利用可能なYouTube Live Streamの非secret `reusable_live_stream_id` | 固定Relay（YouTube Live API）方式 | Check Readiness |
 | Privacy | private / unlisted / public | Live API broadcast作成 | YouTube側 |
 | Latency | normal / low / ultra_low | 安定性と遅延の調整 | YouTube側 |
 | Broadcast title template | 配信タイトル雛形 | Live API方式 | 作成される配信枠 |
@@ -176,6 +179,8 @@ YouTube Outputs は、配信先を管理します。
 | Complete broadcast on stream stop | Stop後に完了処理 | Live API方式 | Retry YouTube Complete |
 
 初回は `private` と `Live API dry-run`、または既存 stream key を使う方式で確認すると切り分けやすくなります。
+
+`固定RelayバインディングID`と`再利用するYouTube Live Stream ID`は、Encoderが`live_api_static`を報告する固定Relay（YouTube Live API）だけに使います。binding IDは`relay-` + 小文字UUID形式でないと無効です。無効なrelay設定は`unavailable`として開始できず、`direct`扱いにはなりません。固定Relay profileでは`watch_url`を入力しませんが、開始後にControl Panelがbroadcastから生成するpublic runtime URLはDiscord通知に使えます。既存の固定key relayを使う`stream_key` Outputへ後から入力して移行するものではありません。互換経路と安全な切替は[YouTube OutputsとDiscord設定](/control-panel/discord-youtube#固定relayの互換経路と新方式)を参照してください。
 
 ## Integrations
 
@@ -193,6 +198,8 @@ Integrations は、OAuth provider、接続アカウント、Google Drive 保存�
 | Default roles | 自動作成userのrole | auto-provision時 | Roles |
 
 OAuth Connected Accountでは接続用途を選びます。接続後の一覧に表示される `利用可能な用途` は実際に許可されたscopeから判定され、YouTube OutputsにはYouTube対応、Drive保存先にはDrive対応のaccountだけが表示されます。両対応のaccountは両方の設定で選択できます。
+
+Connected Account一覧の `Access Token最終自動更新` は、常駐Control PanelがGoogleの短期アクセストークンを自動更新した最後の成功時刻です。`Refresh Token登録/更新` はOAuth接続時またはrefresh tokenローテーション時の記録であり、短期アクセストークンの更新時刻ではありません。どちらも時刻だけを表示し、raw tokenは保存・表示しません。認可をやり直す場合は既存accountの `再連携` を使います。
 
 Google Drive や YouTube Live API を使う場合は、配信用のOAuth Connected Accountを作成し、用途に対応したaccountをYouTube OutputsやArchiveのDrive保存先で選びます。login providerにDrive/YouTube scopeを混ぜません。Google OAuth application側には、Control Panelに保存するProviderのRedirect URIと同じ `/auth/oauth/callback` を登録します。ログイン、Connected Account、Drive/YouTube接続はいずれもこのRedirect URIを使います。
 

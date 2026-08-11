@@ -26,7 +26,7 @@ AutoStream は Discord、YouTube、Google Drive、通知先など複数の外部
 1. YouTube 側で配信枠を作ります。
 2. RTMPS URL と stream key を確認します。
 3. Control Panel に配信先として登録します。
-4. 本番では output relay を使い、FFmpeg の process 引数に stream key を出さない構成にします。
+4. 本番で固定output relayを使う場合は、既存の`stream_key` OutputにはEncoderの`legacy_stream_key`、固定relayと再利用Live Streamを対応付けた新方式には`live_api_static`と`live_api_relay_static`を組で使います。relay modeやbinding IDへstream keyを入れません。手順は[YouTube OutputsとDiscord設定](/control-panel/discord-youtube#固定relayの互換経路と新方式)を参照してください。
 
 ## Google Drive
 

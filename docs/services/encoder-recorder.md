@@ -34,6 +34,8 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 | `AUTOSTREAM_ARCHIVE_DIR` | 録画保存先 |
 | `FFMPEG_BIN` | FFmpeg 実行ファイル |
 | `AUTOSTREAM_OUTPUT_RELAY_URL` | 本番用 output relay |
+| `AUTOSTREAM_OUTPUT_RELAY_MODE` | `direct`、`legacy_stream_key`、`live_api_static`の配送方式。URLありで未設定の場合だけ既存host互換の`legacy_stream_key` |
+| `AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` | `live_api_static`だけで使う、`relay-` + 小文字UUID形式の非secret固定relay識別子。stream keyや外部RTMPS URLは入れない |
 
 `AUTOSTREAM_ARCHIVE_DIR`は未指定なら`/var/lib/autostream/archives`、`FFMPEG_BIN`は未指定なら`ffmpeg`です。標準envでは既定値を重ねず、hostで変更が必要な場合だけ設定します。`AUTOSTREAM_DATA_DIR`はEncoder Recorderでは使用しません。
 
@@ -53,7 +55,9 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 
 ## 本番での注意
 
-本番では FFmpeg のコマンドラインに YouTube stream key を直接出さない構成にします。FFmpeg は local relay にだけ出力し、relay 側で外部配信先へ送ります。
+本番では FFmpeg のコマンドラインに YouTube stream key を直接出さない固定relay構成を推奨します。FFmpeg は local relay にだけ出力し、relay 側で外部配信先へ送ります。固定relayの既存`stream_key` profileは`legacy_stream_key`だけで継続し、`live_api_relay_static`はEncoderの`live_api_static`と一致するbinding IDがある場合だけ使えます。通常の`live_api`や`live_api_dry_run`を既存の固定relayへ送ることはできません。
+
+relay URLを設定しない`direct`、URLありでmode未設定の旧`legacy_stream_key`互換、明示的な`live_api_static`の切替条件と安全な戻し方は、[Encoder Recorderを導入する](/services/encoder-recorder-install#output-relay-の考え方)を参照してください。profileや固定relayのkeyを自動変換・複製しないでください。
 
 Encoderプレビューは本配信、録画と同じencodeを3-way teeし、約2秒のHLS segmentを6個だけrolling保持します。preview出力は有限FIFOと`onfail=ignore`で分離され、previewの遅延やplayer切断で本配信と録画を停止しません。playlistはControl Panelが検証してproxyし、ブラウザへEncoderのNode tokenを渡しません。
 
