@@ -1,14 +1,15 @@
 # Worker
 
-Worker は配信ジョブの進行に必要なイベントを作り、Encoder Recorder へ渡します。重い media 処理ではなく、配信の制御と状態イベントを担当します。
+Worker は配信ジョブの参加者、発言中状態、現在時刻、字幕、Discordチャットから配信映像を生成し、job-scopedに暗号化したSRT over UDPで選択されたEncoder Recorderへ送ります。Encoder Recorderはその映像へウォーターマークを重ね、最終encode、YouTube/HLS出力、録画、archiveを担当します。
 
 Linuxサーバーへの導入、Node Agent config、primary assignment、Worker event test の確認は [Workerを導入する](/services/worker-install) にまとめています。
 
 ## 役割
 
 - Control Panel から配信ジョブを受ける
-- caption、chat、participant、active speaker event を生成する
-- Encoder Recorder へイベントを送る
+- caption、chat、participant、active speaker event を配信sceneへ反映する
+- 現在時刻、字幕、参加者名・アイコン、発言中の緑枠、Discordチャットを含む映像を生成する
+- 配信jobで選択されたEncoder Recorderへ生成映像を送る
 - Control Panel へ heartbeat を送る
 - Control Panel 経由で Observability へ状態やエラーを送る
 
@@ -17,14 +18,19 @@ Linuxサーバーへの導入、Node Agent config、primary assignment、Worker 
 | 項目 | 目的 |
 | --- | --- |
 | `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Worker 用 `config.yml` |
+| `FFMPEG_BIN` | 映像生成に使うFFmpeg。未指定時は`ffmpeg`。SRT秘密はこのprocessのargvへ渡さない |
+| `AUTOSTREAM_SCENE_FONT_FILE` | 必須の日本語font file。`autostream` userが読めるregular fileの絶対pathを指定 |
 
 Worker は DB に直接接続せず、標準構成では Observability にも直接接続しません。永続状態と signal 転送は Control Panel と Observability 側で扱います。
 
 ## 通常運用のポイント
 
-- Encoder Recorder の送信先 URL と stream ingest token は、通常 Control Panel のジョブから渡されます。
+- Encoder Recorder の映像送信先とstream-scoped credentialは、通常 Control Panel のジョブから渡されます。
 - 本番 env に static な worker-event token を置かない運用にします。
 - Worker は primary assignment のジョブだけを受け付けます。
+- SRTのjob token/passphraseはメモリ内だけで扱い、FFmpeg argv、URL、log、audit、env、永続fileへ出しません。
+- SRT/UDPはNode APIのHTTPSやCloudflare Tunnelとは別経路です。Worker hostからEncoder Recorderのadvertise endpointへUDP到達できる必要があります。
+- 参加者・チャットのアイコンには `cdn.discordapp.com:443` と `media.discordapp.net:443` へのDNS/HTTPS outboundが必要です。遮断時は名前とplaceholderへ安全にfallbackします。
 
 ## Control Panelで設定・確認するもの
 
@@ -53,20 +59,20 @@ Worker だけを入れ替えるなら Worker Management、Discord Bot や Encode
 
 | 表示 | 意味 |
 | --- | --- |
-| Worker events | Worker event が Encoder Recorder へ届いているか |
+| Worker events | Worker event がWorkerのscene stateへ反映されたか |
 | Worker event test | current_time や caption event を送れるか |
 | Worker Event Sidecar | event の一覧や最終到達状態 |
 | Start Readiness | Worker assignment と capability が満たされているか |
 
 ## Worker event
 
-Worker は配信中の `overlay.*` と `caption.*` event を受け付け、Encoder Recorder へ転送します。`overlay.*` は互換用の内部event namespaceで、画面上のウォーターマーク設定そのものではありません。
+Worker は配信中の `overlay.*` と `caption.*` event を受け付け、配信sceneへ反映します。`overlay.*` は内部event namespaceで、画面上のウォーターマーク設定そのものではありません。ウォーターマークはWorker映像を受け取ったEncoder Recorderが最終encode前に重ねます。
 
 Caption Profileが選択された配信では、Discord BotがVCから受けたOpus packetを`caption_audio`用のstream-scoped tokenでWorkerへ送ります。Workerは話者SSRCごとにDeepgram Nova-3のlive WebSocketを管理し、中間結果を`caption.telop`、確定結果を`caption.final`として映像生成へ渡します。Deepgram APIキーは対象`stream_id`とprimary Workerの割り当てをControl Panelで検証したruntime secretからjob開始時にだけ取得し、Workerのenv、profile JSON、status、logには保存しません。
 
 | event type | 主な送信元 | payload |
 | --- | --- | --- |
-| `overlay.current_time` | Worker event test | 現在時刻 |
+| `overlay.current_time` | Worker / Worker event test | 現在時刻 |
 | `overlay.participants` | Discord Bot | `participants` |
 | `overlay.active_speaker` | Discord Bot | `user_id`, `display_name` |
 | `overlay.discord_chat` | Discord Bot | `message_id`, `user_id`, `display_name`, `text`, `text_channel_id`, `created_at` |
@@ -92,10 +98,11 @@ Streams の Chat Channel ID が設定されている配信では、開始後に 
 2. Control Panel のサービス一覧で online を確認します。
 3. テスト配信を開始します。
 4. Worker がジョブを受けたことを確認します。
-5. Encoder Recorder 側にイベントが届いているか確認します。
-6. Observability に heartbeat や metric が Control Panel 経由で届いているか確認します。
+5. Workerが生成した映像に参加者、発言中の緑枠、現在時刻、字幕、チャットが反映されることを確認します。
+6. EncoderプレビューでWorker映像とEncoder側ウォーターマークが同じ最終映像になっていることを確認します。
+7. Observability に heartbeat や metric が Control Panel 経由で届いているか確認します。
 
-イベントが届かない場合は、Worker、Encoder Recorder、Control Panel の Node ID、Node Runtime Token、primary assignment の組み合わせを確認してください。
+映像が届かない場合は、Worker、Encoder Recorder、Control Panel の Node ID、Node Runtime Token、primary assignment、配信jobの映像送信先を確認してください。
 
 ## 次に読むページ
 

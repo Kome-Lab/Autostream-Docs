@@ -27,6 +27,8 @@
 | Encoder Recorderのoutput relay URL / 配送モード / 非secret binding ID | Encoder Recorderのenvファイル。`AUTOSTREAM_OUTPUT_RELAY_MODE`はrelayの方式だけを選び、stream keyや外部RTMPS URLは入れない |
 | 通知用 Webhook URL | Control Panel |
 | 録画ファイルのlocal path（既定値から変える場合） | Encoder Recorderのenvファイル |
+| Discord参加者名・字幕・チャット描画用の日本語font | Workerの必須`AUTOSTREAM_SCENE_FONT_FILE`。`autostream` userが読めるregular fileの絶対pathを指定 |
+| Worker映像を受けるSRT/UDPのbind・advertise endpoint | Encoder Recorderの`AUTOSTREAM_WORKER_VIDEO_BIND_ADDR`と`AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST`。HTTPSのNode API URLやCloudflare Tunnelとは別にし、advertise hostはprimary WorkerからUDP到達できるhost/IPを指定 |
 | Google Drive destination / OAuth | Control Panel |
 | YouTube / Google OAuth短期アクセストークンの自動更新間隔 | Control Panelの`AUTOSTREAM_OAUTH_TOKEN_REFRESH_INTERVAL`（既定45分） |
 | 管理画面のタイムゾーン | Control Panel |

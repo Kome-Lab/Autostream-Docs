@@ -43,11 +43,11 @@ Ubuntu / Debian 系の例です。
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y ca-certificates coreutils curl findutils gawk jq openssl tar util-linux mariadb-client ffmpeg
+sudo apt-get install -y ca-certificates coreutils curl findutils gawk jq openssl tar util-linux mariadb-client ffmpeg fontconfig fonts-noto-cjk
 ```
 
 service installerが`autostream` OS account、`/etc/autostream`、serviceごとの
-data directoryを必要に応じて作成します。`ffmpeg`、MariaDB、reverse proxyなどの
+data directoryを必要に応じて作成します。Encoder RecorderとWorkerが使う`ffmpeg`、Workerの映像生成が使う`fontconfig`と`fonts-noto-cjk`、MariaDB、reverse proxyなどの
 外部packageや設定はinstallerの対象外です。GitHub CLIはarchiveを取得・検証する
 管理端末だけで使い、対象サーバーには導入しません。
 
@@ -454,14 +454,27 @@ AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
 OBSERVABILITY_BIND_ADDR=127.0.0.1:8082
 ```
 
-Encoder/Recorder では archive path と FFmpeg も確認します。
+Encoder/Recorder ではarchive path、FFmpeg、Worker映像用SRT/UDP endpointを設定します。
 
 ```text
 AUTOSTREAM_ARCHIVE_DIR=/var/lib/autostream/archives
 FFMPEG_BIN=ffmpeg
+AUTOSTREAM_WORKER_VIDEO_BIND_ADDR=0.0.0.0:10080
+AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST=encoder-media.example.internal
 ```
 
-Worker は `config.yml` の stream ingest signing key で Discord Bot からの stream-scoped `worker_events` token を検証し、同じファイルの Node Runtime Token で Control Panel 経由の signal 送信を行います。
+`AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST`はprimary WorkerからUDP到達できるhost名またはIPへ置き換え、scheme、port、pathを含めません。host firewall、cloud firewall、NATではWorker hostからUDP `10080`だけを許可します。
+
+Workerでも映像生成用のFFmpegと日本語fontを確認し、font pathを必ず設定します。
+
+```text
+FFMPEG_BIN=ffmpeg
+AUTOSTREAM_SCENE_FONT_FILE=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+```
+
+Worker は `config.yml` の stream ingest signing key で Discord Bot からの stream-scoped `worker_events` token を検証し、同じファイルの Node Runtime Token で Control Panel 経由の signal 送信を行います。参加者、発言中状態、現在時刻、字幕、チャットから映像を生成し、配信jobで選択されたEncoder Recorderへjob-scopedに暗号化したSRT over UDPで送ります。
+
+Encoder RecorderのSRT bind/advertise UDP endpointは、Node APIのHTTPS URLやCloudflare Tunnelとは別に設定します。primary Worker hostからadvertise先へUDP到達できることを、host firewall、cloud firewall、NATを含めて確認してください。Control Panelがjobごとに渡すSRT token/passphraseはFFmpeg argv、URL、service log、audit、env、永続fileへ出しません。
 
 Discord token、YouTube stream key、Google Drive folder、OAuth refresh token、webhook URL、SMTP password は、MVP 標準では Control Panel の Integration / Secret / Notification から登録します。互換 fallback を使う場合だけ service env に入れます。
 

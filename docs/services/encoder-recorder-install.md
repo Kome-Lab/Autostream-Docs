@@ -1,6 +1,8 @@
 # Encoder Recorderを導入する
 
-Encoder Recorder は、AutoStream の中で最もサーバー資源を使うサービスです。Discord Bot から音声を受け、Worker からイベントを受け、FFmpeg で配信と録画を行います。host直接起動では、FFmpeg は同梱しないためサーバー側に入れてください。
+Encoder Recorder は、AutoStream の中で最もサーバー資源を使うサービスです。Discord Bot から音声を受け、Worker がjob-scopedに暗号化したSRT over UDPで送る映像へウォーターマークを重ね、FFmpeg でYouTube配信、録画、HLSプレビューを行います。host直接起動では、FFmpeg は同梱しないためサーバー側に入れてください。
+
+Worker映像用のSRT bind/advertise UDP endpointはNode APIのHTTPS URLやCloudflare Tunnelとは別に設定します。primary Worker hostからadvertise先へUDP到達できるよう、host firewall、cloud firewall、NATを構成してください。SRT token/passphraseはControl Panelがjobごとに渡し、FFmpeg argv、URL、service log、audit、env、永続fileへ出しません。
 
 ## 導入前に用意するもの
 
@@ -82,11 +84,13 @@ restartし、既存設定portのhealthと新versionを確認します。詳細�
 AUTOSTREAM_NODE_CONFIG=/etc/autostream-encoder-recorder/config.yml
 AUTOSTREAM_ENV=production
 AUTOSTREAM_BIND_ADDR=127.0.0.1:8081
+AUTOSTREAM_WORKER_VIDEO_BIND_ADDR=0.0.0.0:10080
+AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST=encoder-media.example.internal
 AUTOSTREAM_OUTPUT_RELAY_URL=rtmp://127.0.0.1/autostream/{stream_id}
 AUTOSTREAM_OUTPUT_RELAY_MODE=legacy_stream_key
 ```
 
-録画先は既定で`/var/lib/autostream/archives`、FFmpeg実行名は既定で`ffmpeg`です。`TZ`を含め、既定値と異なるhostだけで追加設定します。
+`AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST`はscheme、port、pathを含めず、primary WorkerからUDP到達できるhost名またはIPを指定します。Node APIの公開HTTPS host名やCloudflare Tunnelを機械的に流用しません。上の例ではhost firewall、cloud firewall、NATでUDP `10080`をWorker hostからだけ許可します。録画先は既定で`/var/lib/autostream/archives`、FFmpeg実行名は既定で`ffmpeg`です。`TZ`を含め、既定値と異なるhostだけで追加設定します。
 
 `AUTOSTREAM_ENV=production`によりControl Panel runtime configとoutput relayは自動的に必須になります。signed ingest tokenは環境に関係なく既定で必須です。`SERVICE_ID`、`CONTROL_PANEL_TOKEN`、`SERVICE_CONTROL_TOKEN[_SHA256]`、`ENCODER_WORKER_EVENTS_TOKEN[_SHA256]`、`ENCODER_DISCORD_AUDIO_TOKEN[_SHA256]`は入力しません。
 
@@ -112,7 +116,7 @@ df -h /var/lib/autostream/archives
 
 `hls` muxerが表示されることを確認します。録画は一時的に大きくなります。配信時間、bitrate、保存日数に合わせてディスク容量を見積もってください。
 
-Encoderプレビューは`AUTOSTREAM_ARCHIVE_DIR/tmp/<stream_id>/preview/`へ約2秒segmentを6個rolling出力します。active中のsegment数は制限されますが、終了済みstreamの`tmp` directoryはfinal archiveの保持期間だけでは削除されない場合があります。`du -sh /var/lib/autostream/archives/tmp`も監視対象にし、active streamのdirectoryは削除しないでください。
+Encoderプレビューは`AUTOSTREAM_ARCHIVE_DIR/tmp/<stream_id>/preview/`へ約2秒segmentを出力し、配信中は開始時点まで戻れるようactive streamの全segmentを保持します。長時間配信では使用量が配信時間に比例して増え、終了済みstreamの`tmp` directoryもfinal archiveの保持期間だけでは削除されない場合があります。`du -sh /var/lib/autostream/archives/tmp`も監視対象にし、active streamのdirectoryは削除しないでください。
 
 ## output relay の考え方
 
@@ -180,7 +184,7 @@ Google Drive へ保存する場合は、Control Panel の Archive画面でDrive�
 | --- | --- |
 | Preflight | ffmpeg、archive dir、output relay がok |
 | Audio Bridge | Discord Bot からpacketが届く |
-| Worker Event Sidecar | Worker eventが保存される |
+| Worker Video Ingest | `worker_video_ingest_srt` capabilityが報告され、primary WorkerからSRT接続と初期frameが到達する |
 | 録画 | `final.mkv` 作成後、停止時に `final.mp4` が作られる |
 | Encoderプレビュー | Streams画面と発行したVLC URLでHLS映像が再生される |
 | Upload | Archive / upload が completed |
@@ -188,13 +192,15 @@ Google Drive へ保存する場合は、Control Panel の Archive画面でDrive�
 
 ## Dockerで起動する場合
 
-Docker image はDebianの`ffmpeg` packageを含み、HLS previewも同じEncoder Recorder API portを使います。preview用の追加公開portや追加volumeは不要です。composeではarchive dir volumeを`/var/lib/autostream/archives`へ永続化し、通常Compose network上の`output-relay:1935`へ出力します。production起動時の`config.yml`はread-only mountにします。Encoder Recorder repositoryのone-shot Auto Configureを使う場合だけ、production overrideを付けずにbase composeで生成してから、production composeを起動します。
+Docker image はDebianの`ffmpeg` packageを含み、HLS previewも同じEncoder Recorder API portを使います。preview用の追加公開portや追加volumeは不要です。一方、Worker scene videoにはNode APIとは別のSRT/UDP portが必要です。同一Compose networkでは`AUTOSTREAM_WORKER_VIDEO_BIND_ADDR=0.0.0.0:10080`、`AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST=encoder-recorder`としてservice DNSを使い、hostへUDPをpublishしません。Workerを別hostで動かす構成だけ`10080:10080/udp`をpublishし、advertise hostをWorkerから到達できるEncoder host名またはIPへ変更します。composeではarchive dir volumeを`/var/lib/autostream/archives`へ永続化し、通常Compose network上の`output-relay:1935`へ出力します。production起動時の`config.yml`はread-only mountにします。Encoder Recorder repositoryのone-shot Auto Configureを使う場合だけ、production overrideを付けずにbase composeで生成してから、production composeを起動します。
 
 ## よくあるトラブル
 
 | 症状 | 確認する場所 |
 | --- | --- |
 | preflightでffmpeg missing | `FFMPEG_BIN` と `ffmpeg -version` |
+| `worker_video_ingest_srt` capabilityが出ない | `AUTOSTREAM_WORKER_VIDEO_BIND_ADDR`と`AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST`、production config error |
+| Worker映像が届かない | advertise host、UDP port publish、host/cloud firewall、NAT、primary assignment |
 | archive root missing | `AUTOSTREAM_ARCHIVE_DIR` の存在、owner、空き容量 |
 | 本番でstream key付きrequestが拒否される | YouTube Output とruntime secret参照を使う |
 | 配信はできるが録画がない | 配信枠のArchive保存先、ディスク権限、stop時のpackaging |

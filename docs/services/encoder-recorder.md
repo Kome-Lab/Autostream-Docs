@@ -1,6 +1,6 @@
 # Encoder Recorder
 
-Encoder Recorder は AutoStream の media 処理を担当します。Discord 音声、Worker のイベント、外部映像入力を受け取り、FFmpeg で配信と録画を行います。
+Encoder Recorder は AutoStream の最終media処理を担当します。Discord音声、Workerが生成したSRT映像、外部映像入力を受け取り、ウォーターマークを重ねてFFmpegで配信と録画を行います。
 
 Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay、Google Drive保存の実運用手順は [Encoder Recorderを導入する](/services/encoder-recorder-install) にまとめています。
 
@@ -8,7 +8,7 @@ Linuxサーバーへの導入、FFmpeg、録画ディレクトリ、output relay
 
 - stream job の start / stop / retry-upload
 - Discord 音声の ingest
-- Worker event の保存
+- Worker scene videoのSRT ingest
 - FFmpeg による live output
 - Control PanelとVLC向けのHLS Encoderプレビュー
 - MKV 録画と MP4 化
@@ -33,11 +33,13 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 | `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Encoder Recorder 用 `config.yml` |
 | `AUTOSTREAM_ARCHIVE_DIR` | 録画保存先 |
 | `FFMPEG_BIN` | FFmpeg 実行ファイル |
+| `AUTOSTREAM_WORKER_VIDEO_BIND_ADDR` | Worker scene video用SRT/UDP listenerのbind。productionでは必須。例: `0.0.0.0:10080` |
+| `AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST` | primary Workerから到達できるSRT host名またはIP。scheme、port、pathは含めない |
 | `AUTOSTREAM_OUTPUT_RELAY_URL` | 本番用 output relay |
 | `AUTOSTREAM_OUTPUT_RELAY_MODE` | `direct`、`legacy_stream_key`、`live_api_static`の配送方式。URLありで未設定の場合だけ既存host互換の`legacy_stream_key` |
 | `AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` | `live_api_static`だけで使う、`relay-` + 小文字UUID形式の非secret固定relay識別子。stream keyや外部RTMPS URLは入れない |
 
-`AUTOSTREAM_ARCHIVE_DIR`は未指定なら`/var/lib/autostream/archives`、`FFMPEG_BIN`は未指定なら`ffmpeg`です。標準envでは既定値を重ねず、hostで変更が必要な場合だけ設定します。`AUTOSTREAM_DATA_DIR`はEncoder Recorderでは使用しません。
+`AUTOSTREAM_ARCHIVE_DIR`は未指定なら`/var/lib/autostream/archives`、`FFMPEG_BIN`は未指定なら`ffmpeg`です。`AUTOSTREAM_ENV=production`ではWorker映像用のbindとadvertise hostを明示しない限りSRT ingest capabilityを報告せず、Worker映像経路は開始しません。`AUTOSTREAM_DATA_DIR`はEncoder Recorderでは使用しません。
 
 ## Control Panelで管理するもの
 
@@ -59,7 +61,9 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 
 relay URLを設定しない`direct`、URLありでmode未設定の旧`legacy_stream_key`互換、明示的な`live_api_static`の切替条件と安全な戻し方は、[Encoder Recorderを導入する](/services/encoder-recorder-install#output-relay-の考え方)を参照してください。profileや固定relayのkeyを自動変換・複製しないでください。
 
-Encoderプレビューは本配信、録画と同じencodeを3-way teeし、約2秒のHLS segmentを6個だけrolling保持します。preview出力は有限FIFOと`onfail=ignore`で分離され、previewの遅延やplayer切断で本配信と録画を停止しません。playlistはControl Panelが検証してproxyし、ブラウザへEncoderのNode tokenを渡しません。
+Discord参加者、発言中の緑枠、現在時刻、字幕、チャットはWorkerが配信映像として生成し、job-scopedに暗号化したSRT over UDPで選択されたEncoder Recorderへ送ります。Encoder RecorderはWorker映像へウォーターマークを重ね、YouTube、本配信と同じ録画、Encoderプレビューへ同じ最終encodeを分岐します。Encoderプレビューは約2秒のHLS segmentを6個だけrolling保持します。preview出力は有限FIFOと`onfail=ignore`で分離され、previewの遅延やplayer切断で本配信と録画を停止しません。playlistはControl Panelが検証してproxyし、ブラウザへEncoderのNode tokenを渡しません。
+
+SRT listen/advertise UDP endpointはNode APIのHTTPS URLやCloudflare Tunnelとは別に設定し、primary Workerからadvertise先へUDP到達できる必要があります。SRT token/passphraseはjob-scopedで、FFmpeg argv、URL、log、audit、env、永続fileへ出しません。
 
 preview fileは`AUTOSTREAM_ARCHIVE_DIR/tmp/<stream_id>/preview/`に置かれます。active stream内ではsegment数が制限されますが、現時点のfinal artifact retentionは終了済みstreamの`tmp` directoryを削除する保証を持ちません。disk監視では`final`だけでなく`tmp`も確認し、手動整理は対象streamが停止済みでEncoder Recorderが使用していないことを確認してから行います。
 
@@ -69,8 +73,8 @@ preview fileは`AUTOSTREAM_ARCHIVE_DIR/tmp/<stream_id>/preview/`に置かれま�
 2. `AUTOSTREAM_ARCHIVE_DIR` に書き込めることを確認します。
 3. Encoder Recorder を起動します。
 4. Control Panel で online を確認します。
-5. 短いテスト配信を行います。
-6. StreamsのEncoderプレビューとVLC用ネットワーク再生URLで映像を確認します。
+5. 短い非公開テスト配信を行い、Worker映像、Discord音声、ウォーターマークが揃うことを確認します。
+6. YouTube、StreamsのEncoderプレビュー、VLC用ネットワーク再生URLで同じ表示を確認します。
 7. `final.mkv` と `final.mp4` が作られるか確認します。
 8. Control Panel の Archive で local artifact を download できるか確認します。
 9. 保存先への upload 結果を確認します。
@@ -80,10 +84,11 @@ preview fileは`AUTOSTREAM_ARCHIVE_DIR/tmp/<stream_id>/preview/`に置かれま�
 | 項目 | 意味 |
 | --- | --- |
 | Encoder Profile | FFmpeg の出力設定 |
-| Encoder Input URL | 外部映像入力。空欄なら既定入力 |
+| Encoder Input URL | 互換用の外部映像入力。Worker映像契約が有効な配信ではjob-scoped SRT入力を使用 |
 | RTMP URL | 直接出力先を指定したい時の補助項目 |
 | Encoder host preflight | ffmpeg、archive dir、output 設定の準備状態 |
 | Audio Bridge | Discord Bot から音声 packet が届いているか |
+| Worker Video Ingest | primary WorkerのSRT接続、初期frame到達、UDP listener readiness |
 | Archive / upload | final MKV / MP4、local artifact、upload status、retry 状態 |
 | Encoderプレビュー | YouTube送信前の最終映像。starting / live / stoppingだけ利用可能 |
 
