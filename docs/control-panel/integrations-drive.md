@@ -8,7 +8,7 @@ Integrations は、OAuth provider、OAuth connected account、Google Drive desti
 | --- | --- | --- |
 | OAuth Provider | Google / GitHub / Discord などの OAuth アプリ設定 | Control Panel login |
 | OAuth Connected Account | 実際に接続したユーザーまたは運用アカウント | YouTube Live API、Google Drive upload |
-| Google Drive Destination | 保存先 folder、共有ドライブ、base path | 録画プロファイル、Encoder Recorder |
+| Google Drive Destination | 保存先 folder、共有ドライブ | 録画プロファイル、Encoder Recorder |
 
 OAuth Provider は「アプリの設定」、OAuth Connected Account は「そのアプリで接続したアカウント」、Drive Destination は「保存先」です。
 
@@ -65,8 +65,7 @@ Drive Destination は、Archive Settings が参照する保存先です。
 | Existing destination | 編集対象 | 空欄なら新規 |
 | Name | 保存先名 | Streams や Archive Settings で判断しやすい名前 |
 | OAuth account | 保存に使うDrive対応のconnected account | Drive保存先の作成時に選びます |
-| Folder ID | Google Drive folder ID | 保存後は表示されません |
-| Base path | folder 内で使うベースパス | `AutoStream` など |
+| Folder ID | Google Drive folder ID | このfolder自体をアーカイブのルートとして使います。保存後は表示されません |
 | Shared drive folder | 共有ドライブ配下か | 共有ドライブなら on |
 
 ### 作成手順
@@ -78,6 +77,8 @@ Drive Destination は、Archive Settings が参照する保存先です。
 5. Archive画面で、接続アカウント、Folder ID、共有ドライブ設定を持つDrive保存先を作ります。
 6. その保存先を使う録画プロファイルを作ります。
 7. Streams の配信枠作成時に録画プロファイルを選びます。
+
+保存される階層は `指定したFolder ID / 配信枠名 / YYYYMMDD_HHMMSS_JST_配信枠UUID / final.mp4` です。旧設定に `base_path` が残っていても、現在のEncoder/Recorderは無視し、`AutoStream` などの中間folderを追加しません。同じ配信実行を再パッケージ化または再uploadした場合は、同じ実行folder内の同名ファイルを更新し、新しい重複ファイルを作りません。過去に作成済みの重複ファイルは自動削除しません。
 
 ## Archive Settingsとの関係
 

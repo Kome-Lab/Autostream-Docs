@@ -47,7 +47,7 @@ sudo apt-get install -y ca-certificates coreutils curl findutils gawk jq openssl
 ```
 
 service installerが`autostream` OS account、`/etc/autostream`、serviceごとの
-data directoryを必要に応じて作成します。Encoder RecorderとWorkerが使う`ffmpeg`、Workerの映像生成が使う`fontconfig`と`fonts-noto-cjk`、MariaDB、reverse proxyなどの
+data directoryを必要に応じて作成します。Encoder Recorderが使う`ffmpeg`、Workerの画像生成が使う`fontconfig`と`fonts-noto-cjk`、MariaDB、reverse proxyなどの
 外部packageや設定はinstallerの対象外です。GitHub CLIはarchiveを取得・検証する
 管理端末だけで使い、対象サーバーには導入しません。
 
@@ -465,14 +465,13 @@ AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST=encoder-media.example.internal
 
 `AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST`はprimary WorkerからUDP到達できるhost名またはIPへ置き換え、scheme、port、pathを含めません。host firewall、cloud firewall、NATではWorker hostからUDP `10080`だけを許可します。
 
-Workerでも映像生成用のFFmpegと日本語fontを確認し、font pathを必ず設定します。
+Workerでは画像生成用の日本語fontを確認し、font pathを必ず設定します。WorkerにFFmpegは不要です。
 
 ```text
-FFMPEG_BIN=ffmpeg
 AUTOSTREAM_SCENE_FONT_FILE=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
 ```
 
-Worker は `config.yml` の stream ingest signing key で Discord Bot からの stream-scoped `worker_events` token を検証し、同じファイルの Node Runtime Token で Control Panel 経由の signal 送信を行います。参加者、発言中状態、現在時刻、字幕、チャットから映像を生成し、配信jobで選択されたEncoder Recorderへjob-scopedに暗号化したSRT over UDPで送ります。
+Worker は `config.yml` の stream ingest signing key で Discord Bot からの stream-scoped `worker_events` token を検証し、同じファイルの Node Runtime Token で Control Panel 経由の signal 送信を行います。参加者、発言中状態、現在時刻、字幕、チャットからscene画像を生成し、低頻度のMJPEG画像列として配信jobで選択されたEncoder Recorderへjob-scopedに暗号化したSRT over UDPで送ります。動画encodeと音声MUXはEncoder Recorderが担当します。
 
 Encoder RecorderのSRT bind/advertise UDP endpointは、Node APIのHTTPS URLやCloudflare Tunnelとは別に設定します。primary Worker hostからadvertise先へUDP到達できることを、host firewall、cloud firewall、NATを含めて確認してください。Control Panelがjobごとに渡すSRT token/passphraseはFFmpeg argv、URL、service log、audit、env、永続fileへ出しません。
 

@@ -1,8 +1,8 @@
 # Encoder Recorderを導入する
 
-Encoder Recorder は、AutoStream の中で最もサーバー資源を使うサービスです。Discord Bot から音声を受け、Worker がjob-scopedに暗号化したSRT over UDPで送る映像へウォーターマークを重ね、FFmpeg でYouTube配信、録画、HLSプレビューを行います。host直接起動では、FFmpeg は同梱しないためサーバー側に入れてください。
+Encoder Recorder は、AutoStream の中で最もサーバー資源を使うサービスです。Discord Bot から音声を受け、Worker がjob-scopedに暗号化したSRT over UDPで送るMJPEG scene画像列の最新画像を保持し、設定FPSの映像化・音声MUX・ウォーターマーク・最終encodeを行ってYouTube配信、録画、HLSプレビューへ分岐します。host直接起動では、FFmpeg は同梱しないためサーバー側に入れてください。
 
-Worker映像用のSRT bind/advertise UDP endpointはNode APIのHTTPS URLやCloudflare Tunnelとは別に設定します。primary Worker hostからadvertise先へUDP到達できるよう、host firewall、cloud firewall、NATを構成してください。SRT token/passphraseはControl Panelがjobごとに渡し、FFmpeg argv、URL、service log、audit、env、永続fileへ出しません。
+Worker画像用のSRT bind/advertise UDP endpointはNode APIのHTTPS URLやCloudflare Tunnelとは別に設定します。primary Worker hostからadvertise先へUDP到達できるよう、host firewall、cloud firewall、NATを構成してください。SRT token/passphraseはControl Panelがjobごとに渡し、FFmpeg argv、URL、service log、audit、env、永続fileへ出しません。
 
 ## 導入前に用意するもの
 
@@ -184,7 +184,7 @@ Google Drive へ保存する場合は、Control Panel の Archive画面でDrive�
 | --- | --- |
 | Preflight | ffmpeg、archive dir、output relay がok |
 | Audio Bridge | Discord Bot からpacketが届く |
-| Worker Video Ingest | `worker_video_ingest_srt` capabilityが報告され、primary WorkerからSRT接続と初期frameが到達する |
+| Worker Frame Ingest | `worker_frame_ingest_mjpeg_srt` capabilityが報告され、primary WorkerからSRT接続と初期JPEG frameが到達する |
 | 録画 | `final.mkv` 作成後、停止時に `final.mp4` が作られる |
 | Encoderプレビュー | Streams画面と発行したVLC URLでHLS映像が再生される |
 | Upload | Archive / upload が completed |
@@ -199,8 +199,8 @@ Docker image はDebianの`ffmpeg` packageを含み、HLS previewも同じEncoder
 | 症状 | 確認する場所 |
 | --- | --- |
 | preflightでffmpeg missing | `FFMPEG_BIN` と `ffmpeg -version` |
-| `worker_video_ingest_srt` capabilityが出ない | `AUTOSTREAM_WORKER_VIDEO_BIND_ADDR`と`AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST`、production config error |
-| Worker映像が届かない | advertise host、UDP port publish、host/cloud firewall、NAT、primary assignment |
+| `worker_frame_ingest_mjpeg_srt` capabilityが出ない | `AUTOSTREAM_WORKER_VIDEO_BIND_ADDR`と`AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST`、production config error |
+| Worker画像が届かない | advertise host、UDP port publish、host/cloud firewall、NAT、primary assignment |
 | archive root missing | `AUTOSTREAM_ARCHIVE_DIR` の存在、owner、空き容量 |
 | 本番でstream key付きrequestが拒否される | YouTube Output とruntime secret参照を使う |
 | 配信はできるが録画がない | 配信枠のArchive保存先、ディスク権限、stop時のpackaging |

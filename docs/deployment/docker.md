@@ -300,7 +300,7 @@ Auto Configureが自動生成するのはsystemdのroot policy/sidecarだけで�
 
 ローカルではDocker 29.6.2 / Compose 5.3.1のisolated root DIND上で`TestDockerPortDaemonSmoke`を実行し、初回・連続変更、実process crash後のfresh-process reconcile、grant二重消費なし、unhealthy mappingの旧値rollback、foreign containerによるpublished port占有のgrant前拒否を確認しました。これはローカル実daemonのPASSであり、全5image build、公開image、実Docker host canary、release/deployの証拠ではありません。
 
-Worker imageはDebianの`ffmpeg`、`fontconfig`、`fonts-noto-cjk` packageを含み、Discord参加者、発言中の緑枠、現在時刻、字幕、チャットを配信映像として生成します。image内の`AUTOSTREAM_SCENE_FONT_FILE`はNoto CJKのcontainer pathを指すため、通常はfont用volumeや追加envは不要です。Workerは配信jobで指定された選択済みEncoder Recorderへ、job-scopedに暗号化したSRT over UDPでscene videoを送り、Encoder Recorderはウォーターマークを重ねた後にYouTube、録画、HLSへ同じ最終encodeを分岐します。
+Worker imageはDebianの`fontconfig`と`fonts-noto-cjk` packageを含み、FFmpegは含みません。Discord参加者、発言中の緑枠、現在時刻、字幕、チャットをscene画像として生成します。image内の`AUTOSTREAM_SCENE_FONT_FILE`はNoto CJKのcontainer pathを指すため、通常はfont用volumeや追加envは不要です。Workerは配信jobで指定された選択済みEncoder Recorderへ、低頻度のMJPEG画像列をjob-scopedに暗号化したSRT over UDPで送り、Encoder Recorderが設定FPSで映像化・音声MUX・最終encodeし、ウォーターマークを重ねた後にYouTube、録画、HLSへ分岐します。
 
 SRT/UDPはNode APIのHTTPS portやCloudflare Tunnelとは別経路です。上の同一Compose例はEncoder Recorderを`0.0.0.0:10080`で待ち受けさせ、advertise hostにCompose service DNSの`encoder-recorder`を使うため、hostへUDPをpublishしません。WorkerとEncoder Recorderを別hostで動かす場合だけ、`AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST`をprimary Workerから到達できるEncoder host名またはIPへ変え、Encoder serviceの`ports`へ`"10080:10080/udp"`を追加します。host firewall、cloud firewall、NATではWorker hostからUDP `10080`だけを許可してください。advertise hostにscheme、port、path、`127.0.0.1`、Cloudflareの公開HTTPS名を入れません。SRTのjob token/passphraseはControl Panelが配信jobごとに渡し、FFmpeg argv、URL、container log、audit、compose file、`.env`、永続volumeへ出しません。
 

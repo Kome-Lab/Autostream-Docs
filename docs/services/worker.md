@@ -1,6 +1,6 @@
 # Worker
 
-Worker は配信ジョブの参加者、発言中状態、現在時刻、字幕、Discordチャットから配信映像を生成し、job-scopedに暗号化したSRT over UDPで選択されたEncoder Recorderへ送ります。Encoder Recorderはその映像へウォーターマークを重ね、最終encode、YouTube/HLS出力、録画、archiveを担当します。
+Worker は配信ジョブの参加者、発言中状態、現在時刻、字幕、Discordチャットからscene画像を生成し、低頻度のMJPEG画像列としてjob-scopedに暗号化したSRT over UDPで選択されたEncoder Recorderへ送ります。Workerは動画encodeや音声MUXを行いません。Encoder Recorderが最新画像を保持し、設定FPSでの映像化、音声MUX、ウォーターマーク、YouTube/HLS出力、録画、archiveを担当します。
 
 Linuxサーバーへの導入、Node Agent config、primary assignment、Worker event test の確認は [Workerを導入する](/services/worker-install) にまとめています。
 
@@ -8,8 +8,8 @@ Linuxサーバーへの導入、Node Agent config、primary assignment、Worker 
 
 - Control Panel から配信ジョブを受ける
 - caption、chat、participant、active speaker event を配信sceneへ反映する
-- 現在時刻、字幕、参加者名・アイコン、発言中の緑枠、Discordチャットを含む映像を生成する
-- 配信jobで選択されたEncoder Recorderへ生成映像を送る
+- 現在時刻、字幕、参加者名・アイコン、発言中の緑枠、Discordチャットを含むscene画像を生成する
+- 配信jobで選択されたEncoder Recorderへ低頻度のMJPEG画像列を送る
 - Control Panel へ heartbeat を送る
 - Control Panel 経由で Observability へ状態やエラーを送る
 
@@ -18,7 +18,6 @@ Linuxサーバーへの導入、Node Agent config、primary assignment、Worker 
 | 項目 | 目的 |
 | --- | --- |
 | `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Worker 用 `config.yml` |
-| `FFMPEG_BIN` | 映像生成に使うFFmpeg。未指定時は`ffmpeg`。SRT秘密はこのprocessのargvへ渡さない |
 | `AUTOSTREAM_SCENE_FONT_FILE` | 必須の日本語font file。`autostream` userが読めるregular fileの絶対pathを指定 |
 
 Worker は DB に直接接続せず、標準構成では Observability にも直接接続しません。永続状態と signal 転送は Control Panel と Observability 側で扱います。
@@ -28,7 +27,7 @@ Worker は DB に直接接続せず、標準構成では Observability にも直
 - Encoder Recorder の映像送信先とstream-scoped credentialは、通常 Control Panel のジョブから渡されます。
 - 本番 env に static な worker-event token を置かない運用にします。
 - Worker は primary assignment のジョブだけを受け付けます。
-- SRTのjob token/passphraseはメモリ内だけで扱い、FFmpeg argv、URL、log、audit、env、永続fileへ出しません。
+- SRTのjob token/passphraseはメモリ内だけで扱い、URL、log、audit、env、永続fileへ出しません。
 - SRT/UDPはNode APIのHTTPSやCloudflare Tunnelとは別経路です。Worker hostからEncoder Recorderのadvertise endpointへUDP到達できる必要があります。
 - 参加者・チャットのアイコンには `cdn.discordapp.com:443` と `media.discordapp.net:443` へのDNS/HTTPS outboundが必要です。遮断時は名前とplaceholderへ安全にfallbackします。
 
@@ -80,6 +79,8 @@ Caption Profileが選択された配信では、Discord BotがVCから受けたO
 | `caption.final` | Deepgram確定結果 | `text`, `speaker_user_id` |
 
 Streams の Chat Channel ID が設定されている配信では、開始後に Discord Bot が対象 text channel の新規messageだけを `overlay.discord_chat` として Worker へ送ります。Worker event API は Authorization header の stream-scoped `worker_events` token を検証しますが、payload 内の token や secret は要求しません。
+
+受信したチャットは時間だけでは消去せず、表示上限を超えて新しいmessageに押し出されるか、配信jobが終了・再開されたときに消去します。
 
 ## metricの見方
 

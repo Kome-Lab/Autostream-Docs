@@ -1,6 +1,6 @@
 # Workerを導入する
 
-Worker は、配信中のparticipant、active speaker、current time、caption、Discord chatを配信sceneへ描画し、job-scopedに暗号化したSRT over UDPで選択されたEncoder Recorderへ映像を送るサービスです。Encoder Recorderはウォーターマーク、最終encode、YouTube/HLS出力、録画、archiveを担当します。
+Worker は、配信中のparticipant、active speaker、current time、caption、Discord chatを配信scene画像へ描画し、低頻度のMJPEG画像列としてjob-scopedに暗号化したSRT over UDPで選択されたEncoder Recorderへ送るサービスです。Workerは動画encodeや音声MUXを行いません。Encoder Recorderが最新画像を保持し、ウォーターマーク、設定FPSでの最終encode、音声MUX、YouTube/HLS出力、録画、archiveを担当します。
 
 ## 導入前に用意するもの
 
@@ -9,10 +9,9 @@ Worker は、配信中のparticipant、active speaker、current time、caption�
 | Worker Node Agent `config.yml` | `/etc/autostream-worker/config.yml` |
 | Worker Node名、Host、Port、SSL | Control Panel の Node登録画面 |
 | Stream ingest signing key | Node登録時に `config.yml` の `stream_ingest.signing_key` として配布 |
-| `ffmpeg` | Worker映像の生成とEncoder Recorderへの送信 |
 | `fontconfig` / `fonts-noto-cjk` | 参加者名、字幕、チャットの日本語描画 |
 
-Encoder Recorder のSRT advertise endpointやjob-scoped credentialは、通常 Control Panel の stream job から渡されます。本番envに固定の `ENCODER_RECORDER_URL` や固定tokenを置かない運用にします。SRT token/passphraseはメモリ内だけで扱い、FFmpeg argv、URL、service log、audit、env、永続fileへ出しません。
+Encoder Recorder のSRT advertise endpointやjob-scoped credentialは、通常 Control Panel の stream job から渡されます。本番envに固定の `ENCODER_RECORDER_URL` や固定tokenを置かない運用にします。SRT token/passphraseはメモリ内だけで扱い、URL、service log、audit、env、永続fileへ出しません。
 
 Worker の Observability signal は、Node Runtime Token で Control Panel に送ります。Worker env に stream ingest signing key や Observability 接続用tokenは入れません。生成方法は [秘密情報とtoken生成](/security/tokens) を参照してください。
 
@@ -22,13 +21,12 @@ Worker hostへ映像生成の外部依存を導入します。
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y ffmpeg fontconfig fonts-noto-cjk
-ffmpeg -version
+sudo apt-get install -y fontconfig fonts-noto-cjk
 fc-match -f '%{file}\t%{lang}\n' ':lang=ja'
 test -r /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
 ```
 
-`fc-match`の出力は、先頭が読めるfont fileで、tab以降のlanguage listに`ja`を含むことを確認します。`ffmpeg`、`fontconfig`、`fonts-noto-cjk`は外部packageのためservice installerでは導入しません。
+`fc-match`の出力は、先頭が読めるfont fileで、tab以降のlanguage listに`ja`を含むことを確認します。`fontconfig`と`fonts-noto-cjk`は外部packageのためservice installerでは導入しません。WorkerにはFFmpegは不要です。
 
 `artifact-manifest.json`を含むarchive-only形式のhost releaseを使います。管理端末で
 archive本体だけをdownloadしてGitHub Attestationを確認し、元`.tar.gz`だけを
@@ -91,7 +89,6 @@ immutable releaseとして公開してください。
 AUTOSTREAM_NODE_CONFIG=/etc/autostream-worker/config.yml
 AUTOSTREAM_ENV=production
 AUTOSTREAM_REQUIRE_CONTROL_PANEL_RUNTIME_CONFIG=true
-FFMPEG_BIN=ffmpeg
 TZ=Asia/Tokyo
 ```
 
@@ -131,8 +128,8 @@ sudo systemctl status autostream-worker
 3. 自分が primary に割り当てられたstreamだけを処理します。
 4. overlayやcaptionなどのeventをscene stateへ反映します。
 5. Discord Bot から来る参加者、active speaker、chat event は stream-scoped `worker_events` token で検証します。
-6. 参加者名・アイコン、発言中の緑枠、現在時刻、字幕、チャットを含む映像を生成します。
-7. stream job に含まれる選択済みEncoder Recorderへjob-scopedに暗号化したSRT over UDPで生成映像を送ります。
+6. 参加者名・アイコン、発言中の緑枠、現在時刻、字幕、チャットを含むscene画像を生成します。
+7. stream job に含まれる選択済みEncoder Recorderへjob-scopedに暗号化したSRT over UDPで低頻度のMJPEG画像列を送ります。
 8. Control Panel 経由で Observability へ状態や失敗を送ります。
 
 standby Worker は予備です。通常はstart対象にならず、primaryへ切り替えた後に使います。
@@ -144,13 +141,13 @@ standby Worker は予備です。通常はstart対象にならず、primaryへ�
 | Service Health | `worker` が online |
 | Assignment | 対象streamで primary |
 | Worker event test | current time やcaption testが成功 |
-| Scene renderer | 参加者、発言中の緑枠、現在時刻、字幕、チャットを含む映像が生成される |
-| Encoder Recorder | 選択されたWorkerの映像を受信し、ウォーターマークを重ねたpreviewを生成する |
+| Scene renderer | 参加者、発言中の緑枠、現在時刻、字幕、チャットを含む画像が生成される |
+| Encoder Recorder | 選択されたWorkerの画像を受信し、映像化・音声MUX・ウォーターマークを含むpreviewを生成する |
 | Observability | worker event failures が増えない |
 
 ## Dockerで起動する場合
 
-Worker Docker imageは`ffmpeg`、`fontconfig`、`fonts-noto-cjk`を含み、`AUTOSTREAM_SCENE_FONT_FILE`の既定値をNoto CJKのcontainer内pathに固定します。compose では Panel が生成した `config.yml` を read-only mount します。env には `AUTOSTREAM_NODE_CONFIG=/etc/autostream-worker/config.yml` だけを指定し、`CONTROL_PANEL_TOKEN` や `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` を手入力しません。
+Worker Docker imageは`fontconfig`と`fonts-noto-cjk`を含み、FFmpegは含みません。`AUTOSTREAM_SCENE_FONT_FILE`の既定値をNoto CJKのcontainer内pathに固定します。compose では Panel が生成した `config.yml` を read-only mount します。env には `AUTOSTREAM_NODE_CONFIG=/etc/autostream-worker/config.yml` だけを指定し、`CONTROL_PANEL_TOKEN` や `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` を手入力しません。
 
 Docker network 上で Control Panel と Encoder Recorder に到達できることを確認してください。SRT/UDPはNode APIのHTTPSやCloudflare Tunnelとは別経路です。同一Compose networkではEncoder Recorderのadvertise hostにservice DNSを使い、hostへUDPをpublishしません。別host構成だけEncoder RecorderのSRT listen portをhostへUDP publishし、primary Workerからadvertise hostへ到達できるようhost firewall、cloud firewall、NATを設定します。参加者・チャットのアイコン取得にはWorkerから `cdn.discordapp.com:443` と `media.discordapp.net:443` へのDNS/HTTPS outboundも必要です。到達できない場合も配信は止めず、名前とplaceholderを描画します。標準構成では Worker から Observability へ直接接続しません。
 
