@@ -19,7 +19,7 @@ Tokenを読みます。service tokenを環境変数へ追加したり、別Node�
 コピーしたりしないでください。5つのApplication Runtime Identity Probesは
 引き続きreadinessのauthorityです。Updaterの状態表示で置き換えません。
 
-Worker、Encoder Recorder、Discord Bot、ObservabilityではNode configに次の固定名を含めます。
+Worker、Encoder Recorder、Discord Bot、ObservabilityではNode configの`listener.credential`に次の固定名を含めます。
 
 ```yaml
 listener:
