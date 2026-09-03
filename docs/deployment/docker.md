@@ -391,7 +391,7 @@ service名は`control-panel`、`discord-bot`、`encoder-recorder`、`observabili
 
 Bridge移行後の`protocol major 2`では、Docker serviceごとではなく物理Docker hostごとに非rootの`autostream-host-agent`を1つだけ置きます。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCPや`8090`を開きません。Control Panel、Host Agent、各service containerへ`/var/run/docker.sock`をmountしないでください。
 
-privileged Docker updateとport変更はroot Local Executorが固定Compose project、service、repository、overlay、credential pathだけを使って実行します。Agentから任意path、image、commandは指定できません。公開release、全imageの証拠、実Docker canaryはCIとは別gateです。詳細は[システム更新](/operations/system-updates)を参照してください。
+privileged Docker updateとport変更は、固定Unix socketで接続するroot Local Executorが、固定Compose project、service、repository、overlay、credential pathだけを使って実行します。Agentから任意path、image、commandは指定できません。公開release、全imageの証拠、実Docker canaryはCIとは別gateです。詳細は[システム更新](/operations/system-updates)を参照してください。
 
 ## 6. Control Panel だけ先に起動する
 
