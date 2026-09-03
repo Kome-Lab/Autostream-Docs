@@ -16,6 +16,8 @@ AutoStream は、Control Panel だけで配信しているわけではありま�
 
 本番運用では、各サービスが Control Panel に登録され、Service Health で `online` になっていることが前提です。
 
+Worker、Encoder Recorder、Discord Bot、Observabilityは必須のNode `config.yml`と、`listener.credential`で指定した`node-listener.json`を読みます。identity、rotating Runtime Token、assignment-scoped secret referenceを別Nodeの値や共有環境変数で補いません。systemd `LoadCredential`またはDocker `configs`からlistenerを渡し、設定が欠ける場合はstartupがfail closedで停止します。4種類とControl PanelのApplication Runtime Identity Probesを独立に確認してください。
+
 ## Control Panel
 
 Control Panel は運用者が触る中心画面です。
@@ -206,7 +208,7 @@ Encoder Recorder は、映像と音声を受け取り、FFmpegで配信、録画
 8. Check Readiness と Encoder host preflight を確認します。
 9. Start 後は FPS、bitrate、dropped frames、archive、upload を見ます。
 
-YouTube を自動で配信開始したい場合は、YouTube Output を `Live API` mode にし、OAuth connected account と `Enable auto start` を設定します。`Existing stream key` mode は RTMPS 送信のみで、YouTube Studio 側の設定によっては手動開始が必要です。`Live API`と`Live API dry-run`はrelayなしの`direct` Encoderで使います。固定relayでは、既存の`stream_key` OutputにはEncoderの`legacy_stream_key`を使い、再利用Live Streamへ固定対応した`live_api_relay_static`だけはEncoderの`live_api_static`と同じbinding IDで使います。通常の`Live API`を旧固定relayへ流すfallbackはありません。
+YouTubeの自動開始には`Live API` Output、OAuth connected account、`Enable auto start`を設定します。directを明示したEncoderだけで動的Live APIを使えます。固定relayは両側の`live_api_relay_static`と同じbinding IDがreadyな場合だけ使い、keyはassignment-scoped secret referenceで解決します。
 
 ### 配信品質の見方
 
@@ -287,7 +289,7 @@ Observability は、metricを集め、incidentを作り、diagnosticと通知を
 | 通知を減らす | severity filter を warning / critical に寄せる |
 | 重要な失敗だけ通知 | event type filter を incident や upload failure に絞る |
 | Discord に通知 | webhook type を作成し Test Channel を実行 |
-| email に通知 | SMTP 設定と recipients を保存し Test Channel を実行 |
+| email に通知 | Settingsのglobal SMTPを参照する通知先とrecipientsを保存し、Test Channelを実行 |
 
 ### よくある問題
 

@@ -1,5 +1,7 @@
 # Workerを導入する
 
+> 以下のarchive commandは公開`v1.3.1`に固定した既存releaseの説明です。v2のNode listener契約を実装するという意味ではありません。v2導入では、対応する新しいimmutable releaseと全componentの組合せを検証し、source/CIと本番canaryを分けて確認してください。
+
 Worker は、配信中のparticipant、active speaker、current time、caption、Discord chatを配信scene画像へ描画し、低頻度のMJPEG画像列としてjob-scopedに暗号化したSRT over UDPで選択されたEncoder Recorderへ送るサービスです。Workerは動画encodeや音声MUXを行いません。Encoder Recorderが最新画像を保持し、ウォーターマーク、設定FPSでの最終encode、音声MUX、YouTube/HLS出力、録画、archiveを担当します。
 
 ## 導入前に用意するもの
@@ -71,7 +73,7 @@ systemd unit、env placeholder、data directory、
 imageは変更しません。詳しい取得と検証手順は
 [Linuxホストで直接動かす](/deployment/host)を参照してください。
 
-外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
+外部archive sidecarと`release-manifest.json*`は自動Updaterの検証用として
 releaseには残りますが、手動導入ではdownloadもuploadもしません。手動導入には
 公開`v1.3.1` archiveを使用します。`v1.2.x`から更新する場合もenvとNode
 `config.yml`、起動中の旧`MainPID`は保持されます。installer成功後に明示的に
@@ -100,7 +102,7 @@ AUTOSTREAM_SCENE_FONT_FILE=/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.tt
 
 指定fileは`autostream` userから読めるregular fileにし、`ProtectHome=true`のsystemd unitから参照できないhome directoryへ置きません。fontを解決できない場合はscene rendererをreadyにせず、文字を欠いたまま配信を始めません。
 
-起動します。
+Node登録の手順でconfigとlistener credentialを配置してから起動します。
 
 ```bash
 sudo systemctl daemon-reload
@@ -109,14 +111,14 @@ sudo systemctl start autostream-worker
 sudo systemctl status autostream-worker
 ```
 
-この時点で `/etc/autostream-worker/config.yml` がまだ無い場合でも、Worker は終了せず `node config pending: waiting for /etc/autostream-worker/config.yml` を出して待機します。Auto Configure コマンドで `config.yml` を作成した後は、登録、heartbeat、runtime config の初期読込を確実にそろえるため Worker を再起動します。
+v2では`/etc/autostream-worker/config.yml`と`listener.credential: node-listener.json`が指定する固定JSONが必須です。systemd `LoadCredential`がJSONを渡し、欠落やservice type / revisionの不一致はstartup errorになります。Auto Configureで設定を揃えてからWorkerを明示的にrestartし、登録、heartbeat、runtime configの初期読込を確認します。
 
 ## Control Panelで登録する
 
 1. Node登録で `worker` を選び、Node名、Host、Port、SSL、説明を入力します。
 2. 作成後の Configuration で `config.yml` または Auto Configure コマンドを取得します。
 3. `config.yml` を `/etc/autostream-worker/config.yml` に配置します。Node Runtime Token と `stream_ingest.signing_key` を含むため、生成直後だけ取得でき、ファイル権限は `0640` に制限されます。
-4. Worker が未起動なら起動します。先に起動して pending になっていた場合は `sudo systemctl restart autostream-worker` を実行します。
+4. Node configとlistener credentialを確認してWorkerを起動します。設定を更新した場合は`sudo systemctl restart autostream-worker`を実行します。
 5. Service Health で online、報告バージョン、Capability が表示されることを確認します。
 6. Worker Management または Stream assignment planner で stream に primary として割り当てます。
 7. Streams の Worker event test を実行します。
@@ -147,7 +149,7 @@ standby Worker は予備です。通常はstart対象にならず、primaryへ�
 
 ## Dockerで起動する場合
 
-Worker Docker imageは`fontconfig`と`fonts-noto-cjk`を含み、FFmpegは含みません。`AUTOSTREAM_SCENE_FONT_FILE`の既定値をNoto CJKのcontainer内pathに固定します。compose では Panel が生成した `config.yml` を read-only mount します。env には `AUTOSTREAM_NODE_CONFIG=/etc/autostream-worker/config.yml` だけを指定し、`CONTROL_PANEL_TOKEN` や `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` を手入力しません。
+Worker Docker imageは`fontconfig`と`fonts-noto-cjk`を含み、FFmpegは含みません。`AUTOSTREAM_SCENE_FONT_FILE`の既定値をNoto CJKのcontainer内pathに固定します。ComposeではPanel生成の`config.yml`をread-only mountし、`configs`から`/run/autostream-credentials/node-listener.json`を渡します。envには`AUTOSTREAM_NODE_CONFIG=/etc/autostream-worker/config.yml`と`CREDENTIALS_DIRECTORY=/run/autostream-credentials`を指定し、Node Runtime Tokenや署名鍵を手入力しません。
 
 Docker network 上で Control Panel と Encoder Recorder に到達できることを確認してください。SRT/UDPはNode APIのHTTPSやCloudflare Tunnelとは別経路です。同一Compose networkではEncoder Recorderのadvertise hostにservice DNSを使い、hostへUDPをpublishしません。別host構成だけEncoder RecorderのSRT listen portをhostへUDP publishし、primary Workerからadvertise hostへ到達できるようhost firewall、cloud firewall、NATを設定します。参加者・チャットのアイコン取得にはWorkerから `cdn.discordapp.com:443` と `media.discordapp.net:443` へのDNS/HTTPS outboundも必要です。到達できない場合も配信は止めず、名前とplaceholderを描画します。標準構成では Worker から Observability へ直接接続しません。
 

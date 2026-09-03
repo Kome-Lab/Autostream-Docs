@@ -32,7 +32,6 @@ Linuxサーバーへの配置、systemd、Docker、初回起動、公開URL、da
 | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | 保存 secret の暗号化 |
 | `AUTOSTREAM_SETUP_TOKEN` | 初回管理者作成 |
 | `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` | stream scoped ingest token の署名 |
-| `SERVICE_CALL_TOKEN` | 旧構成からの移行用 fallback |
 
 `AUTOSTREAM_PUBLIC_URL` は OAuth callback、cookie、他サービスからの参照に関係します。本番では HTTPS の外部 URL を入れます。
 

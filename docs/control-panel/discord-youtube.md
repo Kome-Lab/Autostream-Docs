@@ -102,7 +102,7 @@ YouTube Outputs は、配信先を登録する画面です。既存 stream key �
 | Stream key | YouTube の stream key | 保存後は表示されません |
 | YouTube視聴URL | 視聴者が開く `https://www.youtube.com/watch?v=...` | `stream_key`方式の新規設定ではprofileへ入力し、Discord開始通知に使います。`Live API`と固定Relay（YouTube Live API）は開始後にControl Panelがpublic URLを生成し、固定Relay profileの`watch_url`入力は受け付けません |
 | OAuth connected account | Live API系の接続アカウント | Integrations で先に作ります |
-| 固定RelayバインディングID | `relay-` + 小文字UUID形式の非secret ID（例: `relay-123e4567-e89b-42d3-a456-426614174000`） | 固定Relay（YouTube Live API）では必須。Encoderの`live_api_static`設定とRelay側の設定に一致させます |
+| 固定RelayバインディングID | `relay-` + 小文字UUID形式の非secret ID（例: `relay-123e4567-e89b-42d3-a456-426614174000`） | 固定Relay（YouTube Live API）では必須。Encoderの`live_api_relay_static`設定とRelay側の設定に一致させます |
 | 再利用するYouTube Live Stream ID | 事前に作成した再利用可能なYouTube Live Streamの非secret ID | 固定Relay（YouTube Live API）では必須。stream keyや視聴URLではありません |
 | Privacy | `private`、`unlisted`、`public` | 初回は private 推奨 |
 | Latency | `normal`、`low`、`ultra_low` | 安定重視なら normal |
@@ -116,23 +116,20 @@ YouTube Outputs は、配信先を登録する画面です。既存 stream key �
 
 YouTube 側まで自動で開始したい場合は、YouTube Output を `Live API` mode にし、OAuth connected account と `Enable auto start` を設定します。Control Panel は start 時に YouTube broadcast / live stream を作成して bind し、YouTube API の `enableAutoStart` / `enableAutoStop` 設定を渡します。その後、Encoder Recorder が RTMPS ingest を開始すると YouTube 側の条件に従って配信が開始されます。
 
-### 固定Relayの互換経路と新方式
+### 固定Relayのv2経路
 
-固定relayには、既存の`stream_key`を継続する互換経路と、新しい`live_api_relay_static`を明示的に使う経路があります。Control PanelのYouTube Output modeだけを変更して、relayの配信先や既存keyを自動変換することはありません。
+Encoderは明示されたcanonical modeだけを受け付けます。
 
-| 用途 | Encoderの実効relay mode | YouTube Output mode | 条件 |
-| --- | --- | --- | --- |
-| 既存の固定key relayを継続 | `legacy_stream_key` | `stream_key` | relay URLを設定し、modeは未設定または明示的に`legacy_stream_key`。既存relayの固定keyをそのまま使います |
-| 固定relayでYouTube Live APIを使う | `live_api_static` | `live_api_relay_static` | relay URL、同じ非secret binding ID、再利用するYouTube Live Streamがreadyです |
-| relayを使わない構成 | `direct` | `stream_key`、`live_api`、`live_api_dry_run`（`live_api_relay_static`は不可） | relay URLを設定しません。productionのrelay必須policyは別途満たす必要があります |
+| Encoder mode | YouTube Output | 条件 |
+| --- | --- | --- |
+| `direct` | `stream_key`、`live_api`、`live_api_dry_run` | relay URLなし。secretはassignment-scoped referenceで解決 |
+| `live_api_relay_static` | `live_api_relay_static` | relay URL、同じbinding ID、readyな再利用Live Stream |
 
-通常の`Live API`と`Live API dry-run`は`direct` Encoderでだけ使えます。`legacy_stream_key`、`live_api_static`、またはrelay capabilityを報告していないEncoderへは開始前に拒否されます。relay capabilityが未報告または未知のEncoderは、移行互換として`stream_key`だけを使えます。既存の固定relayへ動的なbroadcast用keyを推測して流すfallbackはありません。
-
-段階的な更新では、旧Encoderが報告するhistorical capability `static`をControl Panelが`legacy_stream_key`として扱います。これは既存の`stream_key` relayを継続する互換だけで、`live_api_relay_static`を有効にするものではありません。新しいEncoderでは`direct`、`legacy_stream_key`、`live_api_static`だけを使い、envや画面で`static`を新しいmodeとして選びません。
+mode未指定、capability未報告、未知mode、binding不一致は開始前に拒否されます。動的broadcastのkeyを固定relayへ推測して流すfallbackはありません。
 
 ### 固定Relay（YouTube Live API）の運用条件
 
-`固定Relay（YouTube Live API）`（`live_api_relay_static`）は、root管理の固定Relayとその接続キーが、事前に作成した再利用可能なYouTube Live Streamへ固定で対応付けられている場合だけ使います。Encoder側も`AUTOSTREAM_OUTPUT_RELAY_MODE=live_api_static`である必要があります。通常の `Live API`（`live_api`）をこの固定Relayへ向けることはできず、Control Panel は開始前にfail closedで拒否します。
+`固定Relay（YouTube Live API）`（`live_api_relay_static`）は、root管理の固定Relayとその接続キーが、事前に作成した再利用可能なYouTube Live Streamへ固定で対応付けられている場合だけ使います。Encoder側も`AUTOSTREAM_OUTPUT_RELAY_MODE=live_api_relay_static`である必要があります。通常の `Live API`（`live_api`）をこの固定Relayへ向けることはできず、Control Panel は開始前にfail closedで拒否します。
 
 - 固定Relayホストの非秘密 `AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` と、YouTube Outputの非secret `relay_binding_id` を一致させます。値は`relay-` + 小文字UUID形式（例: `relay-123e4567-e89b-42d3-a456-426614174000`）だけを使います。あわせて `reusable_live_stream_id` を必ず入力します。固定RelayのRTMPS URL、stream key、profileの`watch_url`はこのmodeの入力ではありません。
 - 開始で作成したbroadcast IDからControl Panelが生成するpublic YouTube視聴URLは、profileの`watch_url`入力とは別のruntime値です。このURLはsecretではなく、Chat Channelがある本番配信のDiscord開始通知に使えます。固定Relay profileへ同じURLを手入力・保存しません。
@@ -140,13 +137,11 @@ YouTube 側まで自動で開始したい場合は、YouTube Output を `Live AP
 - `Complete broadcast on stream stop` は常に有効です。固定Relay modeでは無効化できません。
 - 1つの `relay_binding_id` は同時に1つの配信枠だけで使えます。開始中・停止完了待ち・復旧判断中の枠がある間は、同じbindingで別の枠を開始しません。
 
-### 既存固定Relayからの移行とロールバック
+### 固定Relayの設定とrollback
 
-既存の固定Relayで`stream_key` Outputを使っている場合は、既存profileとrelayのroot管理設定を変更しないまま、Encoderのrelay modeを未設定（URLあり）または明示的な`legacy_stream_key`として継続できます。既存のstream keyをControl Panelへ再入力したり、relay設定からコピーしたりしません。
+停止済みの時間帯に`live_api_relay_static` Output、Google OAuth account、非secretな`relay_binding_id`、再利用Live Stream IDを設定します。relay側がそのLive Streamへ固定対応していることをkeyを表示せず確認し、Encoderにも同じmodeとbindingを設定します。
 
-新方式へ移るときは、停止済みの時間帯に別の`live_api_relay_static` Outputを作ります。Google OAuth account、`relay-` + 小文字UUID形式の`relay_binding_id`、再利用Live Stream IDを登録し、relay側がその再利用Live Streamへ固定対応していることをkeyを表示せずに確認します。形式不正・不一致のrelay設定は`unavailable`であり`direct`へのfallbackではありません。修正後にEncoderを`live_api_static`と同じbinding IDへ変更し、Check Readiness、Service Health、短い開始・停止を順に確認します。既存`stream_key` Outputの自動変換や、同一profileへの秘密値の複製は行いません。
-
-戻す場合は、新方式の配信枠を停止してinactiveになったことを確認します。開始結果が不明な場合は、先に下の固定Relay復旧を完了します。配信枠のOutput選択を既存の`stream_key` profileへ戻してから、Encoderのrelay modeを`legacy_stream_key`（または既存URLのmode未設定）へ戻します。復旧が未完了のbindingを別の配信枠へ使い回しません。
+Service Health、Check Readiness、小さな開始・停止を順に確認します。結果が不明なら固定Relay recoveryを先に完了します。rollbackはreleaseと設定全体を復元し、互換modeやraw-key fieldを再導入しません。
 
 ### 固定Relayの復旧
 

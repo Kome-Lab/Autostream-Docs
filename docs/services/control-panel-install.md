@@ -1,5 +1,7 @@
 # Control Panelを導入する
 
+> 以下のarchive commandは公開`v1.9.11`に固定した既存releaseの説明です。v2対応や独立Updaterの互換性を証明するものではありません。v2導入では、対応する新しいimmutable releaseと全componentの組合せを検証し、source/CIと本番canaryを分けて確認してください。
+
 Control Panel は最初に起動するサービスです。ユーザー、権限、配信設定、外部連携、サービス登録、監視画面の入口になるため、ほかのサービスより先に database、公開URL、session secret、暗号化keyを整えます。
 
 ## 導入前に決めること
@@ -67,7 +69,7 @@ placeholder、backup executableとdirectory、MariaDB defaults placeholderを
 image、Docker repository、MariaDB、reverse proxyを変更しません。詳しい取得と
 検証手順は[Linuxホストで直接動かす](/deployment/host)を参照してください。
 
-外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
+外部archive sidecarと`release-manifest.json*`は自動Updaterの検証用として
 releaseには残りますが、この手動導入ではdownloadもuploadもしません。手動導入には
 `artifact-manifest.json`を含む公開`v1.9.11` archiveだけを使用します。
 
@@ -82,7 +84,7 @@ restartとhealth確認を行います。`v1.8.0` / `v1.8.1`からの初回起動
 [既存環境を更新するとき](/deployment/host#既存環境を更新するとき)を参照して
 ください。service installerはHost Agentを自動導入しません。
 
-既存Host Agent / Local Executorも`v1.9.11`へ更新する場合は、このControl Panelを先に再起動し、`/updater/version`が`v1.9.11`になったことを確認してからHost runtimeへ進みます。通常はHost Agent archiveの`--upgrade`を使います。Panel更新が`99%`の中断状態にある場合だけ、同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pairとexact active jobをinstallerに検証させ、`--upgrade --recover-active-job`を使います。Configure Tokenは不要です。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。完全な直書き手順は[既存Host Agent / Local Executorを`v1.9.11`へ更新する](/operations/system-updates#upgrade-host-agent-v1911)を参照してください。
+独立UpdaterのHost Agent / Local ExecutorはControl Panel archiveに含めません。対応するprotocol major 2とidentity probeを確認してから、独立releaseの[システム更新](/operations/system-updates)手順を使います。通常upgradeではConfigure Tokenは不要です。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。
 
 `/etc/autostream/control-panel.env` を編集します。
 
@@ -95,7 +97,6 @@ AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
 AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
 # 既存構成からの移行中だけ使う fallback。新規 Node は config.yml の Node Runtime Token を使います。
-SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS=<SERVICE_HOSTS>
 AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS=true
@@ -120,7 +121,7 @@ TZ=Asia/Tokyo
 
 Control Panel の現在 version は画面左上とヘッダーに表示されます。Host Release workflow と Docker build は build 時に version / commit / build date を埋め込むため、通常は `SERVICE_VERSION` を手入力する必要はありません。systemd配備はControl Panel、Worker、Encoder/Recorder、Discord Bot、ObservabilityそれぞれのGitHub Releases API、Docker配備は`Autostream-Docker`のbundle releaseを確認します。private repo のため、本番ではreleaseを読めるGitHub tokenを `AUTOSTREAM_UPDATE_CHECK_TOKEN` に設定してください。これはversion表示用の確認tokenであり、システム更新画面へ保存する必須のGitHub Release Tokenとは別です。固定値や別endpointを使う場合は、上記のサービス別環境変数を設定します。URLはHTTPSを使います。固定latest-version値やcustom endpointは検出・表示専用です。GitHub Releaseの`release-manifest.json` assetを検証できないため、Application Infoからの自動更新は`manifest_unverified`として無効になります。
 
-新規hostでは、物理ホストごとにendpointlessな`pull_v2` Update Agentを登録し、非rootの`autostream-host-agent`とroot Local Executorを1つずつ置きます。登録直後はepoch `0`のobserverで、Control Panel上の明示的なownership切替後だけ更新jobをclaimします。公開releaseと実host canaryが未確認の間、更新適用が必要な既存hostはBridge期間中のlegacy `ssh_v1`を維持します。Control Panel自身はfleetの最後に移行します。詳細は[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
+host更新には独立Updaterのprotocol major 2を使います。物理hostごとに非root Agentとroot Local Executorを1つずつ置き、server-owned fenceとexact policyが一致した場合だけ更新します。詳細は[システム更新](/operations/system-updates)を参照してください。
 
 起動します。
 
@@ -163,9 +164,9 @@ Control Panel の [Node Agent登録](/control-panel/node-agent-registration) で
 | Worker | `worker` | `config.yml`、Configure Token、Node Runtime Token |
 | Encoder Recorder | `encoder_recorder` | `config.yml`、Configure Token、Node Runtime Token |
 | Observability | `observability` | `config.yml`、Configure Token、Node Runtime Token |
-| `pull_v2` Host Agent | `update_agent` | 物理ホストごとにAuto Configureを1回実行し、root所有`/etc/autostream-host-agent/identity.json`へ4項目identityだけを生成。受信TCP、`8090`、SSH設定なし |
+| `protocol major 2` Host Agent | `update_agent` | 物理ホストごとにAuto Configureを1回実行し、root所有`/etc/autostream/updater/agent.yaml`へ4項目identityだけを生成。受信TCP、`8090`、SSH設定なし |
 
-Configure TokenとNode Runtime Tokenは作成時だけ表示されます。通常serviceはConfigurationから再生成して`config.yml`を更新します。未起動のHost AgentはConfigure Tokenを再発行して4項目identityを作り直せますが、activeな`pull_v2` Host AgentのRuntime Tokenをgeneric再生成してはいけません。専用のstage→claim→local ack→heartbeat proof→activateを使い、漏えい時のbreak-glassは`emergency-revoke`後に固定canonical identityとroot recovery commandで復旧します。`execution_host_id`と`ownership_epoch`はserver-ownedでconfigへ入れません。
+Configure TokenとNode Runtime Tokenは作成時だけ表示されます。通常serviceはConfigurationから再生成して`config.yml`を更新します。未起動のHost AgentはConfigure Tokenを再発行して4項目identityを作り直せますが、activeな`protocol major 2` Host AgentのRuntime Tokenをgeneric再生成してはいけません。専用のstage→claim→local ack→heartbeat proof→activateを使い、漏えい時のbreak-glassは`emergency-revoke`後に固定canonical identityとroot recovery commandで復旧します。`execution_host_id`と`ownership_epoch`はserver-ownedでconfigへ入れません。
 
 ## 他サービスを許可する
 

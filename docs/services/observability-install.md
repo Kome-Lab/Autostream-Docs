@@ -1,5 +1,7 @@
 # Observabilityを導入する
 
+> 以下のarchive commandは公開`v1.3.1`に固定した既存releaseの説明です。v2のNode listener契約を実装するという意味ではありません。v2導入では、対応する新しいimmutable releaseと全componentの組合せを検証し、source/CIと本番canaryを分けて確認してください。
+
 Observability は、AutoStream の状態、metric、incident、通知、診断、対応候補を扱うサービスです。配信処理そのものは行いませんが、本番運用では異常に気づくために必須に近い役割を持ちます。
 
 ## 導入前に用意するもの
@@ -65,7 +67,7 @@ serviceを開始せず、MariaDB、reverse proxy、Docker Compose、container、
 変更しません。詳しい取得と検証手順は
 [Linuxホストで直接動かす](/deployment/host)を参照してください。
 
-外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
+外部archive sidecarと`release-manifest.json*`は自動Updaterの検証用として
 releaseには残りますが、手動導入ではdownloadもuploadもしません。手動導入には
 公開`v1.3.1` archiveを使用します。`v1.2.x`から更新する場合もenvとNode
 `config.yml`、起動中の旧`MainPID`は保持されます。`v1.2.0`だけはbackup
@@ -81,12 +83,11 @@ canonical pathを確認します。installer成功後に明示的にrestartし�
 AUTOSTREAM_NODE_CONFIG=/etc/autostream-observability/config.yml
 DATABASE_URL=mysql://<DB_USER>:<DB_PASSWORD>@tcp(<DB_HOST>:3306)/autostream_observability?parseTime=true
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
-OBSERVABILITY_BIND_ADDR=127.0.0.1:8082
 REMEDIATION_MODE=suggest_only
 TZ=Asia/Tokyo
 ```
 
-起動します。
+Node登録の手順でconfigとlistener credentialを配置してから起動します。
 
 ```bash
 sudo systemctl daemon-reload
@@ -95,17 +96,17 @@ sudo systemctl start autostream-observability
 sudo systemctl status autostream-observability
 ```
 
-この時点で `/etc/autostream-observability/config.yml` がまだ無い場合でも、Observability は終了せず `node config pending: waiting for /etc/autostream-observability/config.yml` を出して待機します。Auto Configure コマンドで `config.yml` を作成すると、起動中のプロセスが再読込して Control Panel へ登録と heartbeat を開始します。
+v2では`/etc/autostream-observability/config.yml`と`listener.credential: node-listener.json`が指定する固定JSONが必須です。systemd `LoadCredential`がJSONを渡し、欠落やservice type / revisionの不一致はstartup errorになります。Auto Configureで設定を揃えてからObservabilityを明示的にrestartし、登録とheartbeatを確認します。
 
 ## Control Panelで使う
 
 1. Node登録で `observability` を選び、Node名、Host、Port、SSL、説明を入力します。
 2. Configuration から `config.yml` または Auto Configure コマンドを取得し、`/etc/autostream-observability/config.yml` に配置します。
-3. Observability が未起動なら起動します。すでに起動済みなら pending 状態から自動で登録されます。
+3. Node configとlistener credentialを確認してObservabilityを起動します。設定を更新した場合は`sudo systemctl restart autostream-observability`を実行します。
 4. Service Health で online、報告バージョン、Capability を確認します。
 5. Monitoring Dashboard を開きます。
 6. email通知を使う場合は、Settingsのメールサーバーを保存してテスト送信します。
-7. Notification Channels で通知先を作ります。旧個別SMTP方式から移行する場合は、編集画面で共有SMTPへの移行を明示的に選んで保存します。
+7. Notification Channelsで通知先を作り、emailではControl Panelのglobal SMTP referenceとrecipientsを指定します。個別SMTP credentialはruntimeで読みません。移行でretainした履歴・dataは削除しません。
 8. channelの`テスト送信`を実行し、delivery resultとNotification Deliveriesが`success`で、実際に通知が届くことを確認します。
 9. Incidents と Diagnostics を確認します。
 
@@ -156,7 +157,7 @@ Observability は heartbeat、disk、upload retry、packet loss、encoder fps、
 | --- | --- |
 | 起動しない | `DATABASE_URL`、`AUTOSTREAM_SECRET_ENCRYPTION_KEY`、`AUTOSTREAM_NODE_CONFIG` |
 | signalが届かない | Observability Node登録、Worker / Encoder Recorder の Node Runtime Token、Control Panel のログ |
-| Control Panelから読めない | Observability Node の Host / Port / SSL、`OBSERVABILITY_BIND_ADDR`、firewall、reverse proxy |
+| Control Panelから読めない | Observability Nodeの公開Host / Port / SSL、`node-listener.json`のlocal address / revision、firewall、reverse proxy |
 | 公開URLの `/` が想定外 | root `/` は安全な状態JSONだけを返します。Metrics は Control Panel の Metrics 画面、または token付き `/metrics` で確認します |
 | OS / Arch が未取得 | `autostream-observability configure` を最新binaryで実行したか、`config.yml` の保存先と `AUTOSTREAM_NODE_CONFIG` が一致しているか、heartbeat が成功しているか |
 | Webhook通知が届かない | channel設定、Observabilityから通知先へのnetwork、severity filter、delivery history |

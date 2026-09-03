@@ -225,7 +225,7 @@ jobs:
           release_body_path="${RUNNER_TEMP}/docs-release-body.md"
           printf '%s\n\n%s' \
             "AutoStream Docs ${RELEASE_VERSION}" \
-            "This immutable documentation release contains the operator guidance for the SSH-compatible Bridge, pull_v2 Host Agent rollout, configurable service ports, canary verification, rollback, and deferred SSH/8090 removal." \
+            "This immutable documentation release describes independent Updater protocol major 2, managed Node listener credentials, application identity probes, canary verification, and whole-release rollback. Documentation build success does not establish production rollout readiness." \
             > "${release_body_path}"
           test -s "${release_body_path}"
           (

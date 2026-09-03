@@ -78,7 +78,7 @@ Drive Destination は、Archive Settings が参照する保存先です。
 6. その保存先を使う録画プロファイルを作ります。
 7. Streams の配信枠作成時に録画プロファイルを選びます。
 
-保存される階層は `指定したFolder ID / 配信枠名 / YYYYMMDD_HHMMSS_JST_配信枠UUID / final.mp4` です。旧設定に `base_path` が残っていても、現在のEncoder/Recorderは無視し、`AutoStream` などの中間folderを追加しません。同じ配信実行を再パッケージ化または再uploadした場合は、同じ実行folder内の同名ファイルを更新し、新しい重複ファイルを作りません。過去に作成済みの重複ファイルは自動削除しません。
+保存される階層は `指定したFolder ID / 配信枠名 / YYYYMMDD_HHMMSS_JST_配信枠UUID / final.mp4` です。v2ではFolder IDとcanonical run folder layoutだけを使い、任意の中間pathは受け付けません。移行で保持した既存dataは自動削除しません。同じ配信実行を再パッケージ化または再uploadした場合は、同じ実行folder内の同名ファイルを更新し、新しい重複ファイルを作りません。過去に作成済みの重複ファイルは自動削除しません。
 
 ## Archive Settingsとの関係
 

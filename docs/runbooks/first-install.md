@@ -115,7 +115,7 @@ openssl rand -hex 32   # AUTOSTREAM_STREAM_INGEST_SIGNING_KEY
 
 Observability 用の別admin tokenや直接ingest tokenは作りません。Control Panel は登録済み Observability Node の公開URLと Node Runtime Token で Observability API を呼びます。詳しい対応表と PowerShell での生成方法は [秘密情報とtoken生成](../security/tokens.md) を参照してください。
 
-新方式では、各サービスの登録、heartbeat、Panel から Node への操作に使う token は Node登録後の `config.yml` で配布します。Worker / Encoder Recorder の stream ingest signing key も同じファイルへ入ります。`SERVICE_CALL_TOKEN` とNode側の署名鍵envは古い構成からの移行用 fallback としてだけ使います。
+各サービスの登録、heartbeat、PanelからNodeへの操作には、必須のNode `config.yml`から読み込むrotating Runtime Tokenだけを使います。Worker / Encoder Recorderのstream ingest signing keyも同じファイルで配布します。共有tokenやNode側の署名鍵envへのfallbackはありません。
 
 ## 5. 1つのhost release archiveをinstallerで配置する
 
@@ -126,23 +126,21 @@ assetは対象serviceの`.tar.gz` 1つだけです。archiveには
 同じtagを指定しません。
 
 > [!IMPORTANT]
-> 現在のarchive-only Host ReleaseはControl Panel / Host Agentが`v1.9.11`、
+> 以下は公開済みapplication archiveに固定した説明で、v2対応releaseの公開証拠ではありません。
+> application用archive-only Host ReleaseはControl Panelが`v1.9.11`、
 > 4つのruntime serviceが`v1.3.1`です。componentごとにrepositoryとtagを一致させ、
-> 古いreleaseへ読み替えず、次のliteral commandをそのまま使ってください。
+> 古いreleaseへ読み替えず、その版を使う場合だけ次のliteral commandを使います。
+> v2を導入する場合は、対応する新しいimmutable releaseと全componentを先に検証してください。
 
 | component | release repo | 使うarchive | 安定した実行path |
 | --- | --- | --- | --- |
 | Control Panel | `Kome-Lab/Autostream-ControlPanel` | `autostream-control-panel_v1.9.11_linux_amd64.tar.gz` | `/usr/local/bin/control-panel` |
-| Host Agent + Local Executor | `Kome-Lab/Autostream-ControlPanel` | `autostream-host-agent_v1.9.11_linux_amd64.tar.gz` | `/usr/local/bin/autostream-host-agent` |
 | Discord Bot | `Kome-Lab/Autostream-DiscordBot` | `autostream-discord-bot_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-discord-bot` |
 | Encoder/Recorder | `Kome-Lab/Autostream-Encoder-Recorder` | `autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-encoder-recorder` |
 | Observability | `Kome-Lab/Autostream-Observability` | `autostream-observability_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-observability` |
 | Worker | `Kome-Lab/Autostream-Worker` | `autostream-worker_v1.3.1_linux_amd64.tar.gz` | `/usr/local/bin/autostream-worker` |
 
-Host Agentは上表のservice installerから自動導入されません。
-Control Panelと同じrepositoryにある別の
-`autostream-host-agent_v1.9.11_linux_amd64.tar.gz`を使い、物理ホストごとに
-1つだけ導入します。このarchiveにはroot Local Executorも含まれます。
+独立Updaterは上表のservice installerから自動導入されません。検証済みの独立releaseからHost Agent / Local Executorを物理ホストごとに1組導入します。v2 releaseの公開とcanaryは別gateです。
 `autostream-contracts`は各binaryが利用するsource contract repositoryであり、
 サーバーへ単独導入するdaemonやrelease archiveはありません。
 
@@ -192,13 +190,6 @@ gh attestation verify autostream-observability_v1.3.1_linux_amd64.tar.gz \
   --signer-workflow Kome-Lab/Autostream-Observability/.github/workflows/release-host.yml \
   --deny-self-hosted-runners
 
-gh release download v1.9.11 --repo Kome-Lab/Autostream-ControlPanel \
-  --pattern 'autostream-host-agent_v1.9.11_linux_amd64.tar.gz' \
-  --clobber
-gh attestation verify autostream-host-agent_v1.9.11_linux_amd64.tar.gz \
-  --repo Kome-Lab/Autostream-ControlPanel \
-  --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
-  --deny-self-hosted-runners
 ```
 
 成功した元の`.tar.gz`だけを安全な経路で該当サーバーの`/tmp`へ転送します。サーバーに
@@ -245,36 +236,9 @@ sudo tar --no-same-owner --no-same-permissions -xzf autostream-observability_v1.
 sudo ./autostream-observability_v1.3.1_linux_amd64/install-autostream-observability
 ```
 
-物理ホストごとにHost Agentも新規導入する場合は、そのhostで別archiveを配置して
-fresh-only prepareを実行します。既存Host Agentがあるhostでは実行せず、専用
-self-updateを使ってください。
+物理ホストごとのHost Agent / Local Executorは独立Updaterの検証済みpackageをprepareしてからconfigureします。Control Panelと同じarchiveを流用しません。[システム更新](/operations/system-updates)の前提、取得元、順序、公開・実機gateを確認してください。
 
-```bash
-sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
-sudo install -o root -g root -m 0644 /tmp/autostream-host-agent_v1.9.11_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
-cd /opt/autostream/releases/artifacts
-sudo test ! -e autostream-host-agent_v1.9.11_linux_amd64
-sudo test ! -L autostream-host-agent_v1.9.11_linux_amd64
-sudo tar --no-same-owner --no-same-permissions -xzf autostream-host-agent_v1.9.11_linux_amd64.tar.gz
-sudo ./autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --prepare
-```
-
-prepare後もHost Agent / Local Executorは起動しません。Control Panelで`pull_v2`
-Update Agentを登録し、生成されたConfigure commandを実行してからLocal Executorを
-明示的にactivateします。完全な順序は
-[Host Agent Bridgeでサービスを更新する](/operations/system-updates#pull_v2-host-agentを登録する)
-を参照してください。
-
-Auto Configureが書くHost Agent identityはcanonical
-`/etc/autostream-host-agent/identity.json`だけです。通常serviceのsecret directory
-`/etc/autostream`は`root:root 0750`を維持し、Host Agent userへACLやgroupで恒久的な
-traverse権限を追加しません。legacy `/etc/autostream/host-agent.json`はcanonical不在時の
-read-only fallbackだけです。このlegacy pathが存在する、
-dangling symlinkである、または安全に検査できない場合は、先にmanaged migrationを
-完了してください。affected `v1.9.9` hostではcandidate rollback時にも旧Agentを
-再起動できるよう、exact access-only ACLをmatching `v1.9.11` upgrade完了まで保持します。
-upgrade前から[ACL bridgeとcleanupの一続きの手順](/operations/system-updates#remove-v199-acl)
-を実行してください。
+Auto Configureは`/etc/autostream/updater/agent.yaml`と`/etc/autostream/updater/executor-policy.json`だけへidentityとpolicyを保存します。旧identityやenvへのfallbackはありません。安全なowner/modeとparent traversalは独立Updater installerが管理し、手動で広い権限を付与しません。
 
 installerは元archiveを安定して読み取り、
 `artifact-manifest.json`、archive内`checksums.txt`、host architecture、binary
@@ -292,22 +256,19 @@ markerはinstallerとupdaterが管理します。手動で作成、編集しな�
 source checkoutからbuildしたbinaryや
 manifestなしreleaseは自動更新へ使わず、新しいimmutable releaseを公開します。
 
-GitHub Releaseには、自動Updaterと旧clientの互換用としてarchive sidecar、
+GitHub Releaseには、自動Updaterの検証用としてarchive sidecar、
 `release-manifest.json`、manifest sidecarも引き続き公開されます。これらは
 自動Updaterが取得・検証するassetであり、archive-onlyの手動導入ではdownloadも
-uploadもしません。既存のimmutableな旧release assetは書き換えません。新規導入では
-公開Control Panel / Host Agent `v1.9.11`とruntime service `v1.3.1`のarchive-only
-releaseを使用してください。Control Panel `v1.8.x`、runtime service `v1.2.x`から更新する
+uploadもしません。既存のimmutableな旧release assetは書き換えません。上記は
+公開Control Panel `v1.9.11`とruntime service `v1.3.1`の版固定のapplication archive手順です。
+v2 listenerや独立Updaterの契約を満たす証拠にはならず、v2導入では対応する新しいimmutable releaseを検証してください。
+Control Panel `v1.8.x`、runtime service `v1.2.x`から更新する
 場合は、[Linuxホストで直接動かす](/deployment/host#既存環境を更新するとき)の
 backupと再起動境界も先に確認します。
 
-既存Host Agent / Local Executorを`v1.9.11`へmanual upgradeする場合は、新規用の`--prepare`やAuto Configureを再実行しません。Control Panel `v1.9.11`を先に導入・再起動してから、通常は次を実行します。
+独立Updaterの検証済みreleaseでHost Agent / Local Executorを更新します。Control Panelとのprotocol major 2、policy、identity probeの一致が前提です。通常の`--upgrade`は既存identity/policyとRuntime Tokenを保持するためConfigure Tokenは不要です。`--upgrade --recover-active-job`はreleaseが許可したexact pairとactive interrupted jobだけに使います。
 
-```bash
-sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade
-```
-
-Panel更新が`99%`の中断状態にあるときだけ、installed Agent / Executorが同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pairであることをinstallerに検証させ、通常commandの代わりに`--upgrade --recover-active-job`を使います。Configure Tokenは不要です。rescueは同じjobのreconcileだけを行います。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。直書きcommandとfail-closed条件は[既存Host Agent / Local Executorを`v1.9.11`へ更新する](/operations/system-updates#upgrade-host-agent-v1911)にまとめています。
+rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。完全な前提と順序は[システム更新](/operations/system-updates)を参照してください。
 
 ## 6. Control Panel を入れる
 
@@ -333,7 +294,6 @@ AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
 AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
 DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(127.0.0.1:3306)/autostream_control_panel?parseTime=true
 # 既存構成からの移行中だけ使う fallback。新規 Node は config.yml の Node Runtime Token を使います。
-SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS=encoder.example.com,worker.example.com,discord-bot.example.com,observability.example.com
 AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS=true
@@ -451,7 +411,6 @@ Observability だけは DB を直接使うため、追加で次を設定しま�
 ```text
 DATABASE_URL=mysql://autostream:<DB_PASSWORD>@tcp(127.0.0.1:3306)/autostream_observability?parseTime=true
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
-OBSERVABILITY_BIND_ADDR=127.0.0.1:8082
 ```
 
 Encoder/Recorder ではarchive path、FFmpeg、Worker映像用SRT/UDP endpointを設定します。
@@ -496,7 +455,7 @@ systemctl status autostream-worker
 systemctl status autostream-discord-bot
 ```
 
-`config.yml` を保存する前に Node Agent を起動した場合は `node config pending` として待機します。Auto Configure コマンドで `config.yml` を作成した後、Worker、Encoder Recorder、Discord Bot は `systemctl restart` で登録と runtime config の初期読込をそろえます。Observability は起動中に `config.yml` を再読込して登録を開始します。
+v2のWorker、Encoder Recorder、Discord Bot、Observabilityでは、Node `config.yml`と`listener.credential: node-listener.json`が指定するlistener credentialを起動前に配置します。systemd `LoadCredential`が固定JSONを渡し、欠落や不正なservice type / revisionではstartupがfail closedで停止します。Auto Configureで設定を揃えてから対象serviceを明示的にrestartし、登録とruntime configの初期読込を確認してください。
 
 各 service の health を確認します。
 
@@ -507,7 +466,7 @@ curl -fsS http://127.0.0.1:8083/health  # Discord Bot の local port 例
 curl -fsS http://127.0.0.1:8084/health  # Worker の local port 例
 ```
 
-実際の port は Control Panel では `AUTOSTREAM_BIND_ADDR`、Observability では `OBSERVABILITY_BIND_ADDR` に合わせてください。
+実際のportはControl Panelでは`AUTOSTREAM_BIND_ADDR`、4種類の通常Nodeでは`node-listener.json`の`bind_address`に合わせてください。Nodeの公開接続先を示す`api.host` / `api.port`とは分離します。
 
 ## 11. Control Panel で確認する
 
@@ -516,7 +475,7 @@ curl -fsS http://127.0.0.1:8084/health  # Worker の local port 例
 3. Services / Assignments で stream 用の primary service を割り当てます。
 4. Integrations で Discord、YouTube、Google Drive、notification channel を登録します。
 5. Start readiness を実行し、不足している設定がないことを確認します。
-6. Host Agent Bridgeを準備する場合は、配信serviceのhealth確認後に[Host Agent Bridgeでサービスを更新する](/operations/system-updates)へ進みます。物理ホストごとにendpointlessな`pull_v2` Update Agent Nodeを1つ登録し、非rootの`autostream-host-agent`とroot Local Executorを導入します。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。初回はepoch `0`のobserverとして起動し、公開`v1.9.11`のAttestation、実host canary、rollback drillを確認するまではownershipを切り替えず、legacy `ssh_v1`を維持してください。
+6. host更新を使う場合は配信serviceのhealth確認後に[システム更新](/operations/system-updates)へ進みます。物理hostごとに独立Updaterを1つ登録し、protocol major 2、exact policy、host fence、実canaryを確認してから更新を許可します。
 
 ## 12. 初回確認コマンド
 

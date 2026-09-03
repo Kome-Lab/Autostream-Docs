@@ -20,7 +20,7 @@ Linuxサーバーへの導入、database、Node Agent config、通知先登録�
 | `AUTOSTREAM_NODE_CONFIG` | Panel が生成した Observability 用 `config.yml` |
 | `DATABASE_URL` | Observability 用 database |
 | `AUTOSTREAM_SECRET_ENCRYPTION_KEY` | 通知 secret の暗号化 |
-| `OBSERVABILITY_BIND_ADDR` | Observability API が待ち受けるアドレス |
+| Node config `listener.credential` | 固定名`node-listener.json`を指定。`LoadCredential`またはDocker `configs`が渡すJSONのaddress / revisionを使い、欠落はstartup error |
 | `REMEDIATION_MODE` | 自動対応の扱い |
 
 標準構成では、Worker / Encoder Recorder の signal は Control Panel 経由で届きます。Control Panel から Observability への API 呼び出しは、登録済み Observability Node の Runtime Token を使います。Control Panel、Worker、Encoder Recorder 側の env との対応は [秘密情報とtoken生成](/security/tokens) を参照してください。

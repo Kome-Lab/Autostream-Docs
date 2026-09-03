@@ -85,7 +85,7 @@ Roles では、role 名と権限を管理します。
 | `system_updates.read` | Application Infoの更新対象・更新履歴と、Node登録のHost Agent transport・endpoint driftを見る |
 | `system_updates.execute` | 更新jobの作成・cancel、execution host ownership、Host Agent transportを操作する |
 
-`system_updates.execute`はservice停止、Control Panel再起動、Docker image/port切替、systemd port切替、execution host ownership変更につながるため、メンテナンス担当だけに付与します。物理hostごとの`pull_v2` Update Agent Node作成には`api_tokens.create`、`system_updates.execute`、`secrets.update`が必要です。active Host AgentのRuntime Token rotation（stage/cancel/emergency）には、これらに`api_tokens.revoke`を加えた4権限すべてが必要です。`execution_host_id`と`ownership_epoch`はserver-ownedで、Host Agent configへ入力しません。
+`system_updates.execute`はservice停止、Control Panel再起動、Docker image/port切替、systemd port切替、execution host ownership変更につながるため、メンテナンス担当だけに付与します。物理hostごとの`protocol major 2` Update Agent Node作成には`api_tokens.create`、`system_updates.execute`、`secrets.update`が必要です。active Host AgentのRuntime Token rotation（stage/cancel/emergency）には、これらに`api_tokens.revoke`を加えた4権限すべてが必要です。`execution_host_id`と`ownership_epoch`はserver-ownedで、Host Agent configへ入力しません。
 
 ## Security Settings
 

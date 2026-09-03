@@ -141,7 +141,7 @@ Control Panelの監査ログへ保存された認証済みユーザー操作とs
 | Recipients | 宛先。作成時は必須。改行またはカンマで複数指定 |
 | SMTP | この画面では入力しません。`設定` -> `メールサーバー` の共通設定を使います |
 
-作成済みの email 通知先を編集するとき、Recipients を空欄のまま更新すると現在の宛先を保持し、入力した場合だけ置き換えます。保存済みの宛先は masked target だけを表示します。新規作成したemail通知先は共通SMTPを使います。旧版で作成した個別SMTP方式の通知先は、通常の編集では既存方式を保持します。共通SMTPへ移す場合は、先にSettingsのSMTPテストを通し、通知先の編集画面で共有SMTPへの移行を明示的に選んで保存します。移行すると旧個別SMTP資格情報は削除され、元の方式には戻せません。
+作成済みの email 通知先を編集するとき、Recipients を空欄のまま更新すると現在の宛先を保持し、入力した場合だけ置き換えます。保存済みの宛先は masked target だけを表示します。新規作成したemail通知先は共通SMTPを使います。v2のemail通知先は共通SMTPへの非secret参照だけを持ちます。移行済みchannelのdelivery履歴は保持され、個別SMTP fieldやcredentialを再入力する経路はありません。
 
 共通SMTPの host、port、TLS、From、username、password は Control Panel の Settings で管理します。SMTP password は Control Panel の secret store に残り、ブラウザや Observability へ渡しません。email は Observability から Control Panel の relay を経由して送るため、送信時に Observability から Control Panel へ到達でき、Control Panel からSMTPサーバーへ到達できる必要があります。Webhook通知は従来どおり Observability から通知先へ直接送ります。
 

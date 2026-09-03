@@ -34,7 +34,7 @@
 
 ## API Tokens
 
-API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorder、Observability が Control Panel に登録するための token を確認、rotate、revoke する画面です。新規構成ではNode登録のAuto Configureを使います。通常serviceは`config.yml`を生成し、`pull_v2` Update Agentは物理ホストごとに非rootの`autostream-host-agent`を1つ登録して、root所有`/etc/autostream-host-agent/identity.json`へ4項目identityを生成します。
+API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorder、Observability が Control Panel に登録するための token を確認、rotate、revoke する画面です。新規構成ではNode登録のAuto Configureを使います。通常serviceは`config.yml`を生成し、`protocol major 2` Update Agentは物理ホストごとに非rootの`autostream-host-agent`を1つ登録して、root所有`/etc/autostream/updater/agent.yaml`へ4項目identityを生成します。
 
 ### Service type
 
@@ -44,7 +44,7 @@ API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorde
 | `encoder_recorder` | Encoder Recorder |
 | `worker` | Worker |
 | `observability` | Observability |
-| `update_agent` | 新規は物理ホストごとのendpointlessな`pull_v2` Host Agent。legacy `ssh_v1`もBridge中は残る |
+| `update_agent` | 物理hostごとのendpointlessなprotocol major 2の独立Updater |
 
 ### scope
 
@@ -61,7 +61,7 @@ API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorde
 | `discord.status.write` | Discord Bot status 書き込み |
 | `streams.start` | Discord VC参加を起点にした stream auto-start |
 | `observability.ingest` | Observability signal ingest |
-| `updates.claim` | 更新transportが指定host向け更新jobを取得。`pull_v2`は正のownership epochへ切替後だけ使用 |
+| `updates.claim` | 更新transportが指定host向け更新jobを取得。`protocol major 2`は正のownership epochへ切替後だけ使用 |
 | `updates.report` | 更新transportがlease付きprogress、availability、terminal結果を報告 |
 | `updates.authorize` | root変更直前に短命・1回限りのmutation grantを取得。Local Executorがplan/session/policyと再照合 |
 
@@ -69,7 +69,7 @@ API Tokens は、旧構成や移行時に Discord Bot、Worker、Encoder Recorde
 
 ### Pre-create service
 
-API Tokens では、互換用途としてtoken作成と同時にservice registry entryを作れます。通常の新規導入ではNode登録でNode ID、Host、`1024..65535`のPort、SSLを登録し、ConfigurationのAuto Configure commandを使います。`pull_v2` Host Agentはendpointlessで、Host、Port、SSLを持ちません。
+API Tokens では、互換用途としてtoken作成と同時にservice registry entryを作れます。通常の新規導入ではNode登録でNode ID、Host、`1024..65535`のPort、SSLを登録し、ConfigurationのAuto Configure commandを使います。`protocol major 2` Host Agentはendpointlessで、Host、Port、SSLを持ちません。
 
 | 項目 | 説明 |
 | --- | --- |
@@ -79,7 +79,7 @@ API Tokens では、互換用途としてtoken作成と同時にservice registry
 | Version | service version |
 | Capabilities | service が対応する機能。カンマ区切り |
 
-pre-createした場合、画面にbootstrap envが一度だけ表示されます。これは旧構成や移行用です。新規構成ではbootstrap envではなくNode登録のAuto Configureを使います。Host Agentは対象の物理ホストでConfigure Tokenを標準入力から非表示で受け取り、`panel_url`、`node_id`、`runtime_token`、`service_name`だけを`/etc/autostream-host-agent/identity.json`へ保存します。
+pre-createした場合、画面にbootstrap envが一度だけ表示されます。これは旧構成や移行用です。新規構成ではbootstrap envではなくNode登録のAuto Configureを使います。Host Agentは対象の物理ホストでConfigure Tokenを標準入力から非表示で受け取り、`panel_url`、`node_id`、`runtime_token`、`service_name`だけを`/etc/autostream/updater/agent.yaml`へ保存します。
 
 ## token作成手順
 
@@ -92,7 +92,7 @@ pre-createした場合、画面にbootstrap envが一度だけ表示されます
 5. service を起動します。
 6. Service Health で online になるか確認します。
 
-この手順の4は通常service用です。`pull_v2`の`update_agent`では、物理ホストごとにNodeを1つ作成し、Configurationの`autostream-host-agent configure`をそのホストで1回実行します。Configure Tokenは標準入力から非表示で渡し、4項目identityだけを`/etc/autostream-host-agent/identity.json`へ保存します。同じtransactionでtokenを含まないcanonical Local Executor policyと不足しているsystemd port sidecarもroot所有pathへ生成します。`execution_host_id`と`ownership_epoch`はserver-ownedなのでidentity configへ入れません。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。
+この手順の4は通常service用です。`protocol major 2`の`update_agent`では、物理ホストごとにNodeを1つ作成し、Configurationの`autostream-host-agent configure`をそのホストで1回実行します。Configure Tokenは標準入力から非表示で渡し、4項目identityだけを`/etc/autostream/updater/agent.yaml`へ保存します。同じtransactionでtokenを含まないcanonical Local Executor policyと不足しているsystemd port sidecarもroot所有pathへ生成します。`execution_host_id`と`ownership_epoch`はserver-ownedなのでidentity configへ入れません。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。
 
 API Tokens で token を作るのは、旧構成を維持している場合や移行中に限ります。
 
@@ -103,7 +103,7 @@ API Tokens で token を作るのは、旧構成を維持している場合や�
 | Rotate | 旧構成の token を入れ替えたい | 新しい token は一度だけ表示。service host の env 更新が必要 |
 | Revoke | 旧構成の token を無効化したい | 旧構成の service は Control Panel へ登録や heartbeat ができなくなります |
 
-Node Runtime Tokenを入れ替える場合はAPI TokensではなくNode登録のConfigurationを使い、通常serviceでは`config.yml`を更新して再起動してください。`pull_v2` Host Agentの旧来の即時Runtime Token再生成は`staged_runtime_token_rotation_required`で拒否されます。専用flowはstage→旧tokenで1回だけclaim→Local Executorのlocal ack→staged token heartbeat proof→activate→canonical identity昇格→旧token revokeです。activate前はcancelでき、`emergency-revoke`は通信を止めてlocal recoveryを要求するbreak-glass操作です。generic Rotateで旧tokenを先に失効させないでください。legacy identityは先にcanonical pathへmanaged migrationし、legacy `ssh_v1`のtoken rotationはBridge互換手順に従います。公開release、mixed-version実host drill、production deployは未実施です。
+Runtime Tokenの入替えはNode登録のConfigurationを使います。application serviceは`config.yml`を更新してrestartします。Updaterはstage、one-time claim、local ack、staged heartbeat proof、activate、canonical YAML identity昇格、旧token revokeの順でrotateします。generic Rotateで旧tokenを先に失効させないでください。
 
 ## よくあるトラブル
 

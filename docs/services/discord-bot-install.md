@@ -1,5 +1,7 @@
 # Discord Botを導入する
 
+> 以下のarchive commandは公開`v1.3.1`に固定した既存releaseの説明です。v2のNode listener契約を実装するという意味ではありません。v2導入では、対応する新しいimmutable releaseと全componentの組合せを検証し、source/CIと本番canaryを分けて確認してください。
+
 Discord Bot は、Discord の voice channel に参加し、音声と参加者状態を AutoStream に渡します。Bot token や channel ID は Control Panel で管理し、サービスenvには Control Panel へ接続するための最小値だけを置きます。
 
 ## 導入前に用意するもの
@@ -15,7 +17,7 @@ Discord Bot は、Discord の voice channel に参加し、音声と参加者状
 
 Bot には voice channel への参加、音声受信、配信中chatを拾う text channel の閲覧権限を付けます。chat表示を使う場合は Discord Developer Portal で Message Content Intent を有効にします。
 
-Discord Bot service 用に AutoStream 側で手生成する token はありません。Node Runtime Token は Node登録で生成された `config.yml` に入り、Discord Bot token 本体は Discord developer portal で発行して Control Panel の Discord Settings に保存します。固定の `DISCORD_BOT_TOKEN` env は本番標準では使いません。
+Discord Bot service用にAutoStream側で手生成するtokenはありません。Node Runtime TokenはNode登録で生成された`config.yml`に入り、Discord Bot token本体はDiscord developer portalで発行してControl PanelのDiscord Settingsへ保存します。Nodeへはassignment-scoped runtime secret referenceで渡し、固定tokenをenvへ置きません。
 
 ## host直接起動
 
@@ -62,7 +64,7 @@ managed配置へ移行し、既存envは保持します。旧fileは
 container、imageは変更しません。詳しい取得と検証手順は
 [Linuxホストで直接動かす](/deployment/host)を参照してください。
 
-外部archive sidecarと`release-manifest.json*`は自動Updater/旧client互換のため
+外部archive sidecarと`release-manifest.json*`は自動Updaterの検証用として
 releaseには残りますが、手動導入ではdownloadもuploadもしません。手動導入には
 公開`v1.3.1` archiveを使用します。`v1.2.x`から更新する場合もenvとNode
 `config.yml`、起動中の旧`MainPID`は保持されます。installer成功後に明示的に
@@ -84,7 +86,7 @@ CONTROL_PANEL_RUNTIME_CONFIG_REFRESH_INTERVAL=30s
 TZ=Asia/Tokyo
 ```
 
-起動します。
+Node登録の手順でconfigとlistener credentialを配置してから起動します。
 
 ```bash
 sudo systemctl daemon-reload
@@ -93,7 +95,7 @@ sudo systemctl start autostream-discord-bot
 sudo systemctl status autostream-discord-bot
 ```
 
-この時点で `/etc/autostream-discord-bot/config.yml` がまだ無い場合でも、Discord Bot は終了せず `node config pending: waiting for /etc/autostream-discord-bot/config.yml` を出して dry-run で待機します。Auto Configure コマンドで `config.yml` を作成し、Control Panel の Discord Settings に Bot token を保存した後は、実際の Discord 接続を開始するため Discord Bot を再起動します。
+v2では`/etc/autostream-discord-bot/config.yml`と`listener.credential: node-listener.json`が指定する固定JSONが必須です。systemd `LoadCredential`がJSONを渡し、欠落やservice type / revisionの不一致はstartup errorになります。Auto ConfigureとControl PanelのDiscord Settingsを揃えてから対象serviceを明示的にrestartしてください。
 
 ## Control Panelで登録する
 
@@ -103,7 +105,7 @@ sudo systemctl status autostream-discord-bot
 4. Discord Settings を開きます。
 5. Bot token を登録します。
 6. `Discord BOT Node` で登録済み Discord Bot Node を選びます。
-7. Discord Bot が未起動なら起動します。先に起動して pending / dry-run になっていた場合は `sudo systemctl restart autostream-discord-bot` を実行します。
+7. Node configとlistener credentialを確認してDiscord Botを起動します。設定を更新した場合は`sudo systemctl restart autostream-discord-bot`を実行します。
 8. Service Health で Discord Bot が online、報告バージョン、Capability を出しているか確認します。
 9. Streams で Discord Config を選び、guild ID、voice channel ID、必要なら text channel ID を配信枠に保存します。VC参加で開始する待機枠は `Discord VC参加で自動開始` をONにします。
 
@@ -117,7 +119,7 @@ sudo systemctl status autostream-discord-bot
 6. 音声packetを Encoder Recorder へ送ります。
 7. active speaker、参加者状態、配信枠に設定した text channel の新規messageを、配信枠で primary assigned された Worker へ渡します。
 
-本番では `DISCORD_BOT_TOKEN` env に頼らず、Control Panel 管理の runtime secret を使います。
+Bot tokenはControl Panel管理のassignment-scoped runtime secretだけを使います。
 Worker 送信用の固定 `WORKER_URL` / `WORKER_TOKEN` env は使いません。Control Panel が配信開始時に Worker assignment から `worker_events_url` と短期 `worker_events_token` を job に入れます。
 
 ## VC参加で自動開始されるか

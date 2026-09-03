@@ -86,7 +86,6 @@ AUTOSTREAM_PUBLIC_URL=https://control.example.com
 AUTOSTREAM_SESSION_SECRET=<SESSION_SECRET>
 AUTOSTREAM_SECRET_ENCRYPTION_KEY=<SECRET_ENCRYPTION_KEY>
 AUTOSTREAM_SETUP_TOKEN=<SETUP_TOKEN>
-SERVICE_CALL_TOKEN=
 AUTOSTREAM_STREAM_INGEST_SIGNING_KEY=<STREAM_INGEST_SIGNING_KEY>
 SERVICE_CONFIG_ROOT=/opt/autostream/config
 AUTOSTREAM_IMAGE_REGISTRY=ghcr.io/kome-lab/autostream-docker
@@ -162,7 +161,6 @@ services:
       AUTOSTREAM_SECRET_ENCRYPTION_KEY: ${AUTOSTREAM_SECRET_ENCRYPTION_KEY}
       AUTOSTREAM_SETUP_TOKEN: ${AUTOSTREAM_SETUP_TOKEN}
       DATABASE_URL: ${CONTROL_PANEL_DATABASE_URL}
-      SERVICE_CALL_TOKEN: ${SERVICE_CALL_TOKEN}
       AUTOSTREAM_STREAM_INGEST_SIGNING_KEY: ${AUTOSTREAM_STREAM_INGEST_SIGNING_KEY}
       AUTOSTREAM_SERVICE_PUBLIC_ALLOWED_HOSTS: encoder-recorder,worker,discord-bot,observability
       AUTOSTREAM_REQUIRE_SERVICE_PUBLIC_ALLOWED_HOSTS: "true"
@@ -182,14 +180,17 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-observability/config.yml
+      CREDENTIALS_DIRECTORY: /run/autostream-credentials
       AUTOSTREAM_SECRET_ENCRYPTION_KEY: ${AUTOSTREAM_SECRET_ENCRYPTION_KEY}
       DATABASE_URL: ${OBSERVABILITY_DATABASE_URL}
-      OBSERVABILITY_BIND_ADDR: 0.0.0.0:8080
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8082:8080"
     volumes:
       - ${SERVICE_CONFIG_ROOT}/observability/config.yml:/etc/autostream-observability/config.yml:ro
+    configs:
+      - source: observability-listener
+        target: /run/autostream-credentials/node-listener.json
 
   encoder-recorder:
     build: ./src/autostream-encoder-recorder
@@ -199,13 +200,14 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-encoder-recorder/config.yml
+      CREDENTIALS_DIRECTORY: /run/autostream-credentials
       AUTOSTREAM_ENV: production
-      AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
       AUTOSTREAM_WORKER_VIDEO_BIND_ADDR: 0.0.0.0:10080
       # 同じCompose networkのWorkerが解決できるservice DNS名です。
       AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST: encoder-recorder
       AUTOSTREAM_OUTPUT_RELAY_URL: rtmp://output-relay:1935/autostream/{stream_id}
-      AUTOSTREAM_OUTPUT_RELAY_MODE: legacy_stream_key
+      AUTOSTREAM_OUTPUT_RELAY_MODE: live_api_relay_static
+      AUTOSTREAM_OUTPUT_RELAY_BINDING_ID: ${AUTOSTREAM_OUTPUT_RELAY_BINDING_ID:-}
       # Docker Compose内のこのservice DNSだけをrelayとして許可します。
       AUTOSTREAM_COMPOSE_OUTPUT_RELAY: "1"
     ports:
@@ -213,6 +215,9 @@ services:
     volumes:
       - ${SERVICE_CONFIG_ROOT}/encoder-recorder/config.yml:/etc/autostream-encoder-recorder/config.yml:ro
       - archives:/var/lib/autostream/archives
+    configs:
+      - source: encoder-recorder-listener
+        target: /run/autostream-credentials/node-listener.json
 
   output-relay:
     image: tiangolo/nginx-rtmp:latest
@@ -233,12 +238,15 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-worker/config.yml
-      AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
+      CREDENTIALS_DIRECTORY: /run/autostream-credentials
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8084:8080"
     volumes:
       - ${SERVICE_CONFIG_ROOT}/worker/config.yml:/etc/autostream-worker/config.yml:ro
+    configs:
+      - source: worker-listener
+        target: /run/autostream-credentials/node-listener.json
 
   discord-bot:
     build: ./src/autostream-discord-bot
@@ -252,12 +260,29 @@ services:
         condition: service_started
     environment:
       AUTOSTREAM_NODE_CONFIG: /etc/autostream-discord-bot/config.yml
-      AUTOSTREAM_BIND_ADDR: 0.0.0.0:8080
+      CREDENTIALS_DIRECTORY: /run/autostream-credentials
       TZ: ${TZ}
     ports:
       - "127.0.0.1:8083:8080"
     volumes:
       - ${SERVICE_CONFIG_ROOT}/discord-bot/config.yml:/etc/autostream-discord-bot/config.yml:ro
+    configs:
+      - source: discord-bot-listener
+        target: /run/autostream-credentials/node-listener.json
+
+configs:
+  observability-listener:
+    content: |
+      {"schema_version":2,"service_type":"observability","bind_address":"0.0.0.0:8080","config_revision":1}
+  encoder-recorder-listener:
+    content: |
+      {"schema_version":2,"service_type":"encoder_recorder","bind_address":"0.0.0.0:8080","config_revision":1}
+  worker-listener:
+    content: |
+      {"schema_version":2,"service_type":"worker","bind_address":"0.0.0.0:8080","config_revision":1}
+  discord-bot-listener:
+    content: |
+      {"schema_version":2,"service_type":"discord_bot","bind_address":"0.0.0.0:8080","config_revision":1}
 
 volumes:
   mariadb:
@@ -267,9 +292,11 @@ volumes:
 
 ### Node portを変更する
 
-上のCompose例はcontainer内listen portを`8080`にそろえていますが、通常Node serviceのportは`1024..65535`の任意番号へ変更できます。変更する場合は、同じserviceの次の値を一組として変更します。
+上のCompose例では各Node `config.yml`の`listener.credential`を`node-listener.json`に固定し、Compose `configs`からserviceごとにJSONを渡します。`CREDENTIALS_DIRECTORY`は`/run/autostream-credentials`です。JSONは`schema_version`、`service_type`、`bind_address`、`config_revision`の4項目だけを含み、例のrevision `1`は実際の承認済みconfig revisionに合わせます。この例自体は自動port変更を許可するfrozen baselineではありません。
 
-1. serviceのbind設定。例: `AUTOSTREAM_BIND_ADDR=0.0.0.0:18080`
+通常Node serviceのcontainer portは`1024..65535`です。変更する場合は、同じserviceの次の値を一組として扱います。
+
+1. 必須listener JSONの`bind_address`。例: `0.0.0.0:18080`。JSONがない場合やservice type / revisionが不正な場合はstartup errorになります
 2. Composeのcontainer port。例: `"127.0.0.1:18081:18080"`の右側`18080`
 3. Control PanelのNode登録で指定するPort。Compose network内から接続する場合はcontainer portの`18080`
 4. reverse proxyを使う場合はupstreamのorigin port
@@ -294,11 +321,31 @@ Control Panelはendpointを`desired`、`applied`、`reported`に分けて扱い�
 | host published port | `1024..65535` | hostは`127.0.0.1`固定。外部interfaceへ公開しない |
 | container listen port | `1024..65535` | service processがcontainer内で待ち受けるport |
 
-Local Executorは`/opt/autostream/local-executor/docker/ports/<service>.env`の固定env、固定Compose project/service、承認済みCompose revision/digestだけを使って対象containerをrecreateします。container ID、image ID、repository digest、env digest、healthを再検証し、失敗または応答不明時はdurable ledgerからrollback/reconcileします。UIのdesired/applied/reported endpointはadvertised側を示し、published/containerはverified current mapping、pending plan、完了履歴のold/new tripleで確認します。unavailable、busy、stale、drift、recovery中はblockします。
+Local Executorは`/opt/autostream/local-executor/docker/ports/<service>.env`のroot-controlledなCompose補間値、固定Compose project/service、承認済みCompose revision/digestだけを使って対象containerをrecreateします。このenvはpublished port、container port、revisionをComposeへ渡すもので、application processが待受値を環境変数から読むfallbackではありません。固定Compose `configs`の`content`でJSONを生成し、`/run/autostream-credentials/node-listener.json`へmountします。Docker用の別のhost JSON source fileは作りません。
+
+たとえばWorkerの承認済みbaseline内では、次の値を同じport jobのprojectionから補間します。これは単独で起動するCompose fileではなく、固定target policyが照合する構成の抜粋です。operatorがmanaged envやrevisionを手動変更してはいけません。
+
+```yaml
+configs:
+  node-listener:
+    content: |
+      {"schema_version":2,"service_type":"worker","bind_address":"0.0.0.0:${AUTOSTREAM_WORKER_CONTAINER_PORT}","config_revision":${AUTOSTREAM_CONFIG_REVISION}}
+services:
+  worker:
+    environment:
+      CREDENTIALS_DIRECTORY: /run/autostream-credentials
+    configs:
+      - source: node-listener
+        target: /run/autostream-credentials/node-listener.json
+    ports:
+      - "127.0.0.1:${AUTOSTREAM_WORKER_PORT}:${AUTOSTREAM_WORKER_CONTAINER_PORT}/tcp"
+```
+
+container ID、image ID、repository digest、env digest、health、Application Runtime Identity Probeを再検証し、失敗または応答不明時はdurable ledgerからrollback/reconcileします。UIのdesired/applied/reported endpointはadvertised側を示し、published/containerはverified current mapping、pending plan、完了履歴のold/new tripleで確認します。unavailable、busy、stale、drift、recovery中はblockします。
 
 Auto Configureが自動生成するのはsystemdのroot policy/sidecarだけです。Docker authorityはNode登録値から推測せず、既存のroot-owned fixed Docker target policyとapproved frozen Compose baselineがなければfail closedです。Control Panel自身とUpdate AgentはDocker port jobの対象外です。reverse proxy設定は自動変更しないため、originをpublished portへ追従させる場合はNginx/Caddy等を別手順で変更して確認してください。
 
-ローカルではDocker 29.6.2 / Compose 5.3.1のisolated root DIND上で`TestDockerPortDaemonSmoke`を実行し、初回・連続変更、実process crash後のfresh-process reconcile、grant二重消費なし、unhealthy mappingの旧値rollback、foreign containerによるpublished port占有のgrant前拒否を確認しました。これはローカル実daemonのPASSであり、全5image build、公開image、実Docker host canary、release/deployの証拠ではありません。
+sourceとCIでの確認、全5imageのbuild、公開image、実Docker host canary、release/deployは別々のgateです。初回・連続変更、process crash後のfresh-process reconcile、grant二重消費の拒否、unhealthy mappingの旧値rollback、foreign containerによるpublished port占有の拒否を、採用するexact releaseの検証項目に含めてください。この手順だけで実hostでの完了を意味しません。
 
 Worker imageはDebianの`fontconfig`と`fonts-noto-cjk` packageを含み、FFmpegは含みません。Discord参加者、発言中の緑枠、現在時刻、字幕、チャットをscene画像として生成します。image内の`AUTOSTREAM_SCENE_FONT_FILE`はNoto CJKのcontainer pathを指すため、通常はfont用volumeや追加envは不要です。Workerは配信jobで指定された選択済みEncoder Recorderへ、低頻度のMJPEG画像列をjob-scopedに暗号化したSRT over UDPで送り、Encoder Recorderが設定FPSで映像化・音声MUX・最終encodeし、ウォーターマークを重ねた後にYouTube、録画、HLSへ分岐します。
 
@@ -308,25 +355,25 @@ Encoderプレビューは既存のEncoder Recorder API portと`archives` volume�
 
 本番の配信出力は、YouTubeのstream keyをFFmpeg引数へ出さないため`output-relay`を経由します。Encoder Recorderとrelayは通常のCompose networkへ接続し、Encoder Recorderからservice DNS名`output-relay:1935`へ送ります。`AUTOSTREAM_COMPOSE_OUTPUT_RELAY: "1"`はこのCompose内の固定service DNSだけをrelayとして許可するDocker専用の制限です。host/systemd配置へコピーしたり、任意のhost名を許可する値として使ったりしません。network namespaceは共有しません。全サービスを起動する前にEncoder Recorder repositoryの`relay/nginx-rtmp.conf.example`を`/opt/autostream/relay/nginx-rtmp.conf`へコピーし、upstreamを設定してください。この実値入りファイルはGit管理しません。
 
-上のCompose例は、既存の固定key relayを維持する`legacy_stream_key`です。既存hostで`AUTOSTREAM_OUTPUT_RELAY_URL`だけを設定してmodeを省略した場合も、移行互換として同じmodeになります。`legacy_stream_key`ではYouTube Outputの`stream_key`だけを使い、通常の`live_api`や`live_api_dry_run`を固定relayへ流すことはできません。
+上のCompose例はv2の`live_api_relay_static`です。Control Panelの同名YouTube Output、再利用Live Stream、同じbinding IDがreadyであることを確認してください。mode未設定やcapability未報告は拒否されます。
 
 固定relayで新しいYouTube Live API方式を使う場合は、ComposeのEncoder環境を次のように明示的に切り替えます。これは既存の`stream_key` profileやrelayの固定keyを変換する手順ではありません。先にControl Panelで別の`live_api_relay_static` Output、Google OAuth account、再利用するYouTube Live Stream ID、同じ`relay-` + 小文字UUID形式の非secret binding IDをreadyにしてから適用してください。
 
 ```yaml
       AUTOSTREAM_OUTPUT_RELAY_URL: rtmp://output-relay:1935/autostream/{stream_id}
-      AUTOSTREAM_OUTPUT_RELAY_MODE: live_api_static
+      AUTOSTREAM_OUTPUT_RELAY_MODE: live_api_relay_static
       AUTOSTREAM_OUTPUT_RELAY_BINDING_ID: ${AUTOSTREAM_OUTPUT_RELAY_BINDING_ID:-}
 ```
 
-`live_api_static`へ切り替える前に、`.env`へ同じbinding IDを設定します。
+`live_api_relay_static`へ切り替える前に、`.env`へ同じbinding IDを設定します。
 
 ```text
 AUTOSTREAM_OUTPUT_RELAY_BINDING_ID=relay-123e4567-e89b-42d3-a456-426614174000
 ```
 
-bindingは`relay-` + 小文字UUID形式だけを使い、stream key、外部RTMPS URL、視聴URL、任意の説明名を入れません。bindingが空・形式不正・不一致の場合は、Compose interpolationで既存stackを起動不能にするのではなく、relay `unavailable`としてEncoderのpreflight/startがfail closedします。`direct`へ読み替えたりrelay URLを無視したりしません。`live_api_static`はURLと正しいbinding IDを必要とし、`relay_binding_id`が完全一致する`live_api_relay_static`だけを開始できます。URLありの`direct`、URLなしの`legacy_stream_key`/`live_api_static`、未知のmodeも同様にfail closedします。relayを使わない`direct`はURLを設定せず、この`output-relay` Compose例を使わない別構成にします。
+bindingは`relay-` + 小文字UUID形式だけを使い、keyやURLを入れません。URLとmodeの矛盾、bindingの欠落・形式不正・不一致はpreflight/startでfail closedです。directへ自動fallbackしません。
 
-切替前に配信枠がinactiveであることを確認し、切替後はService Health / preflightと小さな開始・停止を確認します。戻す必要がある場合は、まず新方式の配信を停止し、不明な開始結果があればControl Panelの固定Relay回復を完了します。その後でOutput選択を旧`stream_key` profileへ戻し、Composeを`legacy_stream_key`へ戻して再作成します。同じbindingを別の配信枠へ再利用したり、relay設定からkeyを読み出してControl Panelへ貼り付けたりしません。
+切替前に配信枠をinactiveにし、切替後にService Healthとpreflightを確認します。開始結果が不明なら固定Relay recoveryを先に完了します。rollbackは対応するreleaseと設定全体を復元し、同じbindingを別の配信枠へ使い回しません。
 
 ```bash
 sudo install -d -m 0750 /opt/autostream/relay
@@ -342,9 +389,9 @@ image: ${AUTOSTREAM_IMAGE_REGISTRY:-ghcr.io/kome-lab/autostream-docker}/control-
 
 service名は`control-panel`、`discord-bot`、`encoder-recorder`、`observability`、`worker`です。本番の`.env`では`latest`ではなく、`release-manifest.json`が付いた公開済みbundle tagを固定します。Docker bundle versionと各serviceのsource versionは別管理であり、表示差は異常ではありません。
 
-Bridge移行後の`pull_v2`では、Docker serviceごとではなく物理Docker hostごとに非rootの`autostream-host-agent`を1つだけ置きます。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCPや`8090`を開きません。Control Panel、Host Agent、各service containerへ`/var/run/docker.sock`をmountしないでください。
+Bridge移行後の`protocol major 2`では、Docker serviceごとではなく物理Docker hostごとに非rootの`autostream-host-agent`を1つだけ置きます。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCPや`8090`を開きません。Control Panel、Host Agent、各service containerへ`/var/run/docker.sock`をmountしないでください。
 
-privileged Docker software updateとport mapping変更は、Host AgentとはUnix socketで分離したroot Local Executorが固定Compose project、service、repository、version/port overlay、credential pathだけを使って実行します。Host Agent requestからDocker path、image、commandを指定できません。Docker port jobも上記のexact policy/baselineがあるhostだけで有効です。ローカルDINDが成功していても、公開release、全imageの公開証拠、実Docker canaryが揃うまでは、既存hostでlegacy `ssh_v1`を維持します。Host Agentの導入だけでlegacy helperやSSH資産を削除しないでください。移行状態とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
+privileged Docker updateとport変更はroot Local Executorが固定Compose project、service、repository、overlay、credential pathだけを使って実行します。Agentから任意path、image、commandは指定できません。公開release、全imageの証拠、実Docker canaryはCIとは別gateです。詳細は[システム更新](/operations/system-updates)を参照してください。
 
 ## 6. Control Panel だけ先に起動する
 

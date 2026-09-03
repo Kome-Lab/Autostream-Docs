@@ -16,7 +16,7 @@
 | Node Runtime Token | `config.yml` に入る token です。登録、heartbeat、runtime config、Panel から Node への操作に使います |
 | Node Agent API | Host、Port、SSL から Panel が組み立てる API URL です |
 
-新規構成では `SERVICE_ID`、`SERVICE_PUBLIC_URL`、`CONTROL_PANEL_TOKEN`、Node側の `AUTOSTREAM_STREAM_INGEST_SIGNING_KEY` を env に手入力しません。Control Panel の Node登録で `config.yml` を生成し、各サービスは `AUTOSTREAM_NODE_CONFIG` でそのファイルを読みます。古い `SERVICE_CALL_TOKEN` / `SERVICE_CONTROL_TOKEN_SHA256` とNode側の署名鍵envは移行中の fallback としてだけ使います。
+Control PanelのNode登録で`config.yml`を生成し、各サービスは`AUTOSTREAM_NODE_CONFIG`で必ず読みます。identity、rotating Runtime Token、Worker / Encoderの署名鍵はNode configがauthorityです。4種類のruntime Nodeの待受addressとrevisionは`listener.credential: node-listener.json`が選ぶ固定JSONから読みます。共有tokenや待受環境変数へのfallbackはありません。
 
 ## token の生成と入力先
 
@@ -29,10 +29,10 @@
 | Encoder Recorder | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Worker | なし | signing key と Node Runtime Token は Control Panel が `config.yml` に配布します |
 | Discord Bot | なし | Node Runtime Token は `config.yml`、Discord Bot token は Control Panel の Discord Settings に保存します |
-| `pull_v2` Host Agent | なし | 物理ホストごとにAuto Configureで`panel_url`、`node_id`、`runtime_token`、`service_name`だけを`/etc/autostream-host-agent/identity.json`へ生成します |
+| `protocol major 2` Host Agent | なし | 物理ホストごとにAuto Configureで`panel_url`、`node_id`、`runtime_token`、`service_name`だけを`/etc/autostream/updater/agent.yaml`へ生成します |
 | root Local Executor | なし | Host Agentと固定Unix socketで分離。policy/grantとgeneric requestにNode Runtime Tokenを含めない。専用credential-stageのprivate Unix socket requestだけがraw tokenをroot境界へ渡し、log/durable request stateへ残さない。rotation/recoveryは固定canonical/staged identity pathだけを読み書きし、caller指定path/tokenは受け付けない |
 
-Node Runtime TokenとConfigure TokenはNode登録で生成されます。通常serviceはConfigurationから`config.yml`を更新します。`pull_v2` Host Agentの即時Runtime Token再生成は拒否され、staged rotationが必要です。zero-downtime rotationのrelease gateが完了するまでgeneric Rotateで旧tokenを先に失効させません。`execution_host_id`と`ownership_epoch`はserver-ownedであり、configへ入れません。
+Node Runtime TokenとConfigure TokenはNode登録で生成されます。通常serviceはConfigurationから`config.yml`を更新します。`protocol major 2` Host Agentの即時Runtime Token再生成は拒否され、staged rotationが必要です。zero-downtime rotationのrelease gateが完了するまでgeneric Rotateで旧tokenを先に失効させません。`execution_host_id`と`ownership_epoch`はserver-ownedであり、configへ入れません。
 
 ## 推奨ディレクトリ
 
@@ -46,10 +46,9 @@ Node Runtime TokenとConfigure TokenはNode登録で生成されます。通常s
 | 録画保存先 | `/var/lib/autostream/archives` |
 | Control Panel web assets | `/usr/share/autostream-control-panel` |
 | systemd unit | `/etc/systemd/system/autostream-<service>.service` |
-| `pull_v2` Host Agent設定 / state | `/etc/autostream-host-agent/identity.json` / `/var/lib/autostream-host-agent`。legacy `/etc/autostream/host-agent.json`はcanonical不在時のread-only fallbackだけ |
-| Local Executor policy / state / socket | `/etc/autostream-local-executor/policy.json` / `/var/lib/autostream-local-executor` / `/run/autostream-local-executor/executor.sock` |
-| systemd port sidecar | `/opt/autostream/local-executor/ports/<service>.env` |
-| legacy `ssh_v1`設定 / helper | `/etc/autostream/updater.json` / `/usr/local/libexec/autostream-update-host`。Bridge期間だけ維持 |
+| protocol major 2 Host Agent設定 / state | `/etc/autostream/updater/agent.yaml` / `/var/lib/autostream-host-agent` |
+| Local Executor policy / state / socket | `/etc/autostream/updater/executor-policy.json` / `/var/lib/autostream-local-executor` / `/run/autostream-local-executor/executor.sock` |
+| 4種類のsystemd Nodeのlistener credential | `/opt/autostream/local-executor/ports/<service>.json`。root-owned `0600`、private directory `0700`。unitの`LoadCredential`で`node-listener.json`として渡す |
 
 内部ではinstallerが`/opt/autostream/<service>/releases/`、`current` symlink、
 digest、markerを管理します。operatorはこれらを手動で作成、編集せず、
@@ -72,7 +71,6 @@ GitHub Release の host artifact は、archive の中に `bin/` が直接入る�
 ```text
 autostream-control-panel_v1.9.11_linux_amd64/
   bin/control-panel
-  bin/autostream-updater
   systemd/autostream-control-panel.service.example
   .env.example
   artifact-manifest.json
@@ -87,12 +85,14 @@ archive-only形式の手動導入では、サーバーへ転送するrelease ass
 architecture、互換情報をarchive内部に持ち、`checksums.txt`はinstallerを含む
 同梱fileを覆います。
 
-GitHub Releaseには自動Updaterと旧clientの互換用としてarchive sidecar、
+GitHub Releaseには自動Updaterの検証用としてarchive sidecar、
 `release-manifest.json`、manifest sidecarも残ります。自動Updaterはこれらを
 取得・検証しますが、手動導入ではdownloadもサーバーへのuploadもしません。
-既存のimmutableな旧release assetは書き換えません。Control Panel / Host Agentには
-`artifact-manifest.json`を含む公開`v1.9.11` archive-only releaseを使い、
-古いreleaseへ読み替えないでください。runtime serviceの現在のreleaseは`v1.3.1`です。
+既存のimmutableな旧release assetは書き換えません。以下のapplication archive手順は
+公開Control Panel `v1.9.11`とruntime service `v1.3.1`を対象にした版固定の説明です。
+これらの公開済みarchiveがv2 listener契約や独立Updaterの条件を満たすという意味ではありません。
+v2を導入する前に、その契約を含む新しいimmutable releaseと対応する全componentを検証してください。
+Host Agent / Local ExecutorはControl Panel archiveから取得せず、独立Updaterの検証済みreleaseを使います。
 
 管理端末でarchive本体だけをdownloadし、そのarchiveのGitHub Attestationを
 確認します。内部checksumはarchive内の整合性確認であり、GitHub由来の真正性は
@@ -148,7 +148,7 @@ sudo systemctl start autostream-<service>
 sudo systemctl status autostream-<service>
 ```
 
-`AUTOSTREAM_NODE_CONFIG` が指す `config.yml` をまだ作っていない場合、Node Agent は起動を続けて `node config pending: waiting for .../config.yml` を出します。Auto Configure コマンドで `config.yml` を作成した後、Worker、Encoder Recorder、Discord Bot は登録、heartbeat、runtime config の初期読込をそろえるため `sudo systemctl restart autostream-<service>` を実行します。Observability は起動中に `config.yml` を再読込して登録を開始します。
+`AUTOSTREAM_NODE_CONFIG`が指す`config.yml`が未作成・不正ならstartupはfail closedで停止します。Auto Configureで生成・installした後に対象serviceを明示的に起動し、identity probe、登録、heartbeatを確認します。
 
 ## 起動後に必ず見る場所
 
@@ -164,33 +164,18 @@ systemd が active でも、Control Panel 側で heartbeat が warning / offline
 
 ## 更新方法
 
-新規hostには物理ホストごとに非rootの`pull_v2` Host Agentとroot Local Executorを1つずつ置きます。Host Agentはoutbound HTTPSだけを使い、受信TCP、`8090`、SSH設定を持ちません。epoch `0`ではobserver、明示的ownership切替後だけjobをclaimします。systemd/Docker software updateとsystemd/Docker port変更のsource実装はありますが、公開releaseと実host canaryは未確認です。導入方法とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
+新規hostには物理ホストごとに非rootの`protocol major 2` Host Agentとroot Local Executorを1つずつ置きます。Host Agentはoutbound HTTPSだけを使い、受信TCP、`8090`、SSH設定を持ちません。epoch `0`ではobserver、明示的ownership切替後だけjobをclaimします。systemd/Docker software updateとsystemd/Docker port変更のsource実装はありますが、公開releaseと実host canaryは未確認です。導入方法とavailability gateは[システム更新](/operations/system-updates)を参照してください。
 
-service installerはHost Agentを自動導入しません。Host Agentは
-`Kome-Lab/Autostream-ControlPanel`の別archiveにLocal Executorと一緒に含まれ、
-物理ホストごとに1つだけ導入します。`install-autostream-host-agent --prepare`は
-identity、policy、A/B runtimeがないfresh host専用です。既存Host Agentへ
-再実行せず、既存Agent / ExecutorはControl Panelの専用self-updateまたは検証済み
-Host Agent archiveのmanual upgradeで更新します。
+service installerはHost Agentを自動導入しません。物理ホストごとに独立UpdaterのAgent / Executorを1組だけ導入します。`--prepare`はfresh hostだけ、既存hostは専用self-updateまたは検証済みinstallerを使います。
 
-manual upgradeはControl Panel `v1.9.11`を先に導入・再起動してから行います。通常hostは次です。
+独立Updaterの検証済みreleaseでHost Agent / Local Executorを更新します。Control Panelとのprotocol major 2、policy、identity probeの一致が前提です。通常の`--upgrade`は既存identity/policyとRuntime Tokenを保持するためConfigure Tokenは不要です。`--upgrade --recover-active-job`はreleaseが許可したexact pairとactive interrupted jobだけに使います。
 
-```bash
-sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade
-```
-
-Panel更新が`99%`の中断状態にある場合だけ、Agent / Executorが同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pairで、exact active jobをinstallerが証明できるhostに次を使います。
-
-```bash
-sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade --recover-active-job
-```
-
-どちらも既存identity/policyを保持するためConfigure Tokenは不要です。rescue modeはreconcileとexact terminal proofの確認だけを行います。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。詳しいfail-closed条件は[既存Host Agent / Local Executorを`v1.9.11`へ更新する](/operations/system-updates#upgrade-host-agent-v1911)を参照してください。
+rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。完全な前提と順序は[システム更新](/operations/system-updates)を参照してください。
 
 Control Panel `v1.8.x`またはruntime service `v1.2.x`から更新するときは、
 [Linuxホストで直接動かす](/deployment/host#既存環境を更新するとき)のdatabase
 backupとcredential path移行を先に実行します。更新適用が必要な既存hostでは、
-Bridge期間のlegacy `ssh_v1`中央Updater、helper、SSH/必要なstatus portを維持します。
+v2では独立Updaterのprotocol major 2だけを使用し、whole-release rollback以外の互換経路は再導入しません。
 
 1. 現在のversion、設定、active状態、`MainPID`を控えます。Node Agentは
    `autostream-<service> --version`、Control Panelは`control-panel --version`で
@@ -227,7 +212,7 @@ Docker repositoryは変更しません。
 | 症状 | まず確認すること |
 | --- | --- |
 | 起動直後に終了する | 必須 env、DB接続、`AUTOSTREAM_NODE_CONFIG`、config の `node.type` |
-| `node config pending` のまま | Node登録の Auto Configure コマンドを実行したか、保存先が `AUTOSTREAM_NODE_CONFIG` と一致しているか、`root:autostream 0640` で読めるか |
+| Nodeのstartupが停止する | Node登録のAuto Configureを実行したか、Node configの保存先・owner/mode、`listener.credential`とsystemd `LoadCredential`、固定JSONのservice type / revisionを確認する |
 | Service Health に出ない | Node Runtime Token、Control Panel URL、Node ID、名前解決、firewall |
 | start / stop が拒否される | Node Runtime Token の rotation 後に `config.yml` を更新したか |
 | runtime config が取れない | Node ID、Node type、primary assignment、token scope |

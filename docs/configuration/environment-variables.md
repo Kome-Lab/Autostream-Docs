@@ -4,7 +4,7 @@
 
 ## 基本の考え方
 
-起動に必要な最小設定は env ファイルやサーバーの環境変数に置きます。配信先、保存先、通知先など運用中に変える値は、できるだけ Control Panel で管理します。
+Control Panelのdatabaseなどbootstrap設定はenvに置きます。application Nodeのidentityとrotating tokenは必須のNode `config.yml`へ置きます。Worker、Encoder Recorder、Discord Bot、Observabilityの待受addressとconfig revisionは、Node configの`listener.credential`が選ぶ`node-listener.json`から読みます。配信先、保存先、通知先はControl Panelで管理し、割当て範囲のruntime secret referenceだけをserviceへ渡します。
 
 ## 最初に設定する値
 
@@ -32,32 +32,44 @@
 | Google Drive destination / OAuth | Control Panel |
 | YouTube / Google OAuth短期アクセストークンの自動更新間隔 | Control Panelの`AUTOSTREAM_OAUTH_TOKEN_REFRESH_INTERVAL`（既定45分） |
 | 管理画面のタイムゾーン | Control Panel |
-| `pull_v2` Host Agentの接続identity | Auto Configureが各物理ホストのroot所有`/etc/autostream-host-agent/identity.json`へ`panel_url`、`node_id`、`runtime_token`、`service_name`だけを生成 |
+| `protocol major 2` Host Agentの接続identity | Auto Configureが各物理ホストのroot所有`/etc/autostream/updater/agent.yaml`へ`panel_url`、`node_id`、`runtime_token`、`service_name`だけを生成 |
 | execution host binding | `execution_host_id`と`ownership_epoch`はControl Panelのserver-owned state。Host Agent configやenvへ置かない |
-| privileged更新policy | Auto Configureが`/etc/autostream-local-executor/policy.json`へ生成するroot所有固定policy。Host AgentとはUnix socketで分離 |
-| systemd Nodeの有効port | `/opt/autostream/local-executor/ports/<service>.env`。service bind変数と`AUTOSTREAM_CONFIG_REVISION`だけのroot所有2行sidecar |
+| privileged更新policy | Auto Configureが`/etc/autostream/updater/executor-policy.json`へ生成するroot所有固定policy。Host AgentとはUnix socketで分離 |
+| systemd Nodeの有効port / revision | `/opt/autostream/local-executor/ports/<service>.json`。root所有`0600`の非secret listener credentialをsystemd `LoadCredential`で対象serviceだけへ渡す |
+| Docker Nodeの有効port / revision | 固定Compose `configs`から`/run/autostream-credentials/node-listener.json`へ渡す。container環境の`CREDENTIALS_DIRECTORY`はこのdirectoryだけを指す |
 
-## Encoder Recorder の output relay 配送モード
+## Nodeの待受設定
 
-`AUTOSTREAM_OUTPUT_RELAY_MODE` はEncoder Recorderが固定relayをどう使うかを表す非secret設定です。YouTubeのstream key、外部RTMPS URL、視聴URLをこの値や`AUTOSTREAM_OUTPUT_RELAY_BINDING_ID`へ書きません。値と`AUTOSTREAM_OUTPUT_RELAY_URL`の組み合わせは次のとおりです。
+4種類のNode configでは、待受設定の入力を次の固定名で指定します。
 
-| 実効モード | envの組み合わせ | 使うYouTube Output | 用途 |
-| --- | --- | --- | --- |
-| `direct` | `AUTOSTREAM_OUTPUT_RELAY_URL`を設定せず、`AUTOSTREAM_REQUIRE_OUTPUT_RELAY`を無効にする。`AUTOSTREAM_OUTPUT_RELAY_MODE=direct`は任意 | `stream_key`、`live_api`、`live_api_dry_run`（`live_api_relay_static`は不可） | relayなしで出力する環境 |
-| `legacy_stream_key` | URLを設定し、modeは未設定または`legacy_stream_key` | 既存の`stream_key`だけ | 固定nginx-rtmpなどが既存の固定keyへpushする旧構成を、そのまま互換運用します |
-| `live_api_static` | URL、`AUTOSTREAM_OUTPUT_RELAY_MODE=live_api_static`、`relay-` + 小文字UUID形式の`AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` | `live_api_relay_static`だけ | 固定relayと事前作成した再利用YouTube Live Streamを、非secret bindingで明示対応させる新方式です |
+```yaml
+listener:
+  credential: node-listener.json
+```
 
-`live_api_static`のbinding IDは、必ず`relay-`に小文字UUIDを続けた形式にします。例: `relay-123e4567-e89b-42d3-a456-426614174000`。これは非secretな識別子であり、stream key、外部RTMPS URL、視聴URL、任意の説明名を代用できません。
+listener JSONは`schema_version: 2`、`service_type`、`bind_address`、正の`config_revision`の4項目だけです。systemdではroot-ownedなprivate directoryから`LoadCredential`で渡し、serviceはsystemdが用意する`CREDENTIALS_DIRECTORY`内の固定名だけを読みます。Nodeの公開接続先を示す`api.host` / `api.port`を、local listenerの設定として使いません。
 
-`AUTOSTREAM_REQUIRE_OUTPUT_RELAY`が有効なhost（productionでrelay必須にする構成を含む）では、URL未設定は`direct`ではありません。output relayは`missing`（利用不可）となり、preflightと開始処理はfail closedします。URLを外して`direct`へ自動fallbackすることはありません。productionでrelayを必須にするhostは、有効なlocal relay URLを設定してから開始してください。
+| `service_type` | systemdのcredential source |
+| --- | --- |
+| `worker` | `/opt/autostream/local-executor/ports/worker.json` |
+| `encoder_recorder` | `/opt/autostream/local-executor/ports/encoder-recorder.json` |
+| `discord_bot` | `/opt/autostream/local-executor/ports/discord-bot.json` |
+| `observability` | `/opt/autostream/local-executor/ports/observability.json` |
 
-URLありで`direct`を指定する、URLなしで`legacy_stream_key`または`live_api_static`を指定する、未知のmodeを指定する、または`live_api_static`のbinding形式・一致条件を満たさない、といった設定はrelay `unavailable`としてfail closedします。`direct`へ自動的に読み替えたり、URLを無視して出力したりしません。`managed`のような推測用の値は使いません。
+JSONの欠落、不正なshape、service typeの不一致、revision未指定ではstartupがfail closedで停止します。identityや待受値を環境変数から補う経路はありません。managed credential、revision、portを手動で書き換えず、承認済みのconfigure / port変更手順を使ってください。Control Panel自身のbootstrap待受設定はこの4種類とは別です。
 
-URLを設定した既存hostでmodeを未設定にした場合だけ、移行互換のため実効`legacy_stream_key`になります。新規設定では意図を明示するため`legacy_stream_key`または`live_api_static`を設定してください。modeの変更後はEncoder Recorderを再起動し、Service Health / preflightで実効capabilityを確認します。
+## Encoder Recorderのv2 output mode
 
-段階的な更新の間は、旧Encoderが報告するhistorical capability `static`をControl Panelが`legacy_stream_key`として扱います。これは既存の`stream_key` relayを止めないための互換だけです。新しいEncoderが報告するcanonical capabilityは`direct`、`legacy_stream_key`、`live_api_static`であり、envに`static`を設定して新方式を選ぶことはできません。
+`AUTOSTREAM_OUTPUT_RELAY_MODE`は必須の非secret設定です。次のcanonical modeだけを使います。
 
-relay capabilityを報告していないEncoder、または未知の値を報告するEncoderは、移行中の安全な互換として`stream_key`だけを使えます。`live_api`、`live_api_dry_run`、`live_api_relay_static`へ自動的に広げません。これは有効な旧Encoder向けの互換であり、relay設定が`unavailable`のEncoderには適用しません。
+| mode | 必須条件 | YouTube Output |
+| --- | --- | --- |
+| `direct` | `AUTOSTREAM_OUTPUT_RELAY_MODE=direct`を明示し、relay URLを設定しない | `stream_key`、`live_api`、`live_api_dry_run` |
+| `live_api_relay_static` | relay URL、同じmode、`relay-` + 小文字UUID形式のbinding IDを明示する | readyな同名modeのOutputだけ |
+
+mode未指定、未知mode、URLとmodeの矛盾、binding不一致はfail closedです。capability未報告のEncoderにも出力しません。stream keyはmodeやbindingへ入れず、Control Panelのassignment-scoped secret referenceで解決します。
+
+`AUTOSTREAM_REQUIRE_OUTPUT_RELAY`が有効ならURLなしのdirectも拒否されます。設定変更はinactiveな時間帯に行い、restart後にService Healthとpreflightを確認します。rollbackは対応するreleaseと設定全体を復元し、互換modeを追加しません。
 
 ## Control Panel で管理する値
 
@@ -67,13 +79,13 @@ relay capabilityを報告していないEncoder、または未知の値を報告
 - 通知用 Webhook URL
 - 配信ごとのタイトルや説明文
 - Streams、Audit Logs、Account の時刻表示に使うタイムゾーン
-- `pull_v2` Host Agentのhost binding、target、desired endpoint、policy revision
+- `protocol major 2` Host Agentのhost binding、target、desired endpoint、policy revision
 
 運用中に変える可能性がある値は、できるだけ Control Panel に寄せると管理しやすくなります。
 
 Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。4項目identityは`root:autostream-host-agent 0640`とし、API port、GitHub Release Token、target policy、任意commandを追加しないでください。
 
-Bridge期間中の`ssh_v1`では、中央`updater.json`、SSH host、remote `update-host.json`、GitHub Release Tokenをlegacy互換設定として維持します。これらを新しい`pull_v2` configへ移し替えません。詳細は[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
+Updaterの設定と更新権限は[システム更新](/operations/system-updates)を参照してください。v2では独立Updaterのprotocol major 2だけを使用します。
 
 ## 設定後の確認
 

@@ -36,8 +36,8 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 | `AUTOSTREAM_WORKER_VIDEO_BIND_ADDR` | Worker scene video用SRT/UDP listenerのbind。productionでは必須。例: `0.0.0.0:10080` |
 | `AUTOSTREAM_WORKER_VIDEO_ADVERTISE_HOST` | primary Workerから到達できるSRT host名またはIP。scheme、port、pathは含めない |
 | `AUTOSTREAM_OUTPUT_RELAY_URL` | 本番用 output relay |
-| `AUTOSTREAM_OUTPUT_RELAY_MODE` | `direct`、`legacy_stream_key`、`live_api_static`の配送方式。URLありで未設定の場合だけ既存host互換の`legacy_stream_key` |
-| `AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` | `live_api_static`だけで使う、`relay-` + 小文字UUID形式の非secret固定relay識別子。stream keyや外部RTMPS URLは入れない |
+| `AUTOSTREAM_OUTPUT_RELAY_MODE` | 必須。`direct`または`live_api_relay_static`だけを明示 |
+| `AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` | `live_api_relay_static`だけで使う、`relay-` + 小文字UUID形式の非secret固定relay識別子。stream keyや外部RTMPS URLは入れない |
 
 `AUTOSTREAM_ARCHIVE_DIR`は未指定なら`/var/lib/autostream/archives`、`FFMPEG_BIN`は未指定なら`ffmpeg`です。`AUTOSTREAM_ENV=production`ではWorker映像用のbindとadvertise hostを明示しない限りSRT ingest capabilityを報告せず、Worker映像経路は開始しません。`AUTOSTREAM_DATA_DIR`はEncoder Recorderでは使用しません。
 
@@ -57,9 +57,9 @@ stream ingest signing key は env ではなく、Control Panel の Node登録で
 
 ## 本番での注意
 
-本番では FFmpeg のコマンドラインに YouTube stream key を直接出さない固定relay構成を推奨します。FFmpeg は local relay にだけ出力し、relay 側で外部配信先へ送ります。固定relayの既存`stream_key` profileは`legacy_stream_key`だけで継続し、`live_api_relay_static`はEncoderの`live_api_static`と一致するbinding IDがある場合だけ使えます。通常の`live_api`や`live_api_dry_run`を既存の固定relayへ送ることはできません。
+固定relayを使う場合は`live_api_relay_static`と一致するbinding IDを明示します。directではControl Panelのassignment-scoped secret referenceから配信先を解決します。raw keyをstart requestや環境変数へ渡しません。
 
-relay URLを設定しない`direct`、URLありでmode未設定の旧`legacy_stream_key`互換、明示的な`live_api_static`の切替条件と安全な戻し方は、[Encoder Recorderを導入する](/services/encoder-recorder-install#output-relay-の考え方)を参照してください。profileや固定relayのkeyを自動変換・複製しないでください。
+mode未設定、未知mode、capability未報告はfail closedです。[Encoder Recorderを導入する](/services/encoder-recorder-install#output-relay-の考え方)でcanonical設定を確認してください。
 
 Discord参加者、発言中の緑枠、現在時刻、字幕、チャットはWorkerがscene画像として生成し、低頻度のMJPEG画像列をjob-scopedに暗号化したSRT over UDPで選択されたEncoder Recorderへ送ります。Encoder Recorderは最新画像を保持し、Encoder ProfileのFPS/CBRで一度だけ動画encodeしてDiscord音声をMUXし、ウォーターマークを重ね、YouTube、本配信と同じ録画、Encoderプレビューへ同じ最終encodeを分岐します。Worker側では動画encodeしません。playlistはControl Panelが検証してproxyし、ブラウザへEncoderのNode tokenを渡しません。
 

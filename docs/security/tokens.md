@@ -1,6 +1,6 @@
 # 秘密情報とtoken生成
 
-AutoStream の新規構成では、サービス間認証は Control Panel の Node登録に寄せます。Worker、Encoder Recorder、Discord Bot、Observability はサービス間tokenを env に手入力せず、Node登録で生成される `config.yml` の Node Runtime Token を使います。Worker と Encoder Recorder の stream ingest signing key も同じ `config.yml` で配布します。Updaterは物理ホストごとにendpointlessな`pull_v2`を登録し、Auto Configureで4項目だけを含むroot所有`/etc/autostream-host-agent/identity.json`を生成します。
+AutoStream の新規構成では、サービス間認証は Control Panel の Node登録に寄せます。Worker、Encoder Recorder、Discord Bot、Observability はサービス間tokenを env に手入力せず、Node登録で生成される `config.yml` の Node Runtime Token を使います。Worker と Encoder Recorder の stream ingest signing key も同じ `config.yml` で配布します。Updaterは物理ホストごとにendpointlessな`protocol major 2`を登録し、Auto Configureで4項目だけを含むroot所有`/etc/autostream/updater/agent.yaml`を生成します。
 
 Observability も例外ではありません。Control Panel は登録済み `observability` Node の公開URLと暗号化保存された Node Runtime Tokenを使って、Monitoring、Incidents、Notification Channels、signal転送を呼び出します。Observability用の別admin tokenや直接ingest tokenは作りません。
 
@@ -39,9 +39,9 @@ $rng.GetBytes($bytes)
 | Stream ingest signing key | Worker / Encoder Recorder の `config.yml` の `stream_ingest.signing_key` に入ります。通常のNode参照APIでは再表示されません |
 | `CONTROL_PANEL_TOKEN` | env へ手入力しません。`config.yml` 内の Node Runtime Token として配布されます |
 
-通常serviceのNode Runtime Token/Configure Tokenを紛失した場合は、Control PanelのNode登録Configurationから再生成して`config.yml`を更新します。未起動Host AgentのConfigure Tokenは再発行できますが、activeな`pull_v2` Host Agentの即時Runtime Token再生成は`staged_runtime_token_rotation_required`で拒否されます。専用rotationはstage→旧tokenで1回だけclaim→`identity.staged.json`のlocal ack→staged token heartbeat proof→activate→canonical identity昇格→旧token revokeの順です。activate前はcancelでき、emergency revokeは通信断とlocal recoveryを伴うbreak-glass操作です。generic Rotateで旧tokenを先に失効させません。`execution_host_id`と`ownership_epoch`はserver-ownedなのでconfigへ入れません。
+通常serviceのNode Runtime Token/Configure Tokenを紛失した場合は、Control PanelのNode登録Configurationから再生成して`config.yml`を更新します。未起動Host AgentのConfigure Tokenは再発行できますが、activeな`protocol major 2` Host Agentの即時Runtime Token再生成は`staged_runtime_token_rotation_required`で拒否されます。専用rotationはstage→旧tokenで1回だけclaim→`agent.staged.yaml`のlocal ack→staged token heartbeat proof→activate→canonical identity昇格→旧token revokeの順です。activate前はcancelでき、emergency revokeは通信断とlocal recoveryを伴うbreak-glass操作です。generic Rotateで旧tokenを先に失効させません。`execution_host_id`と`ownership_epoch`はserver-ownedなのでconfigへ入れません。
 
-既存Host Agent / Local Executorの`v1.9.11` manual upgradeはcredential発行やrotationではありません。Control Panel `v1.9.11`を先に稼働させ、通常の`--upgrade`またはexact `v1.9.9` / `v1.9.10` pair限定の`--upgrade --recover-active-job`を実行しても、canonical identityと既存Runtime Tokenを保持します。Configure Tokenを再発行せず、`autostream-host-agent configure`を再実行しないでください。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。
+独立Updaterのmanual upgradeはcredential発行やrotationではありません。検証済みreleaseの`--upgrade`はcanonical identityと既存Runtime Tokenを保持します。Configure Tokenを再発行せず、configureを再実行しないでください。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。exact pairなどの前提は[システム更新](/operations/system-updates)で確認します。
 
 ## サービス別の入力一覧
 
@@ -52,14 +52,14 @@ $rng.GetBytes($bytes)
 | Encoder Recorder | なし | Node Runtime Token と stream ingest signing key を `config.yml` で受け取る | YouTube stream key は標準運用では Control Panel の YouTube Outputs に保存 |
 | Worker | なし | Node Runtime Token と stream ingest signing key を `config.yml` で受け取る | なし |
 | Discord Bot | なし | Node Runtime Token を `config.yml` で受け取る | Discord developer portal の Bot token を Control Panel の Discord Settings に保存 |
-| `pull_v2` Host Agent | なし | Node Runtime Tokenを物理ホストごとのroot所有`/etc/autostream-host-agent/identity.json`へ設定。epoch `0`ではobserver、明示的ownership切替後だけclaim/reportに使用 | provider secretなし |
+| `protocol major 2` Host Agent | なし | Node Runtime Tokenを物理ホストごとのroot所有`/etc/autostream/updater/agent.yaml`へ設定。epoch `0`ではobserver、明示的ownership切替後だけclaim/reportに使用 | provider secretなし |
 | root Local Executor | なし | policy/grantとgeneric requestにNode Runtime Tokenやprovider tokenを含めない。専用credential-stageのprivate Unix socket requestだけがraw tokenをroot境界へ渡し、log/durable request stateへ残さない。rotation/recoveryは固定canonical/staged identityだけを読み書きし、caller指定path/tokenは受け付けない | root所有policy、固定operation、短命mutation grantだけを受理 |
 
-Host Agent用のNode Runtime Tokenはcanonical `/etc/autostream-host-agent/identity.json`へ入り、通常Nodeより強い更新境界にあります。fileをroot所有、group `autostream-host-agent`、mode `0640`にし、別hostへcopyしないでください。通常serviceのsecret directory `/etc/autostream`は`root:root 0750`のまま維持します。
+Host Agent用のNode Runtime Tokenはcanonical `/etc/autostream/updater/agent.yaml`へ入り、通常Nodeより強い更新境界にあります。fileをroot所有、group `autostream-host-agent`、mode `0640`にし、別hostへcopyしないでください。通常serviceのsecret directory `/etc/autostream`は`root:root 0750`のまま維持します。
 
-legacy `/etc/autostream/host-agent.json`はcanonical不在時のread-only fallbackだけです。非root Agentはcanonicalをowner、group、mode、regular-file条件、4項目JSONまで安全に読み終えた後のlegacy `EACCES`だけを許容します。canonical不在時のunreachable legacy、visible dual identity、その他のprobe errorはfail closedです。Auto ConfigureとRuntime Token rotation/recoveryはroot writerとして書き込み前後にlegacyが存在せずdangling symlinkでもないことを検証し、canonicalだけへ書き込みます。rotation前にlegacyをmanaged migrationしてください。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。
+Agent identityはcanonical YAMLだけを安全に読み込みます。未知field、JSON入力、不正なowner/mode、symlinkはfail closedです。root writerはfixed pathへatomicに書き、Agentはoutbound HTTPSだけを使います。
 
-Bridge期間のlegacy `ssh_v1`では、中央Updater用Node Runtime TokenとGitHub Release Token、SSH鍵を既存の境界で扱います。これらを`pull_v2`の4項目configへコピーしません。`pull_v2`は固定Kome-Lab repositoryの公開immutable releaseを匿名HTTPSで取得し、長期release tokenをHost Agentへ配送しません。公開`v1.9.11` releaseのAttestationと対象hostでの実canaryは別々に確認してください。
+Updaterは固定repositoryの検証済みimmutable releaseを使います。長期release tokenをHost Agentへ配送しません。公開releaseのprovenanceと対象hostの実canaryは別々に確認してください。
 
 ## 手入力しないtoken
 
@@ -71,8 +71,6 @@ Bridge期間のlegacy `ssh_v1`では、中央Updater用Node Runtime TokenとGitH
 | Observability API token | Control Panel env には入れません。登録済み Observability Node の Runtime Token を使います |
 | Observability admin token | 作りません |
 | Observability ingest token | 作りません。Worker / Encoder Recorder は Control Panel へ signal を送り、Control Panel が Observability へ転送します |
-| `SERVICE_CALL_TOKEN` | 古い構成からの移行用です。新規 Node は `config.yml` の Node Runtime Token を使います |
-| `SERVICE_CONTROL_TOKEN_SHA256` | 古い構成からの移行用です。新規構成では `AUTOSTREAM_NODE_CONFIG` を使います |
 
 ## Provider から発行するsecret
 

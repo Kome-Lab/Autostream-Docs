@@ -362,7 +362,7 @@ Google Analyticsは有効かつMeasurement IDが妥当な場合だけログイ�
 
 ## Node登録とAPI Tokens
 
-新規構成では、サービス登録はNode登録から始めます。通常serviceではConfigurationで`config.yml`を取得し、各serviceの`AUTOSTREAM_NODE_CONFIG`で読ませます。Updater transportは物理ホストごとにendpointlessな`pull_v2`を1つ登録し、そのホストで非rootの`autostream-host-agent`を動かします。
+新規構成では、サービス登録はNode登録から始めます。通常serviceではConfigurationで`config.yml`を取得し、各serviceの`AUTOSTREAM_NODE_CONFIG`で読ませます。Updater transportは物理ホストごとにendpointlessな`protocol major 2`を1つ登録し、そのホストで非rootの`autostream-host-agent`を動かします。
 
 1. Node type を選びます。
 2. Node ID、Node名、Host、Port、SSL、説明を入力します。
@@ -371,37 +371,37 @@ Google Analyticsは有効かつMeasurement IDが妥当な場合だけログイ�
 5. service を起動します。
 6. Service Health で online になったことを確認します。
 
-`update_agent`でtransportに`pull_v2`を選んだ場合は、Configurationに表示された次の形のAuto Configure commandを対象の物理hostで1回実行します。
+`update_agent`でtransportに`protocol major 2`を選んだ場合は、Configurationに表示された次の形のAuto Configure commandを対象の物理hostで1回実行します。
 
 ```bash
 sudo /usr/local/bin/autostream-host-agent configure \
   --panel-url "https://control.example.com" \
   --node "host-agent-tokyo-01" \
-  --config "/etc/autostream-host-agent/identity.json"
+  --config "/etc/autostream/updater/agent.yaml"
 ```
 
-Configure Tokenはコマンドに含まれません。promptへ貼り付けると標準入力から非表示で読み取られ、`/etc/autostream-host-agent/identity.json`へ`panel_url`、`node_id`、`runtime_token`、`service_name`だけが生成されます。同時にControl Panelがsystemd target向けcanonical Local Executor policyを生成し、root所有policyと不足しているsystemd port sidecarをtransactionalにinstallします。Docker authorityはこの処理で生成しません。`execution_host_id`と`ownership_epoch`はserver-ownedであり、identity configへ追加しません。API port、`8090`、SSH設定、GitHub Release Tokenも追加しません。
+Configure Tokenはコマンドに含まれません。promptへ貼り付けると標準入力から非表示で読み取られ、`/etc/autostream/updater/agent.yaml`へ`panel_url`、`node_id`、`runtime_token`、`service_name`だけが生成されます。同時にControl Panelがsystemd target向けcanonical Local Executor policyを生成し、root所有policyと不足しているsystemd port sidecarをtransactionalにinstallします。Docker authorityはこの処理で生成しません。`execution_host_id`と`ownership_epoch`はserver-ownedであり、identity configへ追加しません。API port、`8090`、SSH設定、GitHub Release Tokenも追加しません。
 
-登録後のNodeは、同じ画面の登録済みNode一覧から編集、削除、Configure Token再生成、Node Runtime Token操作ができます。通常serviceは再生成後に`config.yml`を更新します。activeな`pull_v2` Host Agentの即時Runtime Token再生成は`staged_runtime_token_rotation_required`で拒否されるため、専用のstage→claim→local ack→heartbeat proof→activateを使います。`pull_v2` Node作成には`api_tokens.create`、`secrets.update`、`system_updates.execute`が必要です。専用rotationのstage/cancel/emergencyには、さらに`api_tokens.revoke`を加えた4権限すべてが必要です。
+登録後のNodeは、同じ画面の登録済みNode一覧から編集、削除、Configure Token再生成、Node Runtime Token操作ができます。通常serviceは再生成後に`config.yml`を更新します。activeな`protocol major 2` Host Agentの即時Runtime Token再生成は`staged_runtime_token_rotation_required`で拒否されるため、専用のstage→claim→local ack→heartbeat proof→activateを使います。`protocol major 2` Node作成には`api_tokens.create`、`secrets.update`、`system_updates.execute`が必要です。専用rotationのstage/cancel/emergencyには、さらに`api_tokens.revoke`を加えた4権限すべてが必要です。
 
-API Tokens は旧構成や移行時の token 確認、rotate、revoke に使います。Node Runtime Token や Configure Token は画面やドキュメント、チャット、GitHub に残さないでください。漏えいの疑いがある通常NodeはNode登録のConfigurationで再生成します。`pull_v2` Host Agentは通常のstaged rotationを使い、即時遮断が必要なら`emergency-revoke`で両slotを失効してからcanonical managed identityと`recover-runtime-credential`でlocal recoveryします。
+API Tokens は旧構成や移行時の token 確認、rotate、revoke に使います。Node Runtime Token や Configure Token は画面やドキュメント、チャット、GitHub に残さないでください。漏えいの疑いがある通常NodeはNode登録のConfigurationで再生成します。`protocol major 2` Host Agentは通常のstaged rotationを使い、即時遮断が必要なら`emergency-revoke`で両slotを失効してからcanonical managed identityと`recover-runtime-credential`でlocal recoveryします。
 
 ## Application Info
 
 Application Infoは、Control Panelと登録済みNodeのversion、更新候補、更新履歴を確認する画面です。Host Agentのtransport、heartbeat、`desired` / `applied` / `reported` endpointはNode登録の登録済み一覧で確認します。
 
 1. Application Infoの**再取得**で更新対象、最新release、version、更新履歴を読み直します。
-2. Node登録の登録済み一覧で、新規hostの`pull_v2` Host Agentのtransportとheartbeatを確認します。Host Agentはoutbound HTTPSを使い、受信TCPやSSH bootstrapはありません。policy refreshの詳細は診断情報とHost Agent logで確認します。
+2. Node登録の登録済み一覧で、新規hostの`protocol major 2` Host Agentのtransportとheartbeatを確認します。Host Agentはoutbound HTTPSを使い、受信TCPやSSH bootstrapはありません。policy refreshの詳細は診断情報とHost Agent logで確認します。
 3. Host Agent settingsの「更新実行権限の切替」は、observer online、exact policy、target probe、revision、active/recovery jobを確認してから実行します。応答が不明な場合は再送せず、最新owner/epochを再取得します。
-4. 通常NodeのPortは`1024..65535`から選べます。activeな`pull_v2` systemd targetはNode編集から変更せず、Application Infoの「サービスのポート変更」を使います。UIはbackendの`eligible_operations`がない場合もfail closedにします。
+4. 通常NodeのPortは`1024..65535`から選べます。activeな`protocol major 2` systemd targetはNode編集から変更せず、Application Infoの「サービスのポート変更」を使います。UIはbackendの`eligible_operations`がない場合もfail closedにします。
 5. Worker、Encoder Recorder、Discord Bot、Observabilityのsystemd targetではdesired/applied/reported、pending、drift、rollback、blocked reasonを表示します。固定Docker policyと承認済みfrozen Compose baselineがあるDocker targetでは、advertised endpointのdesired/applied/reportedに加え、verified current mapping、pending plan、履歴のold/new tripleとして`127.0.0.1` publishedとcontainer listenを確認します。policy未設定、drift、busy、stale、recovery中はfail closedです。reverse proxyは自動変更しません。
-6. software updateはHost Agentがpositive ownership epochを報告し、targetがeligibleな場合だけ開始します。公開release、実host canary、rollback drillが未確認ならBridge期間中の本番ownershipを`ssh_v1`から切り替えません。
+6. software updateはHost Agentのprotocol、positive ownership fence、exact policy、target readinessが一致した場合だけ開始します。公開release、CI、実host canary、production deployの証拠は分けて確認します。
 
 更新候補は、systemd配備ではNodeが報告したsource versionと同じserviceのhost releaseを比較します。Docker配備では`Autostream-Docker`のbundle versionを比較します。Docker bundle versionと各serviceのsource versionが異なるのは正常です。
 
 Host Agentが一覧に出ない場合は、物理hostに1つだけ登録したNode ID、4項目config、Runtime Token、systemd状態、Control Panelへのoutbound HTTPSを確認します。Host Agentがlistening portを持つ状態は正常ではありません。
 
-必要権限、`ssh_v1`とのBridge、更新apply、port変更、release/canaryのavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
+必要権限、更新、port変更、release/canary gateは[システム更新](/operations/system-updates)を参照してください。
 
 ## 監査ログ
 

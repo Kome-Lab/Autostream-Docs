@@ -21,10 +21,9 @@ Encoder Recorder用の`ffmpeg`、reverse proxyなど、host共通の外部packag
 
 ## release artifact の実際の形
 
-現在のamd64版Host Release archiveは次のとおりです。
+以下は公開済みの版に固定したamd64版application archiveの説明です。v2のlistener / Updater契約をこれらのarchiveが実装するという意味ではありません。v2導入では対応する新しいimmutable release、全componentの互換性、実host canaryを別途検証してから作業してください。
 
 - `autostream-control-panel_v1.9.11_linux_amd64.tar.gz`
-- `autostream-host-agent_v1.9.11_linux_amd64.tar.gz`
 - `autostream-encoder-recorder_v1.3.1_linux_amd64.tar.gz`
 - `autostream-worker_v1.3.1_linux_amd64.tar.gz`
 - `autostream-discord-bot_v1.3.1_linux_amd64.tar.gz`
@@ -35,7 +34,6 @@ Encoder Recorder用の`ffmpeg`、reverse proxyなど、host共通の外部packag
 ```text
 autostream-control-panel_v1.9.11_linux_amd64/
   bin/control-panel
-  bin/autostream-updater
   systemd/autostream-control-panel.service.example
   .env.example
   artifact-manifest.json
@@ -45,7 +43,7 @@ autostream-control-panel_v1.9.11_linux_amd64/
   share/autostream-control-panel/   # Control Panel のみ
 ```
 
-Node Agent の service も同じ形式で、`bin/autostream-discord-bot`、`bin/autostream-encoder-recorder`、`bin/autostream-observability`、`bin/autostream-worker` のように正規コマンド名の実行ファイルが入ります。互換用に旧名 binary が同梱される場合がありますが、Panel の Auto Configure command は `autostream-<service>` を使います。
+Node Agent の service も同じ形式で、`bin/autostream-discord-bot`、`bin/autostream-encoder-recorder`、`bin/autostream-observability`、`bin/autostream-worker` のように正規コマンド名の実行ファイルが入ります。v2では正規binaryだけを使用します。独立Updaterは別repositoryの検証済みreleaseを使用します。
 
 archive-only形式では`artifact-manifest.json`がservice、version、commit、
 architecture、必要な互換情報をarchive内部に保持し、`checksums.txt`がinstallerを
@@ -53,15 +51,16 @@ architecture、必要な互換情報をarchive内部に保持し、`checksums.tx
 `.tar.gz`だけです。サーバー上のinstallerは内部metadata、checksum、host
 architecture、binary versionを確認し、元archiveのSHA-256を記録します。
 
-GitHub Releaseには自動Updaterと旧clientの互換用として`.tar.gz.sha256`、
+GitHub Releaseには自動Updaterの検証用として`.tar.gz.sha256`、
 `release-manifest.json`、`release-manifest.json.sha256`も引き続き添付します。
 自動Updaterはこれらを取得してrelease identityを検証しますが、archive-onlyの
 手動導入ではdownloadもサーバーへのuploadもしません。内部checksumだけをGitHub
 由来の証明とは扱わず、archive本体のAttestationを管理端末で確認してから安全な
 経路で転送します。
 
-既存のimmutableな旧release assetは書き換えません。現在のarchive-only releaseは
-Control Panel / Host Agentが`v1.9.11`、runtime serviceが`v1.3.1`です。
+既存のimmutableな旧release assetは書き換えません。以下の版固定の手順は
+Control Panelが`v1.9.11`、runtime serviceが`v1.3.1`です。Host Agent / Local Executorは
+Control Panel archiveから取得せず、独立Updaterの検証済みreleaseを使います。
 componentごとにrepositoryとtagを一致させ、古いreleaseへ読み替えないでください。
 
 管理端末でControl Panel archive本体だけを取得してAttestationを確認します。
@@ -147,20 +146,9 @@ state directoryの外にあるroot専用directoryです。
 
 ## 既存環境を更新するとき
 
-新規hostでは、物理ホストごとに非rootの`pull_v2` Host Agentを1つ置き、root Local Executorと固定Unix socketで分離します。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。登録直後はepoch `0`のobserverで、公開`v1.9.11`のAttestationと実host canaryを確認した後にだけownershipを切り替えます。systemd/Docker software updateと4 Node serviceの任意port変更はsource実装済みですが、実Linux/Docker gateは未確認です。Docker port変更には事前の固定policyと承認済みCompose baselineが必要で、reverse proxyは自動変更しません。設定とavailability gateは[Host Agent Bridgeでサービスを更新する](/operations/system-updates)を参照してください。
+新規hostでは、物理ホストごとに非rootの`protocol major 2` Host Agentを1つ置き、root Local Executorと固定Unix socketで分離します。Host AgentはControl Panelへoutbound HTTPSで接続し、受信TCP、`8090`、SSH設定を持ちません。登録直後はobserverとして扱い、検証済みの独立Updater release、対応するapplication release、freshなidentity probeと実host canaryを確認した後にだけownershipを切り替えます。Docker port変更には事前の固定policyと承認済みCompose baselineが必要で、reverse proxyは自動変更しません。source、CI、release、実hostの各gateを混同せず、設定とavailability gateは[システム更新](/operations/system-updates)を参照してください。
 
-Host Agent identityはcanonical `/etc/autostream-host-agent/identity.json`だけへ書きます。
-`/etc/autostream`は`root:root 0750`を維持し、Host Agent用の恒久ACL、`chmod 0751`、
-`chgrp`、通常service groupへの追加を行いません。affected `v1.9.9` hostはcandidate
-rollbackで旧Agentを再起動できるよう、exact access-only ACLをmatching `v1.9.11`
-upgrade完了まで保持します。upgrade前から
-[ACL add-or-verify、matched upgrade、exact cleanup](/operations/system-updates#remove-v199-acl)
-を一続きで実行してください。
-
-Control Panel `v1.8.x`またはruntime service `v1.2.x`から更新するときも、
-uninstallや設定の作り直しは行いません。更新適用が必要な既存hostでは、Bridge期間の
-legacy `ssh_v1`中央`autostream-updater`、各host helper、SSH/必要なstatus portを
-維持します。Host Agentを追加してもこれらは自動削除されません。
+Host Agent identityは`/etc/autostream/updater/agent.yaml`だけへ保存します。v2の独立Updaterはprotocol major 2だけを使います。移行でretain指定されたdataは保持し、rollbackは対応するreleaseとdata snapshot全体を復元します。
 
 1. 現在のversion、unitのactive状態、`MainPID`、envとNode
    `config.yml`のowner/mode/digestを控えます。
@@ -276,9 +264,9 @@ legacy `ssh_v1`中央`autostream-updater`、各host helper、SSH/必要なstatus
 6. installerは既存envをbyte-for-byteで保持し、Node `config.yml`を変更しません。
    managed `current`を切り替えても、起動中の旧`MainPID`とprocessはこの時点では
    変わりません。binary更新とport/config revision変更を同時に行わず、
-   Control Panelと通常のNode serviceで`AUTOSTREAM_BIND_ADDR`がない旧構成、
-   Observabilityで`OBSERVABILITY_BIND_ADDR`がない旧構成は、いずれも従来の
-   `127.0.0.1:8080`を維持します。
+   v2の通常Nodeは必須`config.yml`の`listener.credential: node-listener.json`で待受設定を選び、
+   systemd `LoadCredential`が渡す固定JSONのaddressとrevisionを使います。公開接続先の
+   `api.host` / `api.port`とは分離します。credentialがなければ暗黙のportへfallbackせずstartupを拒否します。
 7. `.env.example`と既存envを比較し、必要な設定だけを別の変更として反映します。
    Control Panel `v1.8.0` / `v1.8.1`では新processの初回起動時にdatabase
    migration 059が適用されます。`v1.8.2`には既に059があります。
@@ -319,20 +307,9 @@ Local ExecutorはControl Panelの専用self-updateまたは検証済みHost Agen
 manual upgradeで更新します。fresh hostでもservice archiveとは別のHost Agent
 archiveを使い、物理ホストごとに1つだけ導入します。
 
-manual upgradeは、上の手順でControl Panel `v1.9.11`を導入・再起動し、Panelの
-`/updater/version`が`v1.9.11`になった後だけ実行します。通常hostは次です。
+独立Updaterの検証済みreleaseでHost Agent / Local Executorを更新します。Control Panelとのprotocol major 2、policy、identity probeの一致が前提です。通常の`--upgrade`は既存identity/policyとRuntime Tokenを保持するためConfigure Tokenは不要です。`--upgrade --recover-active-job`はreleaseが許可したexact pairとactive interrupted jobだけに使います。
 
-```bash
-sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade
-```
-
-Panel更新が`99%`の`inspecting interrupted host update state without reapplying`で止まった場合は、installed Agent / Executorが同じexact `v1.9.9` pairまたは同じexact `v1.9.10` pairで、installerがexact active jobを証明できるhostに限り、通常commandの代わりに次を1回実行します。
-
-```bash
-sudo /opt/autostream/releases/artifacts/autostream-host-agent_v1.9.11_linux_amd64/install/install-autostream-host-agent --upgrade --recover-active-job
-```
-
-manual upgradeとrescue modeは既存identity/policyを保持するためConfigure Tokenを使いません。rescueはdurable stateのreconcileとexact terminal reportだけを行います。rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。fail closedになったら表示されたerrorを保存して停止します。詳細は[既存Host Agent / Local Executorを`v1.9.11`へ更新する](/operations/system-updates#upgrade-host-agent-v1911)を参照してください。
+rescue modeは再stage・再applyしません。journal、ledger、checkpoint、marker、guardを手動削除・編集しないでください。systemd conditionを回避しないでください。完全な前提と順序は[システム更新](/operations/system-updates)を参照してください。
 
 ## Dockerとの使い分け
 

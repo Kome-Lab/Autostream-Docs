@@ -168,7 +168,7 @@ YouTube Outputs は、配信先を管理します。
 | Stream key | YouTube stream key | stream key方式 | 設定済み状態 |
 | YouTube視聴URL | 視聴者が開く `https://www.youtube.com/watch?v=...` | `stream_key`方式の新規設定ではprofile入力とDiscord開始通知に使う。`Live API`と固定Relay（YouTube Live API）は開始後にpublic runtime URLを生成し、固定Relay profileの`watch_url`入力は受け付けない | canonical URL表示 |
 | OAuth connected account | Google接続アカウント | Live API方式 | Integrations |
-| 固定RelayバインディングID | `relay-` + 小文字UUID形式（例: `relay-123e4567-e89b-42d3-a456-426614174000`）で、Encoderの`live_api_static`と固定Relayホストの非secret `AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` に一致する `relay_binding_id` | 固定Relay（YouTube Live API）方式 | Relay側設定との一致 |
+| 固定RelayバインディングID | `relay-` + 小文字UUID形式（例: `relay-123e4567-e89b-42d3-a456-426614174000`）で、Encoderの`live_api_relay_static`と固定Relayホストの非secret `AUTOSTREAM_OUTPUT_RELAY_BINDING_ID` に一致する `relay_binding_id` | 固定Relay（YouTube Live API）方式 | Relay側設定との一致 |
 | 再利用するYouTube Live Stream ID | 再利用可能なYouTube Live Streamの非secret `reusable_live_stream_id` | 固定Relay（YouTube Live API）方式 | Check Readiness |
 | Privacy | private / unlisted / public | Live API broadcast作成 | YouTube側 |
 | Latency | normal / low / ultra_low | 安定性と遅延の調整 | YouTube側 |
@@ -180,7 +180,7 @@ YouTube Outputs は、配信先を管理します。
 
 初回は `private` と `Live API dry-run`、または既存 stream key を使う方式で確認すると切り分けやすくなります。
 
-`固定RelayバインディングID`と`再利用するYouTube Live Stream ID`は、Encoderが`live_api_static`を報告する固定Relay（YouTube Live API）だけに使います。binding IDは`relay-` + 小文字UUID形式でないと無効です。無効なrelay設定は`unavailable`として開始できず、`direct`扱いにはなりません。固定Relay profileでは`watch_url`を入力しませんが、開始後にControl Panelがbroadcastから生成するpublic runtime URLはDiscord通知に使えます。既存の固定key relayを使う`stream_key` Outputへ後から入力して移行するものではありません。互換経路と安全な切替は[YouTube OutputsとDiscord設定](/control-panel/discord-youtube#固定relayの互換経路と新方式)を参照してください。
+`固定RelayバインディングID`と`再利用するYouTube Live Stream ID`は、Encoderが`live_api_relay_static`を報告する固定Relay（YouTube Live API）だけに使います。binding IDは`relay-` + 小文字UUID形式でないと無効です。無効なrelay設定は`unavailable`として開始できず、`direct`扱いにはなりません。固定Relay profileでは`watch_url`を入力しませんが、開始後にControl Panelがbroadcastから生成するpublic runtime URLはDiscord通知に使えます。既存の固定key relayを使う`stream_key` Outputへ後から入力して移行するものではありません。互換経路と安全な切替は[YouTube OutputsとDiscord設定](/control-panel/discord-youtube)を参照してください。
 
 ## Integrations
 
@@ -321,7 +321,7 @@ Audit Logs は原因確認の入口です。秘密情報のraw valueは出ませ
 | Recipients | email宛先。作成時は必須 | email方式。編集時の空欄は保存済み宛先を保持 | masked target、delivery結果 |
 | SMTP | Notification Channelsでは入力しない | Settingsの共通SMTPを利用 | Settingsのテスト送信 |
 
-作成済みの通知先は一覧から編集できます。emailのRecipientsは空欄なら既存値を保持し、入力時だけ置き換えます。新規email通知先はSettingsの共通SMTPを使い、旧版の個別SMTP通知先は通常の編集では既存方式を保持します。共有SMTPへ移すときは、先にSettingsのSMTPテストを通し、編集画面で移行を明示的に選んで保存します。移行後は旧個別SMTP資格情報が削除され、元の方式には戻せません。SMTP未設定でもemail通知先は保存できますが、共通SMTP方式のテスト送信と実送信は `smtp_not_configured` で失敗します。
+作成済みの通知先は一覧から編集できます。emailのRecipientsは空欄なら既存値を保持し、入力時だけ置き換えます。v2のemail通知先はSettingsのglobal SMTPへの非secret参照だけを持ち、個別SMTP credentialを入力・読込する経路はありません。移行でretainしたdelivery履歴やdataは保持します。先にSettingsのSMTPテストを通し、各通知先の実着信も確認してください。SMTP未設定でもemail通知先は保存できますが、テスト送信と実送信は`smtp_not_configured`で失敗します。
 
 監査ログへ保存された認証済みユーザー操作とsystem操作は `admin.audit` として全enabled channelへ送られ、Severity / Event type filterでは除外できません。止める場合はchannelを無効化します。未認証login失敗とservice actorの常時trafficは監査ログだけに残ります。
 
