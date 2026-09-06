@@ -70,14 +70,58 @@ Compose project、service、image repository、credential path、承認済みbas
 policyで固定します。requestから任意command、path、unit、image、public endpointを
 指定することはできません。reverse proxyは自動変更しません。
 
+## local listenerと広告endpointの変更
+
+ポート変更は、対応するControl Panelと同じ版のHost Agent／Local Executor pairで行います。
+protocol major 2に加え、`port_contract_version: 2`と`policy_transition_version: 1`の対応、
+完全なpolicy snapshot、現在のlistenerとroot policyの一致が必要です。未対応・未観測・
+不一致の場合は操作を受け付けません。snapshotを作るためにconfigureをやり直す必要はありません。
+
+Applicationのポート変更では、次の範囲を選びます。
+
+| 範囲 | 入力例 | 広告endpoint |
+| --- | --- | --- |
+| local listenerのみ | local `18081` → `18084` | 公開HTTPS `443`を維持 |
+| local listenerと広告endpoint | local `18081` → `18084`、広告`443` → `8443` | portだけを変更 |
+
+local listenerと広告portは別の値です。広告のHost、TLS、URLのpath/queryは維持します。
+広告endpointだけの変更はできません。localの値を変えず広告だけを変える要求も拒否します。
+Dockerは同じ二つの範囲で、127.0.0.1のpublished portとcontainerの待受portを別々に指定します。
+image、Compose構成、bind address、reverse proxyはこの操作では変更しません。
+Control Panel自身とendpointless Updater Nodeはポート変更の対象外です。
+
+現在と全て同じ値を指定した場合も、実際のpolicy・listener・configを確認してから「変更不要」と表示します。
+未接続や応答待ちを「変更不要」とは扱いません。確認だけのjobはpolicy、config、portを更新せず、restartもしません。
+
+変更時はControl Panelの短命grantをLocal Executorが直接consumeし、固定されたpolicyを安全に保存・再読込してから
+listenerを変更します。失敗時も先に復旧policyを保存・再読込し、元のportへ復旧します。
+復旧ではconfigとpolicyのrevisionを前に戻さず、新しいrevisionの正確な内容を検証します。
+Host Agentが一時停止していても認可済みのroot復旧を進め、Agentの再開後に同じjobのprojectionを照合します。
+
+| 表示 | 確認した状態 |
+| --- | --- |
+| 適用済み | 指定したlistenerとpolicyが一致 |
+| 変更不要 | 全sameの要求と実状態が一致、設定変更なし |
+| 復旧済み | 元の機能値へ新しいrevisionで復旧し、全境界が一致 |
+| 確認中 | 受付または実行結果が未確定 |
+| 復旧未完了／要再照合 | 復旧試行が失敗し、同じjobでの再照合が必要 |
+
+復旧試行の失敗は完了結果ではありません。元と変更先のport予約、hostの保留、元のplanを保持し、
+別jobを作らず同じjobを再照合します。復旧を開始したjobが変更先へ再applyすることはありません。
+応答を失った場合も同じidempotency keyで受付済みjobを照合し、自動で別の要求を送りません。
+確認済みの結果は再送でも書き換えません。root policy、ledger、予約、DBのjob行を手動編集・削除しないでください。
+
+対応版のsourceやlocal検証だけで、required CI・実host・本番導入が完了したとは扱いません。
+Control Panelを先に準備し、対応pairとbaselineが揃ってから利用します。
+
 ## 結果、recovery、rollback
 
 mutation後はprocess/container identity、listener、health、version、applied configを
 検証し、durable resultを報告します。応答を失った場合はjournal、ledger、checkpoint、
 grantからreconcileし、推測でmutationを再実行しません。
 
-検証に失敗した場合は旧release/image全体を復元し、旧healthを確認します。
-rollbackはwhole-releaseだけです。v2 release内へ廃止済みroute、field、環境変数、
+ソフトウェア更新の検証に失敗した場合は旧release/image全体を復元し、旧healthを確認します。
+ソフトウェアのrollbackはwhole-releaseだけです。v2 release内へ廃止済みroute、field、環境変数、
 binary、unit、image、helperを部分的に戻してはいけません。
 
 rescue modeは再stage・再applyしません。
