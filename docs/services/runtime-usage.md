@@ -35,10 +35,12 @@ Control Panel は運用者が触る中心画面です。
 ### 日常で見るところ
 
 1. Dashboard で Open Incidents と Services を見ます。
-2. Streams で対象配信を選びます。
-3. Check Readiness を押します。
-4. Streams の配信枠で Primary Encoder Node と Primary Worker Node を選び、Service Health で必要サービスが primary になっているか見ます。
-5. Start / Stop 後は Audit Logs と Metrics を確認します。
+2. Streamsで対象配信を選びます。新規枠は、下の初回手順で作成成功を確認してから進みます。
+3. 割当の不足や変更がある場合は、作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して、`設定を保存`を押します。
+4. Service Healthなどで対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`（`開始準備を再確認`）を実行します。
+5. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。Start / Stop後はAudit LogsとMetricsを確認します。
+
+設定保存とサービス割当は既存の権限に従います。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。Service HealthやWorker Managementでも割当権限が必要です。他の配信枠で使用中・保護中のNodeの所有権や競合保護を回避しないでください。競合が表示されたら現在の割当を再確認します。配信中のライブ調整は通常のNode割当変更には使いません。
 
 ### 初回に最低限やること
 
@@ -47,10 +49,16 @@ Control Panel は運用者が触る中心画面です。
 3. 各サービスを起動し、Service Health で online になるまで待ちます。
 4. Integrations で Google OAuth や Drive destination を作ります。
 5. Discord Settings と YouTube Outputs を作ります。
-6. Encoder Profiles と Archive Settings を作ります。
-7. Streams で配信を作り、各設定を選びます。
-8. Check Readiness を実行します。
-9. warning / critical が残っていないことを確認して Start します。
+6. Encoder Profilesを作り、先に[録画・アーカイブ](/control-panel/page-usage#archive-settings)で保存先、録画形式、保持日数を準備します。
+7. Streamsで配信枠名、Discord BOT設定と既存のDiscord配信先、YouTube出力、映像・音声設定を入力します。標準作成フォームでは`録画プロファイル`または`録画しない`を選びます。必要なら`YouTube開始予定`の`開始予定（任意）`をブラウザのタイムゾーンで入力します。空欄なら、配信開始時にYouTubeの枠をすぐ開始します。日時を指定した場合だけYouTubeの予定配信になります。
+8. `配信枠を作成`を押し、一覧に待機状態の枠が追加されたことから作成成功を確認します。
+9. 作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して、`設定を保存`を押します。
+10. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`（`開始準備を再確認`）を実行します。
+11. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
+
+作成時には既存配信のNode割り当てを変更せず、新規枠のWorker/Encoderも自動割当しません。Node未割当でも新規作成できますが、担当Nodeの割当は開始前に整える条件です。作成成功だけで開始可能とは判断しません。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
+
+YouTube予定とAutoStreamの開始トリガーは別です。予定時刻だけでAutoStreamのStartを自動実行する機能ではありません。既存の予定を空欄にして保存すると、次回の配信開始時はYouTube枠を即時開始します。
 
 ### 運用中に見る順番
 
@@ -90,9 +98,10 @@ Discord Bot は、Discord の voice channel に入り、音声を受け取り、
 3. Discord Bot を起動します。
 4. Service Health で `discord_bot` が online になることを確認します。
 5. Discord Settings で Bot token を保存し、登録済み Discord Bot Node を選びます。
-6. Streams で Discord Config、Discord Guild ID、VC Channel ID、必要なら Chat Channel ID を保存します。VC参加で開始する待機枠は `Discord VC参加で自動開始` をONにし、Primary Encoder Node と Primary Worker Node も選びます。
-7. Check Readiness で Discord 関連の不足がないことを確認します。
-8. Start 後、Streams の Discord audio と Encoder audio bridge を見ます。
+6. 初回手順に従ってStreamsでDiscord Configと既存のDiscord配信先を選び、VC参加で開始する待機枠は`Discord VC参加で自動開始`をONにします。配信枠を作成し、作成成功を確認します。
+7. 作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して、`設定を保存`を押します。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
+8. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`でDiscordを含む開始前の不足を確認・解消します。
+9. 手動の`Start`または既存のDiscord VC参加トリガーによる開始後、StreamsのDiscord audioとEncoder audio bridgeを見ます。
 
 Discord VC へのユーザー参加でも stream auto-start が動きます。Bot は runtime config にある stream / guild / voice channel / auto-start trigger 対応を使い、`Discord VC参加で自動開始` がONの待機streamだけを Control Panel に開始要求します。runtime config には、Streamsで選んだDiscord Configの `service_id` がそのBot Node IDと一致する待機枠が入ります。Control Panel は Node Runtime Token、`streams.start` scope、保存済みtrigger、待機状態を確認し、開始直前に対象streamへ primary Discord Bot assignment を作ります。明示的に別Botが primary assigned されているstreamは上書きしません。Bot は runtime config を定期的に再読込するため、起動後に追加した待機枠も次回 refresh 後に候補になります。
 
@@ -147,10 +156,11 @@ Worker は、配信中に発生するイベントを処理します。caption、
 2. Worker の env に `AUTOSTREAM_NODE_CONFIG` を入れ、Panel が生成した `config.yml` を読ませます。
 3. Worker を起動します。
 4. Service Health で online / healthy を確認します。
-5. Streams の配信枠作成時に Primary Worker Node として選びます。あとから変更する場合は Worker Management または Service Health で対象 stream に primary として割り当てます。
-6. Streams で必要な場合だけ Watermark Profile または Caption Profile を選びます。
-7. Worker event test を実行します。
-8. 配信中は Worker events、Event Send Failures、Scene Updates を確認します。
+5. 初回手順に従ってStreamsで設定を選びます。必要な場合だけWatermark ProfileまたはCaption Profileを選び、配信枠を作成して作成成功を確認します。
+6. 作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して、`設定を保存`を押します。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
+7. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`を実行します。
+8. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
+9. Worker event testを実行し、配信中はWorker events、Event Send Failures、Scene Updatesを確認します。
 
 ### 使う場面
 
@@ -204,9 +214,11 @@ Encoder Recorder は、映像と音声を受け取り、FFmpegで配信、録画
 4. Encoder Recorder を起動します。
 5. Service Health で online / healthy を確認します。
 6. Encoder Profiles、Archive Settings、YouTube Outputs を Control Panel で作ります。
-7. Streams の配信枠作成時に Primary Encoder Node として選び、profile と配信先を選びます。あとから変更する場合は Service Health で primary assignment を更新します。
-8. Check Readiness と Encoder host preflight を確認します。
-9. Start 後は FPS、bitrate、dropped frames、archive、upload を見ます。
+7. 初回手順に従ってStreamsでprofile、録画プロファイルまたは録画しない、配信先、任意のYouTube予定を選び、配信枠を作成して作成成功を確認します。
+8. 作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して、`設定を保存`を押します。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
+9. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`とEncoder host preflightを確認します。
+10. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
+11. Start後はFPS、bitrate、dropped frames、archive、uploadを見ます。
 
 YouTubeの自動開始には`Live API` Output、OAuth connected account、`Enable auto start`を設定します。directを明示したEncoderだけで動的Live APIを使えます。固定relayは両側の`live_api_relay_static`と同じbinding IDがreadyな場合だけ使い、keyはassignment-scoped secret referenceで解決します。
 

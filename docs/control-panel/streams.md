@@ -20,12 +20,18 @@ Streams では、次の作業を行います。
 ## 配信を新規作成する
 
 1. `配信枠名` に番組名や案件名を入れます。
-2. `Discord VC参加で自動開始` をONにし、`Discord BOT設定`、Guild ID、VC Channel ID、必要ならChat Channel IDを指定します。
-3. `YouTube Output`、`Encoder Profile`、必要なら`録画プロファイル`を選びます。
-4. `Primary Encoder Node` と `Primary Worker Node` を選びます。Nodeが1つだけなら自動選択されます。
-5. 録画する場合は、Archive画面で録画形式、保持日数、Drive保存先を設定済みの録画プロファイルを選びます。
-6. `配信枠を作成` を押します。
-7. 作成後、一覧に新しい配信枠が待機状態で追加されたことを確認します。
+2. Discord VC参加で自動開始する場合は、`Discord VC参加で自動開始` をONにし、`Discord BOT設定`と既存のDiscord配信先を指定します。
+3. `YouTube出力`、エンコード設定、必要な映像・音声設定を選びます。
+4. 録画する場合は、先に[録画・アーカイブ](/control-panel/page-usage#archive-settings)で保存先、録画形式、保持日数を準備し、作成フォームでは`録画プロファイル`を選びます。録画しない場合は`録画しない`を選びます。
+5. 必要なら`YouTube開始予定`の`開始予定（任意）`をブラウザのタイムゾーンで入力します。空欄なら、配信開始時にYouTubeの枠をすぐ開始します。日時を指定した場合だけYouTubeの予定配信になります。
+6. 不足項目を確認して`配信枠を作成`を押し、一覧に待機状態の枠が追加されたことから作成成功を確認します。
+7. 作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して、`設定を保存`を押します。
+8. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`（`開始準備を再確認`）を実行します。
+9. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
+
+作成時には既存配信のNode割り当てを変更せず、新規枠のWorker/Encoderも自動割当しません。Node未割当でも新規作成できますが、担当Nodeの割当は開始前に整える条件です。作成成功だけで開始可能とは判断しません。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
+
+YouTube予定とAutoStreamの開始トリガーは別です。予定時刻だけでAutoStreamのStartを自動実行する機能ではありません。既存の予定を空欄にして保存すると、次回の配信開始時はYouTube枠を即時開始します。
 
 配信名は、あとから監査ログや通知にも出ます。日付だけではなく、用途が分かる名前にしておくと後で探しやすくなります。
 
@@ -42,9 +48,10 @@ Streams では、次の作業を行います。
 | Encoder Profile | 解像度、fps、bitrate などの profile | 既定または未指定扱い | 配信品質を変える時に使います |
 | Caption Profile | 字幕/STT の profile | 字幕なし | 字幕を使う配信だけ選びます |
 | Watermark Profile | 配信映像へ載せる画像の profile | ウォーターマークなし | ロゴ画像を配信枠ごとにON/OFFする時に選びます |
-| Primary Encoder Node | 配信と録画を担当する Encoder Recorder | 自動開始枠では作成できません | `services.assign` 権限がある場合に表示されます |
-| Primary Worker Node | caption、chat、参加者状態 event を担当する Worker | 自動開始枠では作成できません | `workers.assign` 権限がある場合に表示されます |
+| 担当Encoder Node（編集時） | 配信と録画を担当する Encoder Recorder | 新規作成は可能ですが、開始前に割当が必要です | 作成後の編集で、設定保存と`services.assign`の権限に従って選択・保存します |
+| 担当Worker Node（編集時） | caption、chat、参加者状態 event を担当する Worker | 新規作成は可能ですが、開始前に割当が必要です | 作成後の編集で、設定保存と`workers.assign`の権限に従って選択・保存します |
 | 録画プロファイル | 録画形式、保持日数、Drive保存先をまとめた設定 | 録画しません | Archive画面で事前作成した設定から選びます |
+| YouTube開始予定 / 開始予定（任意） | ブラウザのタイムゾーンで入力するYouTube予定 | 配信開始時にYouTube枠をすぐ開始します | AutoStreamの手動Start・Discord VC参加トリガーとは別の設定です |
 | YouTube Output | 配信先 | 外部配信なし、または開始前チェックで不足 | 本番配信では通常選びます |
 | RTMP URL | start 時に直接渡す RTMP/RTMPS URL | YouTube Output の設定を使います | 通常は YouTube Output 側で管理します |
 
@@ -82,9 +89,13 @@ Discord Settings は Bot token と登録済み Discord Bot Node だけを持ち�
 | `worker` | caption、chat、参加者状態などの event 生成 | 映像生成イベントや字幕が流れません |
 | `encoder_recorder` | FFmpeg、配信、録画、upload | 配信と録画ができません |
 
-Streamsの作成画面で `Primary Encoder Node` と `Primary Worker Node` を選ぶと、配信枠の作成と同時に primary assignment が保存されます。Discord Bot は Streamsで選んだ `Discord BOT設定` の Node ID を使って待機枠を受け取り、VC参加による開始要求の直前に Control Panel が primary assignment を作ります。
+Worker/Encoderは、作成成功を確認したあと、作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して`設定を保存`を押します。保存後に対象枠の実際のprimary assignmentを確認し、`Check Readiness`を実行します。配信中のライブ調整は通常のNode割当変更には使いません。
 
-`services.assign` や `workers.assign` 権限がない場合、Streams画面ではPrimary Nodeを保存できません。その場合は Service Health または Worker Management で割り当てます。`Stream assignment planner` で `missing` が出ている場合は、候補サービスの `assign` を押します。`primary` は実際の dispatch 対象、`standby` は予備です。
+設定保存とサービス割当は既存の権限に従います。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。Service Health、Worker Management、`Stream assignment planner`から割り当てる場合も、Encoderには`services.assign`、Workerには`workers.assign`の権限が必要です。`primary`は実際のdispatch対象、`standby`は予備です。
+
+他の配信枠で使用中・保護中のNodeの所有権や競合保護を回避しないでください。競合が表示されたら一覧を更新して現在の割当を再確認し、使用中の処理が完了してから、権限のある担当者が通常の割当操作を行います。
+
+Discord Botは別の既存動作として、Streamsで選んだ`Discord BOT設定`のNode IDを使って待機枠を受け取り、VC参加による開始要求の直前にControl Panelがprimary Discord Bot assignmentを作ります。この動作はWorker/Encoderの作成時割当には適用されません。
 
 ## Start前チェック
 
@@ -92,7 +103,7 @@ Streamsの作成画面で `Primary Encoder Node` と `Primary Worker Node` を�
 
 | チェック | 見る内容 | 対応 |
 | --- | --- | --- |
-| Service assignment | 必要な service type が primary に割り当て済みか | Service Health または planner で割り当てます |
+| Service assignment | 必要な service type が primary に割り当て済みか | 権限のある担当者が作成済み枠の編集などで割当・保存し、実際の割当とReadinessを再確認します |
 | Service heartbeat | 割り当て済みサービスが warning / offline ではないか | 対象サービスを起動または再起動します |
 | 外部入力URL | API連携で保存済みの場合にURL形式が妥当か | 通常のDiscord配信では空欄にします |
 | YouTube Output | stream key または OAuth account が ready か | YouTube Outputs と Integrations を見直します |

@@ -11,7 +11,8 @@
     "docs:check-updater-contract": "node scripts/check-updater-contract.mjs",
     "docs:test-updater-contract": "node --test scripts/test-updater-contract.mjs",
     "docs:check-physical-eol": "node scripts/check-physical-eol.mjs",
-    "docs:check": "npm run docs:check-secrets && npm run docs:check-release-workflow && npm run docs:check-updater-contract && npm run docs:test-updater-contract && npm run docs:check-physical-eol"
+    "docs:test-stream-create": "node --test scripts/test-stream-create-docs.mjs",
+    "docs:check": "npm run docs:check-secrets && npm run docs:check-release-workflow && npm run docs:check-updater-contract && npm run docs:test-updater-contract && npm run docs:check-physical-eol && npm run docs:test-stream-create"
   },
   "devDependencies": {
     "esbuild": "0.25.12",

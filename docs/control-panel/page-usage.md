@@ -7,8 +7,8 @@ Control Panel は設定を保存するだけでなく、各サービスへ配信
 1. Node登録でサービス用 Node を作り、`config.yml` を保存する。
 2. 各サービスを起動し、Service Health で online を確認する。
 3. Integrations、Discord Settings、YouTube Outputs、Archive Settings を作る。
-4. Streams で配信を作成し、必要な設定とサービスを割り当てる。
-5. Check Readiness を実行してから Start する。
+4. Streams で設定を選んで配信枠を作成し、作成成功を確認する。
+5. 作成済み枠の編集で担当Worker/Encoderを明示的に割当・保存し、実際のprimary assignmentとCheck Readinessを確認してから、手動StartまたはDiscord VC参加トリガーによる開始へ進む。
 6. Dashboard、Monitoring、Incidents、Audit Logs で状態を見る。
 
 ## 共通操作
@@ -47,11 +47,20 @@ Streams は、VC参加を待つ配信枠を作成し、開始条件、配信経�
 ### 新しい配信を作る
 
 1. `配信枠を作成` を押し、右側の作成画面を開きます。
-2. `配信枠名` を入力します。配信枠には開始日時や終了日時を設定しません。
-3. Discord VC参加で自動開始する場合は、Discord BOT設定、サーバーID、ボイスチャンネルID、担当Worker Node、担当Encoder Nodeを選びます。
-4. YouTube出力と録画用Googleアカウントを選びます。録画用にはDrive保存を利用できる接続だけが表示されます。Driveへ保存する場合はFolder ID、必要なら共有ドライブID、録画ファイル名、Encoder内の保持日数を入力します。
+2. `配信枠名`を入力します。必要なら`YouTube開始予定`の`開始予定（任意）`をブラウザのタイムゾーンで入力します。空欄なら、配信開始時にYouTubeの枠をすぐ開始します。日時を指定した場合だけYouTubeの予定配信になります。
+3. Discord VC参加で自動開始する場合は、Discord BOT設定と既存のDiscord配信先を選びます。
+4. YouTube出力を選びます。録画する場合は、先に[録画・アーカイブ](#archive-settings)で保存先、録画形式、保持日数を準備し、標準作成フォームでは`録画プロファイル`を選びます。録画しない場合は`録画しない`を選びます。
 5. 必要ならエンコード設定と字幕設定を選び、ロゴを載せる配信だけ `ウォーターマークを使用` をONにして設定を選びます。
-6. 画面下部に不足項目が表示されていないことを確認し、`配信枠を作成` を押します。一覧で待機状態、開始条件、配信経路、録画、担当Nodeが意図どおりか確認します。
+6. 画面下部の不足項目を確認して`配信枠を作成`を押し、一覧に待機状態の枠が追加されたことから作成成功を確認します。
+7. 作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して、`設定を保存`を押します。
+8. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`開始準備を再確認`（`Check Readiness`）を実行します。
+9. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
+
+作成時には既存配信のNode割り当てを変更せず、新規枠のWorker/Encoderも自動割当しません。Node未割当でも新規作成できますが、担当Nodeの割当は開始前に整える条件です。作成成功だけで開始可能とは判断しません。
+
+設定保存とサービス割当は既存の権限に従います。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。Service HealthやWorker Managementでも割当権限が必要です。他の配信枠で使用中・保護中のNodeの所有権や競合保護を回避しないでください。競合が表示されたら現在の割当を再確認します。配信中のライブ調整は通常のNode割当変更には使いません。
+
+YouTube予定とAutoStreamの開始トリガーは別です。予定時刻だけでAutoStreamのStartを自動実行する機能ではありません。既存の予定を空欄にして保存すると、次回の配信開始時はYouTube枠を即時開始します。
 
 自動開始を有効にした配信枠では、対象VCへのユーザー参加をDiscord Botが検知します。BotがVCへ参加して音声取得を開始し、Control Panelの通常の開始処理からWorker、Encoder Recorder、録画、配信出力が起動します。
 
@@ -86,7 +95,7 @@ Guild / VC / Chat を指定する場合は、同じ配信枠で Discord BOT設�
 | ready | Start できる状態 | Start 前に配信先と保存先を再確認する |
 | warning | 開始は可能でも確認が必要 | 表示された項目を読んで、意図した warning か判断する |
 | critical | Start すべきではない不足 | 該当画面で設定またはサービスを直す |
-| missing assignment | 必要サービスが primary ではない | Service Health または assignment planner で割り当てる |
+| missing assignment | 必要サービスが primary ではない | 権限のある担当者が作成済み枠の編集などで割当・保存し、実際の割当とReadinessを再確認する |
 | warning / offline service | heartbeat が古い | 対象サービスの systemd / Docker / network を確認する |
 
 ### Start / Stop / Retry
