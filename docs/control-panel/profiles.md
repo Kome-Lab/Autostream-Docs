@@ -25,6 +25,8 @@ Encoder Profiles、Caption/STT Settings、Watermark Settings、Archive Settings 
 
 内部的には profile config として保存されますが、日常運用では JSON を直接編集しません。
 
+編集中も一覧や監視表示は更新されます。入力を保持したまま保存直前に権限と対象設定を確認し、同じ設定が他者に変更された場合は上書きを止めます。確認中・入力エラー・結果不明での扱いは[共通操作](/control-panel/page-usage#editing-and-save)を参照してください。
+
 ## Encoder Profiles
 
 Encoder Profile は、Encoder Recorder が FFmpeg 処理を行う時の設定です。
