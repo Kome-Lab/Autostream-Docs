@@ -8,6 +8,8 @@ Discord Settings は、登録済み Discord Bot Node と Bot token、音声転�
 
 Discord Bot の登録は OAuth ログインではありません。Discord developer portal で発行した Bot token を Control Panel に保存し、Discord Bot service は runtime config と runtime secret resolve でその token を受け取ります。Integrations の OAuth Provider は管理画面ログイン用で、YouTube / Drive の権限は OAuth Connected Account として接続します。
 
+Streamsの`Discord BOT設定`はBot tokenとNodeを選ぶ認証設定です。`Discord配信先`はGuild / VC / Chatのプリセットで、接続に使うBotの指定とは別です。配信先はプリセット名で選び、両方の設定を配信枠に保存してください。
+
 ### 入力項目
 
 | 項目 | 説明 | 空欄にした場合 |
@@ -37,13 +39,15 @@ Discord Bot の登録は OAuth ログインではありません。Discord devel
 
 ### VC参加で自動開始されるか
 
-Discord Bot が primary assignment になっていて、Node Runtime Token に `streams.start` scope があり、runtime config に対象 stream の Discord Config と `auto_start_trigger: discord_voice_join` が配布されている場合、対象 VC にユーザーが参加すると Control Panel に auto-start を要求します。
+自動開始を有効にした待機枠では、Control Panelが選択済みBotのprimary assignmentを確保し、current bindingを通してGateway監視用の設定を配布します。選択していないBotを常時接続する設定ではありません。Node Runtime Tokenに`streams.start` scopeがあり、保存済みの`auto_start_trigger: discord_voice_join`などの認可条件を満たす場合に開始を要求できます。
+
+更新前からある未割当の枠は、配信設定とサービス割当の権限を持つ担当者が設定を再保存して同期します。別枠で使用中のBotは自動移管しません。[Streamsのサービス割り当て](/control-panel/streams#サービス割り当て)に従い、既存処理と保護状態を確認して明示的に移管してください。
 
 1. ユーザーが Streams の配信枠に保存した voice channel に参加します。
-2. Discord Bot が VoiceStateUpdate を受け取り、guild / voice channel から対象 stream を特定します。
+2. 選択済みDiscord BotがGatewayへ接続し、VoiceStateUpdateと既存の在席情報からguild / voice channelに対応する待機streamを特定します。Gateway接続や設定の再取得時に既にユーザーがいる場合も確認します。
 3. Discord Bot が `POST /services/streams/{id}/start` を Node Runtime Token で呼びます。
-4. Control Panel は、その token が対象 stream の primary Discord Bot に紐づき、配信枠が `Discord VC参加で自動開始` ONの待機状態である場合だけ開始を許可します。
-5. Control Panel が Discord Bot、Worker、Encoder Recorder へ通常の start job を送ります。
+4. Control PanelはNode Runtime Token、`streams.start` scope、current binding、primary assignment、保存済みtrigger、待機状態を確認し、対象streamへの開始権限がある場合だけ許可します。
+5. Control PanelがDiscord Bot、Worker、Encoder Recorderへ通常の`jobs/start`を送ります。
 6. Bot が voice channel に参加し、stream が active になった後は参加/退出を参加者状態として記録します。
 7. Stream settings の Text channel ID がある場合、開始後にその channel へ投稿された新規messageを Worker へ `overlay.discord_chat` として送ります。
 
@@ -68,7 +72,7 @@ Discord Bot は runtime config を定期的に再読込するため、Bot起動�
 
 | 状況 | 見るところ |
 | --- | --- |
-| Bot が voice channel に入らない | Bot の招待、Discord 権限、Guild ID、Voice channel ID |
+| Bot が voice channel に入らない | 枠のDiscord BOT設定と配信先の保存、選択済みBotのprimary assignment/current binding、Gateway接続と在席認識、CP開始認可、jobs/start、Voice接続の順に確認します。Botの招待、Discord権限、Guild ID、VC Channel IDも確認します |
 | VCが空になっても配信が止まらない | Discord Bot を再Configureして再起動済みか、Bot Node Runtime Token に `streams.stop` があるか、対象枠が `Discord VC参加で自動開始` か |
 | Bot は入るが音声が流れない | Enable audio forward、Encoder Recorder 割り当て、Audio Bridge |
 | 接続が何度も切れる | Reconnect attempts、Reconnect delay、Discord 側の network 状態 |

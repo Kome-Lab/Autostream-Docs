@@ -47,13 +47,13 @@ function section(text, headings) {
   return body;
 }
 
-const node = '(?:Primary (?:Encoder |Worker )?Node|担当(?:Worker|Encoder) Node)';
-const selection = '(?:選びます|選ぶ|選択します|選択する|選択してください|選択して)';
+const selectedNodes = /担当Worker Node.{0,30}担当Encoder Node.{0,30}明示的に選択/;
 const oldClaims = [
-  ['create-node-selection', new RegExp(`(?:作成時|作成中|作成前|作成画面)[^。\\n]*${node}[^。\\n]*${selection}`)],
   ['single-node-auto', /Node[^。\n]*(?:1つ|一つ|１つ)[^。\n]*自動(?:選択|割り?当て?)(?:されます|します)/],
-  ['create-auto-assignment', /(?:作成と同時|作成時|新規作成)[^。\n]*(?:primary assignment[^。\n]*保存されます|自動割り?当て?(?:されます|します))/],
-  ['create-requires-node', /(?:Node|ノード)[^。\n]*(?:作成できません|新規作成不可|作れません)/],
+  ['missing-node-create', /Node未(?:割当|選択)でも[^。\n]*(?:新規)?作成できます/],
+  ['create-no-assignment', /(?:作成時|新規作成)[^。\n]*(?:Worker\/Encoder|担当Node|primary assignment)[^。\n]*(?:自動割当しません|保存しません|割り当てません)/],
+  ['other-stream-transfer', /他の配信枠[^。\n]*使用中[^。\n]*Node[^。\n]*(?:自動移管します|上書きします)/],
+  ['partial-create', /割当[^。\n]*失敗[^。\n]*枠だけ[^。\n]*作成(?:できます|成功します)/],
   ['create-is-ready', /作成成功(?:だけ|のみ)[^。\n]*(?:開始できます|開始可能です|Startできます)/],
   ['no-schedule-input', /(?:開始日時や終了日時|日時|開始予定)(?:を|は)[^。\n]*(?:設定しません|入力しません|入力できません|指定できません)/],
   ['timer-start', /(?:予定時刻|指定日時)[^。\n]*AutoStream[^。\n]*Start[^。\n]*自動実行(?:します|されます)/],
@@ -64,10 +64,9 @@ const oldClaims = [
 function checkFlow(body, existing = false) {
   const steps = [...body.matchAll(/^\d+\. (.+)$/gm)].map((match) => match[1]).join('\n');
   const sequence = [
-    ...(!existing ? [/配信枠を作成/, /作成成功.{0,60}確認/] : []),
-    /作成済み.{0,30}待機中.{0,30}終了済み.{0,30}編集/,
-    /担当Worker Node.{0,30}担当Encoder Node.{0,30}明示的に選択/,
-    /設定を保存/,
+    ...(existing ? [/割当の不足や変更がある場合/, /作成済み.{0,30}待機中.{0,30}終了済み.{0,30}編集/] : []),
+    selectedNodes,
+    ...(existing ? [/設定を保存/] : [/配信枠を作成/, /作成成功.{0,60}確認/]),
     /実際のprimary assignment/,
     /Check Readiness|開始準備を再確認/,
     /手動.{0,20}Start.{0,40}Discord VC参加/,
@@ -78,10 +77,8 @@ function checkFlow(body, existing = false) {
     assert.ok(match, `ordered procedure: ${expected}`);
     cursor += match.index + match[0].length;
   }
-  assert.ok(steps.search(/Check Readiness|開始準備を再確認/) > steps.indexOf('設定を保存'), 'Readiness must follow assignment save');
-  if (!existing) {
-    assert.doesNotMatch(steps.slice(0, steps.indexOf('作成成功')), new RegExp(`${node}[^。\\n]*${selection}`), 'create-node-selection');
-  }
+  const saved = steps.indexOf(existing ? '設定を保存' : '作成成功');
+  assert.ok(saved >= 0 && steps.search(/Check Readiness|開始準備を再確認/) > saved, 'Readiness must follow successful assignment save');
 }
 
 function checkGuide(guide, source) {
@@ -95,9 +92,12 @@ function checkGuide(guide, source) {
   for (const flow of guide.flows) checkFlow(section(text, flow.headings), flow.existing);
 
   for (const expected of [
-    /自動割当しません/,
-    /Node未割当でも新規作成できます/,
-    /割当は開始前に整える条件/,
+    /担当Worker Nodeと担当Encoder Nodeの両方が必須/,
+    /未選択のNodeを自動選択しません/,
+    /配信枠とprimary assignmentをまとめて保存/,
+    /Discord BOT設定[^。]*選択済みBot[^。]*同じ保存処理/,
+    /services.assign/,
+    /workers.assign/,
     /作成成功だけで開始可能とは判断しません/,
     /割当権限がない場合.{0,40}権限のある管理者・担当者へ依頼/,
     /録画プロファイル/,
@@ -128,20 +128,25 @@ function checkGuide(guide, source) {
   ]) assert.match(text, expected, `required assignment protection: ${expected}`);
   if (guide.path.endsWith('/streams.md')) {
     const fields = section(text, ['配信設定の項目']);
-    assert.match(fields, /担当Encoder Node（編集時）/, 'required section guidance: Encoder field');
-    assert.match(fields, /担当Worker Node（編集時）/, 'required section guidance: Worker field');
-    assert.match(fields, /新規作成は可能[^\n]*開始前に割当が必要/, 'required section guidance: start prerequisite');
+    assert.match(fields, /担当Encoder Node（作成時必須）/, 'required section guidance: Encoder field');
+    assert.match(fields, /担当Worker Node（作成時必須）/, 'required section guidance: Worker field');
+    assert.match(fields, /未選択では作成できません/, 'required section guidance: required create nodes');
     assert.match(section(text, ['Start前チェック']), /Service assignment[^\n]*権限のある担当者/, 'required section guidance: readiness');
     const assignment = section(text, ['サービス割り当て']);
     assert.match(assignment, /services.assign/);
     assert.match(assignment, /workers.assign/);
-    assert.match(assignment, /VC参加による開始要求の直前[^。]*primary Discord Bot assignment/);
+    assert.match(assignment, /選択済み[^。]*primary Discord Bot assignment[^。]*開始前の監視/);
+    assert.match(assignment, /current binding/);
   }
   if (guide.path.endsWith('/page-usage.md')) {
     assert.match(section(text, ['Streams', 'Check Readiness の見方']), /missing assignment[^\n]*権限のある担当者/, 'required section guidance: readiness');
   }
   if (guide.path.endsWith('/runtime-usage.md')) {
-    assert.match(section(text, ['Discord Bot']), /開始直前[^。]*primary Discord Bot assignment/);
+    const discord = section(text, ['Discord Bot']);
+    assert.match(discord, /待機枠[^。]*選択済みBotのprimary Discord Bot assignment/);
+    assert.match(discord, /current binding/);
+    assert.match(discord, /Gateway[^。]*既存の在席/);
+    assert.match(discord, /jobs\/start/);
   }
 }
 
@@ -155,13 +160,13 @@ function appendToCreate(guide, source, line) {
 }
 
 const regressions = [
-  ['create-node-selection', '作成中にPrimary Nodeを選ぶ。'],
-  ['create-node-selection', '4. Primary Encoder Node と Primary Worker Node を選びます。'],
   ['single-node-auto', 'Nodeが1つだけなら自動選択されます。'],
-  ['create-auto-assignment', '配信枠の作成と同時に primary assignment が保存されます。'],
-  ['create-auto-assignment', '作成時にWorker/Encoderを自動割当します。'],
-  ['create-requires-node', 'Node未選択では自動開始枠を新規作成できません。'],
-  ['create-requires-node', '| Primary Encoder Node | 自動開始枠では作成できません |'],
+  ['missing-node-create', 'Node未割当でも新規作成できます。'],
+  ['missing-node-create', 'Node未選択でも配信枠を作成できます。'],
+  ['create-no-assignment', '作成時には新規枠のWorker/Encoderを自動割当しません。'],
+  ['create-no-assignment', '新規作成ではprimary assignmentを保存しません。'],
+  ['other-stream-transfer', '他の配信枠で使用中のNodeは自動移管します。'],
+  ['partial-create', 'Nodeの割当が失敗しても枠だけ作成できます。'],
   ['create-is-ready', '作成成功だけで配信開始可能です。'],
   ['direct-archive-input', '標準作成フォームでFolder ID、共有ドライブID、録画ファイル名、保持日数を入力します。'],
   ['direct-archive-input', 'YouTube出力と録画用Googleアカウントを選びます。'],
@@ -178,9 +183,9 @@ for (const guide of guides) {
       assert.throws(() => checkGuide(guide, appendToCreate(guide, read(guide), claim)), new RegExp(label));
     });
   }
-  test(`${guide.path}: accepts editing, negative auto-assignment and archive-screen fields`, () => {
+  test(`${guide.path}: accepts explicit create selection, guarded editing and archive-screen fields`, () => {
     const source = read(guide);
-    const allowed = '作成済み枠の編集で担当Worker Nodeと担当Encoder Nodeを選びます。\n作成時に自動割当しません。Nodeが一つでも自動選択しません。\n録画・アーカイブ画面でFolder IDと共有ドライブIDを入力します。';
+    const allowed = '作成画面で担当Worker Nodeと担当Encoder Nodeを選びます。Node未選択では新規作成できません。\n割当変更が必要な場合は作成済み枠を編集します。Nodeが一つでも自動選択しません。\n録画・アーカイブ画面でFolder IDと共有ドライブIDを入力します。';
     assert.doesNotThrow(() => checkGuide(guide, appendToCreate(guide, source, allowed)));
   });
   for (const headings of [guide.create, ...guide.required, ...guide.flows.map((flow) => flow.headings)]) {
@@ -202,11 +207,23 @@ for (const guide of guides) {
       const source = visible(read(guide));
       const body = section(source, flow.headings);
       const lines = body.split('\n');
-      const assign = lines.findIndex((line) => /^\d+\. .*設定を保存/.test(line));
+      const assign = lines.findIndex((line) => /^\d+\. /.test(line) && (flow.existing ? /設定を保存/.test(line) : /作成成功/.test(line)));
       const readiness = lines.findIndex((line) => /^\d+\. .*(?:Check Readiness|開始準備を再確認)/.test(line));
       assert.ok(assign >= 0 && readiness > assign, 'mutation must swap real procedure steps');
       [lines[assign], lines[readiness]] = [lines[readiness], lines[assign]];
       assert.throws(() => checkGuide(guide, source.replace(body, lines.join('\n'))), /ordered procedure|Readiness must follow/);
     });
+    if (!flow.existing) {
+      test(`${guide.path}: rejects selecting nodes after create in ${flow.headings.join(' / ')}`, () => {
+        const source = visible(read(guide));
+        const body = section(source, flow.headings);
+        const lines = body.split('\n');
+        const nodes = lines.findIndex((line) => /^\d+\. /.test(line) && selectedNodes.test(line));
+        const create = lines.findIndex((line, index) => index > nodes && /^\d+\. .*作成成功/.test(line));
+        assert.ok(nodes >= 0 && create > nodes, 'mutation must swap real selection and creation steps');
+        [lines[nodes], lines[create]] = [lines[create], lines[nodes]];
+        assert.throws(() => checkGuide(guide, source.replace(body, lines.join('\n'))), /ordered procedure/);
+      });
+    }
   }
 }

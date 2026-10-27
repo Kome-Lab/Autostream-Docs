@@ -19,17 +19,19 @@ Streams では、次の作業を行います。
 
 ## 配信を新規作成する
 
+一覧の`配信枠を作成`を押すと、画面全体を使う作成画面が開きます。入力途中で`戻る / キャンセル`や別画面への移動を選ぶと、未保存の変更を破棄するか確認します。入力エラーを解消して保存すると一覧へ戻るので、追加された待機枠を確認してください。
+
 1. `配信枠名` に番組名や案件名を入れます。
 2. Discord VC参加で自動開始する場合は、`Discord VC参加で自動開始` をONにし、`Discord BOT設定`と既存のDiscord配信先を指定します。
 3. `YouTube出力`、エンコード設定、必要な映像・音声設定を選びます。
 4. 録画する場合は、先に[録画・アーカイブ](/control-panel/page-usage#archive-settings)で保存先、録画形式、保持日数を準備し、作成フォームでは`録画プロファイル`を選びます。録画しない場合は`録画しない`を選びます。
 5. 必要なら`YouTube開始予定`の`開始予定（任意）`をブラウザのタイムゾーンで入力します。空欄なら、配信開始時にYouTubeの枠をすぐ開始します。日時を指定した場合だけYouTubeの予定配信になります。
-6. 不足項目を確認して`配信枠を作成`を押し、一覧に待機状態の枠が追加されたことから作成成功を確認します。
-7. 作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して、`設定を保存`を押します。
+6. 作成画面で`担当Worker Node`と`担当Encoder Node`を明示的に選択します。両方の選択が必要です。
+7. 不足項目と選択したNodeを確認して`配信枠を作成`を押し、一覧に待機状態の枠が追加されたことから作成成功を確認します。
 8. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`（`開始準備を再確認`）を実行します。
 9. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
 
-作成時には既存配信のNode割り当てを変更せず、新規枠のWorker/Encoderも自動割当しません。Node未割当でも新規作成できますが、担当Nodeの割当は開始前に整える条件です。作成成功だけで開始可能とは判断しません。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
+標準作成フォームでは担当Worker Nodeと担当Encoder Nodeの両方が必須です。未選択のNodeを自動選択しません。選択したNodeについて配信枠とprimary assignmentをまとめて保存し、他枠で使用中のNodeを勝手に移しません。Discord BOT設定を指定した場合は、選択済みBotも同じ保存処理でprimaryに割り当てます。作成には`streams.create`に加え、Encoderの`services.assign`とWorkerの`workers.assign`が必要です。作成成功だけで開始可能とは判断しません。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
 
 YouTube予定とAutoStreamの開始トリガーは別です。予定時刻だけでAutoStreamのStartを自動実行する機能ではありません。既存の予定を空欄にして保存すると、次回の配信開始時はYouTube枠を即時開始します。
 
@@ -48,8 +50,8 @@ YouTube予定とAutoStreamの開始トリガーは別です。予定時刻だけ
 | Encoder Profile | 解像度、fps、bitrate などの profile | 既定または未指定扱い | 配信品質を変える時に使います |
 | Caption Profile | 字幕/STT の profile | 字幕なし | 字幕を使う配信だけ選びます |
 | Watermark Profile | 配信映像へ載せる画像の profile | ウォーターマークなし | ロゴ画像を配信枠ごとにON/OFFする時に選びます |
-| 担当Encoder Node（編集時） | 配信と録画を担当する Encoder Recorder | 新規作成は可能ですが、開始前に割当が必要です | 作成後の編集で、設定保存と`services.assign`の権限に従って選択・保存します |
-| 担当Worker Node（編集時） | caption、chat、参加者状態 event を担当する Worker | 新規作成は可能ですが、開始前に割当が必要です | 作成後の編集で、設定保存と`workers.assign`の権限に従って選択・保存します |
+| 担当Encoder Node（作成時必須） | 配信と録画を担当する Encoder Recorder | 未選択では作成できません | 作成画面で明示的に選び、`services.assign`の権限で枠と一緒に保存します。変更時は待機中・終了済み枠を編集します |
+| 担当Worker Node（作成時必須） | caption、chat、参加者状態 event を担当する Worker | 未選択では作成できません | 作成画面で明示的に選び、`workers.assign`の権限で枠と一緒に保存します。変更時は待機中・終了済み枠を編集します |
 | 録画プロファイル | 録画形式、保持日数、Drive保存先をまとめた設定 | 録画しません | Archive画面で事前作成した設定から選びます |
 | YouTube開始予定 / 開始予定（任意） | ブラウザのタイムゾーンで入力するYouTube予定 | 配信開始時にYouTube枠をすぐ開始します | AutoStreamの手動Start・Discord VC参加トリガーとは別の設定です |
 | YouTube Output | 配信先 | 外部配信なし、または開始前チェックで不足 | 本番配信では通常選びます |
@@ -59,6 +61,8 @@ YouTube予定とAutoStreamの開始トリガーは別です。予定時刻だけ
 
 Discord Settings は Bot token と登録済み Discord Bot Node だけを持ちます。実際に入る guild / voice / chat channel は Streams の配信枠へ保存します。
 
+`Discord BOT設定`は接続に使うBotの認証設定、`Discord配信先`はGuild / VC / Chatのプリセットです。別々に選んで保存してください。配信先の選択肢にはプリセット名を表示します。
+
 | 運用 | Streams に保存する値 | 補足 |
 | --- | --- | --- |
 | いつも同じ voice channel | すべての配信枠に同じ Guild ID / VC Channel ID | 誤配信を避けるため配信枠ごとに明示します |
@@ -67,6 +71,16 @@ Discord Settings は Bot token と登録済み Discord Bot Node だけを持ち�
 | 別 guild で検証する | Guild ID、VC Channel ID、必要なら Chat Channel ID | Bot が招待済みか確認します |
 
 空欄は「元の config を使う」ではありません。Discord 音声やVC参加auto-startを使う配信枠では、Guild ID と VC Channel ID を明示してください。VC参加で開始する枠は、配信枠の `Discord VC参加で自動開始` もONにします。
+
+## 蓋画像の候補と開始時の画像
+
+作成・編集画面の`蓋画像（Video Cover）`には、保存した全候補をサムネイル付きカードで表示します。開始時に選んでいない画像も残り、保存後に編集画面を開き直しても確認できます。ファイル名と操作ボタンは別の領域にあり、長い名前は`ファイル名をすべて表示`で確認できます。スマートフォンではカードを縦に並べて操作できます。
+
+候補を追加しただけでは開始時の画像は増えません。開始時に使用する画像は候補から1枚だけ選び、設定を保存してください。配信中に別候補へ切り替える場合は、その枠の詳細画面で操作します。
+
+枠専用にアップロードできる蓋画像は1枠あたり4枚までです。共有プリセットと、表示用に生成したvariantはこの枚数に含みません。作成・編集画面と直接APIで同じ上限が適用され、同時にアップロードしても上限を超えて追加できません。既に5枚以上ある枠は既存画像を保持し、上限を超える追加を拒否します。
+
+配信枠を正常に削除すると、その枠専用のアップロード蓋画像と派生画像も自動削除します。共有プリセット、他の配信枠の画像、録画ファイルは削除しません。画像ファイルの削除が一時的に失敗した場合は再試行し、Control Panelの再起動後も残りの削除を再開します。
 
 ## 外部入力URLの互換性
 
@@ -89,13 +103,15 @@ Discord Settings は Bot token と登録済み Discord Bot Node だけを持ち�
 | `worker` | caption、chat、参加者状態などの event 生成 | 映像生成イベントや字幕が流れません |
 | `encoder_recorder` | FFmpeg、配信、録画、upload | 配信と録画ができません |
 
-Worker/Encoderは、作成成功を確認したあと、作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して`設定を保存`を押します。保存後に対象枠の実際のprimary assignmentを確認し、`Check Readiness`を実行します。配信中のライブ調整は通常のNode割当変更には使いません。
+Worker/Encoderは、新規枠の作成画面で`担当Worker Node`と`担当Encoder Node`を明示的に選択し、枠とprimary assignmentを一括保存します。作成成功後は対象枠の実際のprimary assignmentを確認し、`Check Readiness`を実行します。割当の不足や変更がある既存枠だけ、待機中または終了済みの枠を編集して設定を保存し直します。配信中のライブ調整は通常のNode割当変更には使いません。
 
 設定保存とサービス割当は既存の権限に従います。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。Service Health、Worker Management、`Stream assignment planner`から割り当てる場合も、Encoderには`services.assign`、Workerには`workers.assign`の権限が必要です。`primary`は実際のdispatch対象、`standby`は予備です。
 
 他の配信枠で使用中・保護中のNodeの所有権や競合保護を回避しないでください。競合が表示されたら一覧を更新して現在の割当を再確認し、使用中の処理が完了してから、権限のある担当者が通常の割当操作を行います。
 
-Discord Botは別の既存動作として、Streamsで選んだ`Discord BOT設定`のNode IDを使って待機枠を受け取り、VC参加による開始要求の直前にControl Panelがprimary Discord Bot assignmentを作ります。この動作はWorker/Encoderの作成時割当には適用されません。
+Discord VC参加で自動開始する待機枠では、Control Panelが選択済み`Discord BOT設定`のNodeをprimary Discord Bot assignmentとして確保し、current bindingを通して開始前の監視に必要な設定を配布します。新規作成では、選択したWorker/Encoderと同じ保存処理で確保します。選択していないBotや別枠で使用中のNodeへ切り替えず、明示的に別Botがprimaryの枠は上書きしません。
+
+更新前に作成し、選択済みBotがまだprimary未割当の枠は、`streams.update`と`services.assign`を持つ担当者が待機中または終了済みの枠を編集し、Discord BOT設定を確認して設定を再保存してください。保存に成功したら、primary assignmentとcurrent binding、Gatewayの接続状態を再確認します。Botが別枠へ割当済みの場合、再保存だけでは所有権を移しません。権限のある担当者が既存の処理と保護状態を確認し、通常の割当画面で明示的に解除・移管してから保存し直してください。
 
 ## Start前チェック
 
@@ -122,7 +138,7 @@ Discord Botは別の既存動作として、Streamsで選んだ`Discord BOT設�
 | Retry YouTube Complete | YouTube Live API の終了処理を再試行 | Stop 後に complete 処理だけ失敗した時 |
 | View Stream Audit | 対象 stream の操作履歴を開く | 誰が開始・停止・変更したか見たい時 |
 
-自動運用では、対象 Discord VC へのユーザー参加が開始トリガーです。配信枠で `Discord VC参加で自動開始` をONにし、`created`、`draft`、`ready` の待機状態にしておきます。参加を検知したDiscord BotはVCへ参加して音声取得を開始し、Control Panel の service-auth endpoint に開始を要求します。Control Panel は primary assignment、`streams.start` scope、保存済みの auto-start trigger を確認してから、WorkerとEncoder Recorderを含む通常の start dispatch を行います。日時による予約実行は行いません。
+自動運用では、対象 Discord VC へのユーザー参加が開始トリガーです。配信枠で `Discord VC参加で自動開始` をONにし、`created`、`draft`、`ready` の待機状態にしておきます。選択済みBotがGatewayで参加イベントと既に在席しているユーザーを確認し、Control Panelのservice-auth endpointへ開始を要求します。Control Panelはcurrent binding、primary assignment、`streams.start` scope、保存済みのauto-start triggerを確認してから、通常の`jobs/start`をBot、Worker、Encoder Recorderへ送ります。BotのVoice接続と音声取得は、この開始指示に従って行います。日時による予約実行は行いません。
 
 YouTubeの自動開始はYouTube Outputのmodeに従います。`Live API`と`Live API dry-run`は明示的な`direct` Encoderで使い、固定relayは両側の`live_api_relay_static`と同じbinding IDがreadyな場合だけ使います。raw-key requestや互換modeへのfallbackはありません。
 
