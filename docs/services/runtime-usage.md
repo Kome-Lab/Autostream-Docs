@@ -339,6 +339,8 @@ Observability は、metricを集め、incidentを作り、diagnosticと通知を
 
 ## 共有Node選択を導入する更新と復旧
 
+この変更は[Discord Bot v2.0.4](https://github.com/Kome-Lab/Autostream-DiscordBot/releases/tag/v2.0.4)と[Control Panel v2.0.7](https://github.com/Kome-Lab/Autostream-ControlPanel/releases/tag/v2.0.7)を組み合わせて利用します。先にDiscord Bot v2.0.4へ更新し、その後Control Panel v2.0.7へ更新してください。
+
 共有Node選択を初めて導入するControl Panelの自動更新では、更新結果の確認が終わるまで通常の画面・APIは一時的に503を返し、バックグラウンド処理も待機します。更新エージェントの確認・復旧通信は維持され、同じ更新ジョブの成功が確定すると通常操作が再開します。
 
 導入に失敗して旧版へ自動復帰した場合、旧版でNode選択を変更したあとに正規の更新を再実行すると、その変更を新しい保存先へ引き継ぎます。導入完了後の再起動では、保存済みの共有選択や解除を旧割当で上書きしません。導入完了後に旧保存方式の版へ戻す場合は、アプリを停止して検証済みバックアップから整合した状態へ復旧する必要があります。バイナリだけを旧版へ戻したり、更新ジョブ・復旧記録を手動で書き換えたりしないでください。
