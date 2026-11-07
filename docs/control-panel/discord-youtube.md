@@ -39,7 +39,7 @@ Streamsの`Discord BOT設定`はBot tokenとNodeを選ぶ認証設定です。`D
 
 ### VC参加で自動開始されるか
 
-自動開始を有効にした待機枠では、Control Panelが選択済みBotのprimary assignmentを確保し、current bindingを通してGateway監視用の設定を配布します。選択していないBotを常時接続する設定ではありません。Node Runtime Tokenに`streams.start` scopeがあり、保存済みの`auto_start_trigger: discord_voice_join`などの認可条件を満たす場合に開始を要求できます。
+自動開始を有効にした待機枠では、Control Panelが保存済みBot選択とDiscord配信先から待機監視用の設定を配布します。複数の待機枠を監視しても、実行中の別枠のprimary assignmentやVC接続を切り替えません。Node Runtime Tokenに`streams.start` scopeがあり、保存済みの`auto_start_trigger: discord_voice_join`などの認可条件を満たす場合に開始を要求できます。開始時に必要なNodeを確保できた場合にだけ、Botは開始指示に従ってVoice接続します。
 
 更新前からある未割当の枠は、配信設定とサービス割当の権限を持つ担当者が設定を再保存して同期します。別枠で使用中のBotは自動移管しません。[Streamsのサービス割り当て](/control-panel/streams#サービス割り当て)に従い、既存処理と保護状態を確認して明示的に移管してください。
 

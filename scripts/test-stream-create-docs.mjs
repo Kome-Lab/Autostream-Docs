@@ -51,7 +51,9 @@ const selectedNodes = /担当Worker Node.{0,30}担当Encoder Node.{0,30}明示�
 const oldClaims = [
   ['single-node-auto', /Node[^。\n]*(?:1つ|一つ|１つ)[^。\n]*自動(?:選択|割り?当て?)(?:されます|します)/],
   ['missing-node-create', /Node未(?:割当|選択)でも[^。\n]*(?:新規)?作成できます/],
-  ['create-no-assignment', /(?:作成時|新規作成)[^。\n]*(?:Worker\/Encoder|担当Node|primary assignment)[^。\n]*(?:自動割当しません|保存しません|割り当てません)/],
+  ['create-no-selection', /(?:作成時|新規作成)[^。\n]*(?:Worker\/Encoder|担当Node|Node選択)[^。\n]*(?:保存しません|記録しません)/],
+  ['saved-choice-is-owner', /配信枠とprimary assignmentをまとめて保存/],
+  ['saved-choice-node-sharing', /別の配信枠で使用中のNodeは選択できません/],
   ['other-stream-transfer', /他の配信枠[^。\n]*使用中[^。\n]*Node[^。\n]*(?:自動移管します|上書きします)/],
   ['partial-create', /割当[^。\n]*失敗[^。\n]*枠だけ[^。\n]*作成(?:できます|成功します)/],
   ['create-is-ready', /作成成功(?:だけ|のみ)[^。\n]*(?:開始できます|開始可能です|Startできます)/],
@@ -67,7 +69,7 @@ function checkFlow(body, existing = false) {
     ...(existing ? [/割当の不足や変更がある場合/, /作成済み.{0,30}待機中.{0,30}終了済み.{0,30}編集/] : []),
     selectedNodes,
     ...(existing ? [/設定を保存/] : [/配信枠を作成/, /作成成功.{0,60}確認/]),
-    /実際のprimary assignment/,
+    /保存済みNode選択/,
     /Check Readiness|開始準備を再確認/,
     /手動.{0,20}Start.{0,40}Discord VC参加/,
   ];
@@ -94,7 +96,10 @@ function checkGuide(guide, source) {
   for (const expected of [
     /担当Worker Nodeと担当Encoder Nodeの両方が必須/,
     /未選択のNodeを自動選択しません/,
-    /配信枠とprimary assignmentをまとめて保存/,
+    /選択したNodeを配信枠へまとめて保存/,
+    /同じNodeを複数の配信枠へ選択・保存できます/,
+    /Nodeを使って同時に実行できる配信は1枠/,
+    /待機枠の追加・編集・削除/,
     /Discord BOT設定[^。]*選択済みBot[^。]*同じ保存処理/,
     /services.assign/,
     /workers.assign/,
@@ -135,16 +140,16 @@ function checkGuide(guide, source) {
     const assignment = section(text, ['サービス割り当て']);
     assert.match(assignment, /services.assign/);
     assert.match(assignment, /workers.assign/);
-    assert.match(assignment, /選択済み[^。]*primary Discord Bot assignment[^。]*開始前の監視/);
-    assert.match(assignment, /current binding/);
+    assert.match(assignment, /保存済みBot選択[^。]*待機監視/);
+    assert.match(assignment, /複数の待機枠を監視しても[^。]*実行中の枠/);
   }
   if (guide.path.endsWith('/page-usage.md')) {
     assert.match(section(text, ['Streams', 'Check Readiness の見方']), /missing assignment[^\n]*権限のある担当者/, 'required section guidance: readiness');
   }
   if (guide.path.endsWith('/runtime-usage.md')) {
     const discord = section(text, ['Discord Bot']);
-    assert.match(discord, /待機枠[^。]*選択済みBotのprimary Discord Bot assignment/);
-    assert.match(discord, /current binding/);
+    assert.match(discord, /待機枠[^。]*保存済みBot選択/);
+    assert.match(discord, /必要なNodeを確保できた場合[^。]*jobs\/start/);
     assert.match(discord, /Gateway[^。]*既存の在席/);
     assert.match(discord, /jobs\/start/);
   }
@@ -163,8 +168,10 @@ const regressions = [
   ['single-node-auto', 'Nodeが1つだけなら自動選択されます。'],
   ['missing-node-create', 'Node未割当でも新規作成できます。'],
   ['missing-node-create', 'Node未選択でも配信枠を作成できます。'],
-  ['create-no-assignment', '作成時には新規枠のWorker/Encoderを自動割当しません。'],
-  ['create-no-assignment', '新規作成ではprimary assignmentを保存しません。'],
+  ['create-no-selection', '作成時には新規枠の担当Nodeを保存しません。'],
+  ['create-no-selection', '新規作成では担当Nodeを記録しません。'],
+  ['saved-choice-is-owner', '作成時に配信枠とprimary assignmentをまとめて保存します。'],
+  ['saved-choice-node-sharing', '別の配信枠で使用中のNodeは選択できません。'],
   ['other-stream-transfer', '他の配信枠で使用中のNodeは自動移管します。'],
   ['partial-create', 'Nodeの割当が失敗しても枠だけ作成できます。'],
   ['create-is-ready', '作成成功だけで配信開始可能です。'],

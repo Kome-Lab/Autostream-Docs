@@ -37,7 +37,7 @@ Control Panel は運用者が触る中心画面です。
 1. Dashboard で Open Incidents と Services を見ます。
 2. Streamsで対象配信を選びます。新規枠は、下の初回手順で作成成功を確認してから進みます。
 3. 割当の不足や変更がある場合は、作成済みの待機中または終了済みの枠を編集し、`担当Worker Node`と`担当Encoder Node`を明示的に選択して、`設定を保存`を押します。
-4. Service Healthなどで対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`（`開始準備を再確認`）を実行します。
+4. Service Healthなどで対象枠の保存済みNode選択、service readiness、開始条件を確認し、`Check Readiness`（`開始準備を再確認`）を実行します。
 5. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。Start / Stop後はAudit LogsとMetricsを確認します。
 
 設定保存とサービス割当は既存の権限に従います。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。Service HealthやWorker Managementでも割当権限が必要です。他の配信枠で使用中・保護中のNodeの所有権や競合保護を回避しないでください。競合が表示されたら現在の割当を再確認します。配信中のライブ調整は通常のNode割当変更には使いません。
@@ -53,10 +53,10 @@ Control Panel は運用者が触る中心画面です。
 7. Streamsで配信枠名、Discord BOT設定と既存のDiscord配信先、YouTube出力、映像・音声設定を入力します。標準作成フォームでは`録画プロファイル`または`録画しない`を選びます。必要なら`YouTube開始予定`の`開始予定（任意）`をブラウザのタイムゾーンで入力します。空欄なら、配信開始時にYouTubeの枠をすぐ開始します。日時を指定した場合だけYouTubeの予定配信になります。
 8. 作成画面で`担当Worker Node`と`担当Encoder Node`を明示的に選択します。
 9. `配信枠を作成`を押し、一覧に待機状態の枠が追加されたことから作成成功を確認します。
-10. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`（`開始準備を再確認`）を実行します。
+10. 対象枠の保存済みNode選択、service readiness、開始条件を確認し、`Check Readiness`（`開始準備を再確認`）を実行します。
 11. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
 
-標準作成フォームでは担当Worker Nodeと担当Encoder Nodeの両方が必須です。未選択のNodeを自動選択しません。選択したNodeについて配信枠とprimary assignmentをまとめて保存し、他枠で使用中のNodeを勝手に移しません。Discord BOT設定を指定した場合は、選択済みBotも同じ保存処理でprimaryに割り当てます。作成には`streams.create`に加え、Encoderの`services.assign`とWorkerの`workers.assign`が必要です。作成成功だけで開始可能とは判断しません。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
+標準作成フォームでは担当Worker Nodeと担当Encoder Nodeの両方が必須です。未選択のNodeを自動選択しません。選択したNodeを配信枠へまとめて保存します。Discord BOT設定を指定した場合は、選択済みBotも同じ保存処理で記録します。同じNodeを複数の配信枠へ選択・保存できます。Nodeを使って同時に実行できる配信は1枠です。待機枠の追加・編集・削除で、実行中の別枠のNodeを移しません。作成には`streams.create`に加え、Encoderの`services.assign`とWorkerの`workers.assign`が必要です。作成成功だけで開始可能とは判断しません。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
 
 YouTube予定とAutoStreamの開始トリガーは別です。予定時刻だけでAutoStreamのStartを自動実行する機能ではありません。既存の予定を空欄にして保存すると、次回の配信開始時はYouTube枠を即時開始します。
 
@@ -101,10 +101,10 @@ Discord Bot は、Discord の voice channel に入り、音声を受け取り、
 6. 初回手順に従ってStreamsでDiscord Configと既存のDiscord配信先を選び、VC参加で開始する待機枠は`Discord VC参加で自動開始`をONにします。
 7. 作成画面で`担当Worker Node`と`担当Encoder Node`を明示的に選択します。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
 8. `配信枠を作成`を押し、作成成功を確認します。
-9. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`でDiscordを含む開始前の不足を確認・解消します。
+9. 対象枠の保存済みNode選択、service readiness、開始条件を確認し、`Check Readiness`でDiscordを含む開始前の不足を確認・解消します。
 10. 手動の`Start`または既存のDiscord VC参加トリガーによる開始後、StreamsのDiscord audioとEncoder audio bridgeを見ます。
 
-Discord VCへのユーザー参加でもstream auto-startが動きます。Control Panelは、`Discord VC参加で自動開始`がONの待機枠に選択済みBotのprimary Discord Bot assignmentを確保し、current bindingからGateway監視用の設定を配布します。Bot認証の`Discord BOT設定`と、Guild / VC / Chatを指定する`Discord配信先`は別々に選んで保存します。選択済みBotはGatewayの参加イベントと既存の在席を確認して開始を要求します。Control PanelはNode Runtime Token、`streams.start` scope、current binding、primary assignment、保存済みtrigger、待機状態を確認し、通常の`jobs/start`を送ります。Botはその指示でVoice接続します。明示的に別Botがprimary assignedされているstreamは上書きしません。Botは設定を定期的に再取得し、追加された待機枠とそのVCの在席も確認します。
+Discord VCへのユーザー参加でもstream auto-startが動きます。Control Panelは、`Discord VC参加で自動開始`がONの待機枠の保存済みBot選択とDiscord配信先から待機監視用の設定を配布します。Bot認証の`Discord BOT設定`と、Guild / VC / Chatを指定する`Discord配信先`は別々に選んで保存します。選択済みBotはGatewayの参加イベントと既存の在席を確認して開始を要求します。Control PanelはNode Runtime Token、`streams.start` scope、保存済みBot選択と監視設定、保存済みtrigger、待機状態を確認します。必要なNodeを確保できた場合に、通常の`jobs/start`を送り、Botはその指示でVoice接続します。複数の待機枠を監視するために、実行中の枠のprimary assignmentやVC接続を切り替えません。Botは設定を定期的に再取得し、追加された待機枠とそのVCの在席も確認します。実行権限が正式に取り消された場合は、接続と音声処理を終了します。
 
 Stream settings に text channel ID がある場合、配信開始後にその channel へ投稿された新規messageは Worker event の `overlay.discord_chat` として送られます。Discord 側では Bot の channel閲覧権限と Message Content Intent が必要です。
 
@@ -160,7 +160,7 @@ Worker は、配信中に発生するイベントを処理します。caption、
 5. 初回手順に従ってStreamsで設定を選びます。必要な場合だけWatermark ProfileまたはCaption Profileを選びます。
 6. 作成画面で`担当Worker Node`と`担当Encoder Node`を明示的に選択します。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
 7. `配信枠を作成`を押し、作成成功を確認します。
-8. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`を実行します。
+8. 対象枠の保存済みNode選択、service readiness、開始条件を確認し、`Check Readiness`を実行します。
 9. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
 10. Worker event testを実行し、配信中はWorker events、Event Send Failures、Scene Updatesを確認します。
 
@@ -219,7 +219,7 @@ Encoder Recorder は、映像と音声を受け取り、FFmpegで配信、録画
 7. 初回手順に従ってStreamsでprofile、録画プロファイルまたは録画しない、配信先、任意のYouTube予定を選びます。
 8. 作成画面で`担当Worker Node`と`担当Encoder Node`を明示的に選択します。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。
 9. `配信枠を作成`を押し、作成成功を確認します。
-10. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`Check Readiness`とEncoder host preflightを確認します。
+10. 対象枠の保存済みNode選択、service readiness、開始条件を確認し、`Check Readiness`とEncoder host preflightを確認します。
 11. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
 12. Start後はFPS、bitrate、dropped frames、archive、uploadを見ます。
 
@@ -336,3 +336,9 @@ Observability は、metricを集め、incidentを作り、diagnosticと通知を
 | Control Panel | 全体の管理画面とAPIが止まる |
 
 配信中に止める場合は、先に Streams で Stop するか、standbyへ切り替えられる状態か確認します。
+
+## 共有Node選択を導入する更新と復旧
+
+共有Node選択を初めて導入するControl Panelの自動更新では、更新結果の確認が終わるまで通常の画面・APIは一時的に503を返し、バックグラウンド処理も待機します。更新エージェントの確認・復旧通信は維持され、同じ更新ジョブの成功が確定すると通常操作が再開します。
+
+導入に失敗して旧版へ自動復帰した場合、旧版でNode選択を変更したあとに正規の更新を再実行すると、その変更を新しい保存先へ引き継ぎます。導入完了後の再起動では、保存済みの共有選択や解除を旧割当で上書きしません。導入完了後に旧保存方式の版へ戻す場合は、アプリを停止して検証済みバックアップから整合した状態へ復旧する必要があります。バイナリだけを旧版へ戻したり、更新ジョブ・復旧記録を手動で書き換えたりしないでください。

@@ -8,7 +8,7 @@ Control Panel は設定を保存するだけでなく、各サービスへ配信
 2. 各サービスを起動し、Service Health で online を確認する。
 3. Integrations、Discord Settings、YouTube Outputs、Archive Settings を作る。
 4. Streamsの作成画面で設定と担当Worker/Encoderを明示的に選び、配信枠と割当を保存して作成成功を確認する。
-5. 実際のprimary assignmentとCheck Readinessを確認してから、手動StartまたはDiscord VC参加トリガーによる開始へ進む。割当の不足・変更がある既存枠だけ編集・再保存する。
+5. 保存済みNode選択とCheck Readinessを確認してから、手動StartまたはDiscord VC参加トリガーによる開始へ進む。割当の不足・変更がある既存枠だけ編集・再保存する。
 6. Dashboard、Monitoring、Incidents、Audit Logs で状態を見る。
 
 ## 共通操作
@@ -73,10 +73,10 @@ Streams は、VC参加を待つ配信枠を作成し、開始条件、配信経�
 5. 作成画面で`担当Worker Node`と`担当Encoder Node`を明示的に選択します。必要ならエンコード設定と字幕設定を選び、ロゴを載せる配信だけ `ウォーターマークを使用` をONにして設定を選びます。
 6. 画面下部の不足項目を確認して`配信枠を作成`を押し、一覧に待機状態の枠が追加されたことから作成成功を確認します。
 7. 一覧へ戻ったら、保存した担当Nodeと配信経路を確認します。
-8. 対象枠の実際のprimary assignment、service readiness、開始条件を確認し、`開始準備を再確認`（`Check Readiness`）を実行します。
+8. 対象枠の保存済みNode選択、service readiness、開始条件を確認し、`開始準備を再確認`（`Check Readiness`）を実行します。
 9. 開始前の不足を解消してから、手動の`Start`または既存のDiscord VC参加トリガーによる開始へ進みます。
 
-標準作成フォームでは担当Worker Nodeと担当Encoder Nodeの両方が必須です。未選択のNodeを自動選択しません。選択したNodeについて配信枠とprimary assignmentをまとめて保存し、他枠で使用中のNodeを勝手に移しません。Discord BOT設定を指定した場合は、選択済みBotも同じ保存処理でprimaryに割り当てます。作成には`streams.create`に加え、Encoderの`services.assign`とWorkerの`workers.assign`が必要です。作成成功だけで開始可能とは判断しません。
+標準作成フォームでは担当Worker Nodeと担当Encoder Nodeの両方が必須です。未選択のNodeを自動選択しません。選択したNodeを配信枠へまとめて保存します。Discord BOT設定を指定した場合は、選択済みBotも同じ保存処理で記録します。同じNodeを複数の配信枠へ選択・保存できます。Nodeを使って同時に実行できる配信は1枠です。待機枠の追加・編集・削除で、実行中の別枠のNodeを移しません。作成には`streams.create`に加え、Encoderの`services.assign`とWorkerの`workers.assign`が必要です。作成成功だけで開始可能とは判断しません。
 
 設定保存とサービス割当は既存の権限に従います。割当権限がない場合は、権限のある管理者・担当者へ依頼してください。Service HealthやWorker Managementでも割当権限が必要です。他の配信枠で使用中・保護中のNodeの所有権や競合保護を回避しないでください。競合が表示されたら現在の割当を再確認します。配信中のライブ調整は通常のNode割当変更には使いません。
 
