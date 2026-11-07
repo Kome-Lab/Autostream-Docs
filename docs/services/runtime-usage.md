@@ -339,8 +339,52 @@ Observability は、metricを集め、incidentを作り、diagnosticと通知を
 
 ## 共有Node選択を導入する更新と復旧
 
-この変更は[Discord Bot v2.0.4](https://github.com/Kome-Lab/Autostream-DiscordBot/releases/tag/v2.0.4)と[Control Panel v2.0.7](https://github.com/Kome-Lab/Autostream-ControlPanel/releases/tag/v2.0.7)を組み合わせて利用します。先にDiscord Bot v2.0.4へ更新し、その後Control Panel v2.0.7へ更新してください。
+この変更は[Discord Bot v2.0.4](https://github.com/Kome-Lab/Autostream-DiscordBot/releases/tag/v2.0.4)と[Control Panel v2.0.8](https://github.com/Kome-Lab/Autostream-ControlPanel/releases/tag/v2.0.8)を組み合わせて利用します。先にDiscord Bot v2.0.4へ更新し、その後Control Panel v2.0.8へ更新してください。
 
 共有Node選択を初めて導入するControl Panelの自動更新では、更新結果の確認が終わるまで通常の画面・APIは一時的に503を返し、バックグラウンド処理も待機します。更新エージェントの確認・復旧通信は維持され、同じ更新ジョブの成功が確定すると通常操作が再開します。
 
 導入に失敗して旧版へ自動復帰した場合、旧版でNode選択を変更したあとに正規の更新を再実行すると、その変更を新しい保存先へ引き継ぎます。導入完了後の再起動では、保存済みの共有選択や解除を旧割当で上書きしません。導入完了後に旧保存方式の版へ戻す場合は、アプリを停止して検証済みバックアップから整合した状態へ復旧する必要があります。バイナリだけを旧版へ戻したり、更新ジョブ・復旧記録を手動で書き換えたりしないでください。
+
+### v2.0.7で更新完了待ちが続く場合
+
+v2.0.7では、更新ジョブが正常完了しても`Control Panel update verification is in progress.`が続く場合があります。更新結果の成功時とロールバック時では保存される検証情報が異なるのに、初回移行の完了判定が両方を要求していたためです。
+
+既存のControl Panelデータベースで、読み取り専用の確認を行います。
+
+```sql
+SELECT j.status,
+       (j.completed_at IS NOT NULL) AS completed,
+       CHAR_LENGTH(COALESCE(j.artifact_digest, '')) AS artifact_chars,
+       CHAR_LENGTH(COALESCE(j.previous_digest, '')) AS previous_chars,
+       (a.activated_at IS NOT NULL) AS activated
+FROM stream_node_selection_activation a
+LEFT JOIN system_update_jobs j ON j.id = a.update_job_id
+WHERE a.singleton_id = 1;
+```
+
+`succeeded`、完了あり、適用したartifactの検証情報あり、未activationの場合は、検証済みのControl Panel v2.0.8を通常のアプリ用インストーラーで導入し、`autostream-control-panel.service`を明示的に再起動します。修正版は、元のジョブと権限・完了記録を照合して、保存済みのNode選択を保持したまま初回移行を完了します。この手順はControl Panelアプリを更新し、既存のHost Agent／Local Executorと環境設定を保持します。
+
+Linux amd64の配布物は、管理PCで署名を確認してからサーバーへ転送します。arm64では対応するarm64配布物を使用します。
+
+```bash
+gh attestation verify /tmp/autostream-control-panel_v2.0.8_linux_amd64.tar.gz \
+  --repo Kome-Lab/Autostream-ControlPanel \
+  --signer-workflow Kome-Lab/Autostream-ControlPanel/.github/workflows/release-host.yml \
+  --source-ref refs/tags/v2.0.8 \
+  --deny-self-hosted-runners
+```
+
+サーバーで、検証済みのarchiveをインストーラーと隣接した場所へ保持して実行します。
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/autostream/releases/artifacts
+sudo install -o root -g root -m 0644 /tmp/autostream-control-panel_v2.0.8_linux_amd64.tar.gz /opt/autostream/releases/artifacts/
+cd /opt/autostream/releases/artifacts
+sudo tar --no-same-owner --no-same-permissions -xzf autostream-control-panel_v2.0.8_linux_amd64.tar.gz
+cd autostream-control-panel_v2.0.8_linux_amd64
+sudo ./install-autostream-control-panel
+sudo systemctl restart autostream-control-panel.service
+sudo systemctl status autostream-control-panel.service --no-pager
+```
+
+処理中・失敗・不明・権限不一致のジョブは、元の更新計画に対する正規の復旧・照合を継続します。復旧記録や更新ジョブの行は、それぞれの管理プロトコルを通して扱います。
