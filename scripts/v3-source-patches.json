@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "baseline": "dc856739caf11bd4b255e53b4311528ab35062e8",
+  "new": {
+    "docs/v3/contract-closure.md": "d255adcaf67508a01728db4d525261b8c02a3bd0e403b50abaf2110edf82873f",
+    "implementation-unit-register.json": "5dd9017646d6575c635acf5e34ab2649c1c28e546c454a5bae793fa7d4774e22",
+    "scripts/check-v3-contract-closure.mjs": "7afd0cb806e035f7dba1354d74d6ce01da10e1fab7030817a4b9c67b6af8a6bb",
+    "scripts/check-v3-fixed-sources.mjs": "244559075f3d0c3a2f905575d6a8df9dcf5c029fcb4ef7f8e40722e4281c1eb0",
+    "scripts/check-v3-source-boundary.mjs": "ac5603be0b47e1afba5a69575eadb94b059bfc8c4a18eb113604a70832b881cb",
+    "scripts/check-v3-test-events.mjs": "8f1ebed99eda545945d5b7519f429b3917e09b3918d90c36ea4958de0692905f",
+    "scripts/test-v3-contract-closure.mjs": "bc2a277abef3a7d45845d49a71fec5857fe09cd4395352080dbe5bee7a0b1f85",
+    "scripts/v3-required-tests.txt": "5bd6eabfb27f767ec2b2bbb036848cee86148f7eca8683fa8a4d20e55c431f74"
+  },
+  "patches": {
+    ".github/workflows/ci.yml": {
+      "before_sha256": "acce3da8da103c683a826fb60c24372282926a988f0b81485e104c451f13e3f6",
+      "after_sha256": "941349f8138a021e1bcf3dd55af09355f4c80903d10adf2848aa40e38bbd4dd7",
+      "edits": [
+        {
+          "old": "          cache-dependency-path: package-lock.json\n      - run: npm ci\n      - run: npm run docs:check\n      - run: npm run docs:build\n",
+          "new": "          cache-dependency-path: package-lock.json\n      - run: npm ci\n      - run: npm run docs:check\n      - run: npm run docs:build\n\n  v3-contract-closure-checks:\n    name: v3-contract-closure-checks\n    runs-on: ubuntu-24.04\n    timeout-minutes: 15\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          fetch-depth: 0\n          persist-credentials: false\n      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020\n        with:\n          node-version: 26\n      - name: Preserve exact source, existing checks and dependency pins\n        run: node scripts/check-v3-source-boundary.mjs\n      - name: Fixed ControlPanel source\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          repository: Kome-Lab/Autostream-ControlPanel\n          ref: 588e58c10392f562bed5c777003e3561c0924c8d\n          path: .ws7-sources/cp\n          persist-credentials: false\n      - name: Fixed Updater source\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          repository: Kome-Lab/Autostream-Updater\n          ref: 5741d48d94f6fe7c6727f637ea32667860882dfd\n          path: .ws7-sources/updater\n          persist-credentials: false\n      - name: Fixed Observability source\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          repository: Kome-Lab/Autostream-Observability\n          ref: 14da2031a46c755c9201f94ac57a7a2a99f8d0b9\n          path: .ws7-sources/observability\n          persist-credentials: false\n      - name: Fixed Docker checker source\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          repository: Kome-Lab/Autostream-Docker\n          ref: 8ca3f9102752d67bca2049f5039ad874112012ac\n          path: .ws7-sources/docker\n          persist-credentials: false\n      - name: Frozen Contracts source\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          repository: Kome-Lab/Autostream-Contracts\n          ref: d32ea3514b1c1010391caae0348b0ff9e751f447\n          path: .ws7-sources/contracts\n          persist-credentials: false\n      - name: Frozen Media fixture source\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          repository: Kome-Lab/Autostream-Encoder-Recorder\n          ref: 7c7ec14d2b06b866ebd5b006331f55ba01da8dfe\n          path: .ws7-sources/encoder\n          persist-credentials: false\n      - name: Source existence, content and exact consumer-vector references\n        run: node scripts/check-v3-fixed-sources.mjs \"$GITHUB_WORKSPACE/.ws7-sources\"\n      - name: Required Feature Scenario Runbook roots without skips\n        run: |\n          set -euo pipefail\n          node scripts/check-v3-contract-closure.mjs\n          node --test --test-reporter=tap scripts/test-v3-contract-closure.mjs | tee \"$RUNNER_TEMP/ws7-docs.tap\"\n          node scripts/check-v3-test-events.mjs scripts/v3-required-tests.txt \"$RUNNER_TEMP/ws7-docs.tap\"\n      - name: Preserve required root execution evidence\n        if: always()\n        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n        with:\n          name: ws7-docs-events-${{ github.sha }}\n          path: ${{ runner.temp }}/ws7-docs.tap\n          if-no-files-found: error\n          retention-days: 14\n"
+        }
+      ]
+    },
+    "docs/.vitepress/config.ts": {
+      "before_sha256": "dd0e23a0eaabc4389d6b0bb77c66b5dd71135dac281ec0eac43c315603fc422c",
+      "after_sha256": "ff768bd59b6da5755ce47cccdf1ef1c885d931af2eec9b013740cb8b1695fb58",
+      "edits": [
+        {
+          "old": "          { text: '文字化けしたとき', link: '/troubleshooting/mojibake' },\n          { text: 'ネットワークの確認', link: '/troubleshooting/network' },\n        ],\n      },\n    ],\n  },\n};\n",
+          "new": "          { text: '文字化けしたとき', link: '/troubleshooting/mojibake' },\n          { text: 'ネットワークの確認', link: '/troubleshooting/network' },\n        ],\n      },\n      {\n        text: 'v3 接続と証拠',\n        items: [\n          { text: '操作結果と証拠の確認', link: '/v3/contract-closure' },\n        ],\n      },\n    ],\n  },\n};\n"
+        }
+      ]
+    },
+    "package.json": {
+      "before_sha256": "304f6d6da92743a9945f8a3f8d7bc17270f408404ad87c7c79c709d2e302f802",
+      "after_sha256": "03ff913773e14046bd052dd0492c66e21687d43dfe1a351da397d02893163609",
+      "edits": [
+        {
+          "old": "    \"docs:check-updater-contract\": \"node scripts/check-updater-contract.mjs\",\n    \"docs:test-updater-contract\": \"node --test scripts/test-updater-contract.mjs\",\n    \"docs:check-physical-eol\": \"node scripts/check-physical-eol.mjs\",\n    \"docs:test-stream-create\": \"node --test scripts/test-stream-create-docs.mjs\",\n    \"docs:check\": \"npm run docs:check-secrets && npm run docs:check-release-workflow && npm run docs:check-updater-contract && npm run docs:test-updater-contract && npm run docs:check-physical-eol && npm run docs:test-stream-create\"\n  },\n  \"devDependencies\": {\n    \"esbuild\": \"0.25.12\",\n    \"vite\": \"6.4.3\",\n",
+          "new": "    \"docs:check-updater-contract\": \"node scripts/check-updater-contract.mjs\",\n    \"docs:test-updater-contract\": \"node --test scripts/test-updater-contract.mjs\",\n    \"docs:check-physical-eol\": \"node scripts/check-physical-eol.mjs\",\n    \"docs:test-stream-create\": \"node --test scripts/test-stream-create-docs.mjs\",\n    \"docs:check\": \"npm run docs:check-secrets && npm run docs:check-release-workflow && npm run docs:check-updater-contract && npm run docs:test-updater-contract && npm run docs:check-physical-eol && npm run docs:test-stream-create\",\n    \"docs:check-v3-closure\": \"node scripts/check-v3-contract-closure.mjs && node --test --test-reporter=tap scripts/test-v3-contract-closure.mjs\",\n    \"docs:check-v3-boundary\": \"node scripts/check-v3-source-boundary.mjs\"\n  },\n  \"devDependencies\": {\n    \"esbuild\": \"0.25.12\",\n    \"vite\": \"6.4.3\",\n"
+        }
+      ]
+    }
+  }
+}

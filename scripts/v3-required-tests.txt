@@ -1,0 +1,3 @@
+DOC-WS7-01 all scoped Features Scenarios operations and Runbooks resolve
+DOC-WS7-02 rejects incomplete unsafe or contradictory evidence guidance
+DOC-WS7-03 missing or mismatched Runbook section is not accepted
