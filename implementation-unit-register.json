@@ -88,7 +88,7 @@
     {
       "id": "cp",
       "repository": "Kome-Lab/Autostream-ControlPanel",
-      "commit": "588e58c10392f562bed5c777003e3561c0924c8d",
+      "commit": "3d6885c1ec3835b09cbeed1e83110d1111e237a3",
       "paths": [
         "web/src/features/streams/stream-action-controller.ts",
         "web/src/features/streams/lifecycle-outcome-presentation.ts",

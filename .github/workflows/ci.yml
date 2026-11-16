@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: Kome-Lab/Autostream-ControlPanel
-          ref: 588e58c10392f562bed5c777003e3561c0924c8d
+          ref: 3d6885c1ec3835b09cbeed1e83110d1111e237a3
           path: .ws7-sources/cp
           persist-credentials: false
       - name: Fixed Updater source
