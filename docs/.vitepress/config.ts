@@ -112,6 +112,12 @@ export default {
           { text: 'ネットワークの確認', link: '/troubleshooting/network' },
         ],
       },
+      {
+        text: 'v3 接続と証拠',
+        items: [
+          { text: '操作結果と証拠の確認', link: '/v3/contract-closure' },
+        ],
+      },
     ],
   },
 };

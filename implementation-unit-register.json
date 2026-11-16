@@ -1,0 +1,562 @@
+{
+  "schema_revision": 1,
+  "contracts": {
+    "repository": "Kome-Lab/Autostream-Contracts",
+    "commit": "d32ea3514b1c1010391caae0348b0ff9e751f447",
+    "logical_revision": 1,
+    "spec_ref": "G0-LOGICAL-20261115-R1"
+  },
+  "production_qualified": false,
+  "authorizes_mutation": false,
+  "product_acceptance": "NOT_RUN",
+  "formal_v2_return": "NOT_CERTIFIED",
+  "units": [
+    {
+      "id": "IU-WS5-01",
+      "features": [
+        "V3-MD-024",
+        "V3-MD-025",
+        "V3-MD-026",
+        "V3-MD-027",
+        "OP-MD-017",
+        "OP-MD-018",
+        "OP-MD-019",
+        "OP-MD-020",
+        "OP-MD-021",
+        "OP-RL-029"
+      ],
+      "scenarios": [
+        "SC-OPS-006",
+        "SC-CC-07",
+        "SC-CC-08"
+      ],
+      "implementation": "CODE_CONNECTED_AND_SYNTHETIC_SUBSET",
+      "environment": "NOT_QUALIFIED",
+      "product_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "IU-WS6-01",
+      "features": [
+        "OP-RL-001",
+        "OP-RL-005",
+        "OP-RL-014",
+        "OP-RL-015",
+        "OP-RL-018",
+        "OP-RL-019",
+        "OP-RL-020",
+        "OP-RL-021",
+        "OP-RL-022",
+        "OP-RL-023",
+        "OP-RL-026"
+      ],
+      "scenarios": [
+        "SC-OPS-004",
+        "SC-OPS-005",
+        "SC-OPS-007",
+        "SC-CC-10"
+      ],
+      "implementation": "CODE_CONNECTED_AND_SYNTHETIC_SUBSET",
+      "environment": "NOT_QUALIFIED",
+      "product_acceptance": "NOT_RUN"
+    },
+    {
+      "id": "IU-WS7-01",
+      "features": [
+        "V3-TR-035",
+        "V3-TR-036",
+        "V3-TR-037",
+        "V3-MD-029",
+        "OP-RL-024",
+        "OP-RL-025"
+      ],
+      "scenarios": [
+        "SC-UI-COV-01",
+        "SC-UI-COV-03",
+        "SC-UI-VIS-01",
+        "SC-UI-STOP-01",
+        "SC-UI-PREV-01",
+        "SC-UI-PREV-02",
+        "SC-UI-PREV-03",
+        "SC-OPS-008"
+      ],
+      "implementation": "CODE_CONNECTED_AND_SYNTHETIC_SUBSET",
+      "environment": "NOT_QUALIFIED",
+      "product_acceptance": "NOT_RUN"
+    }
+  ],
+  "sources": [
+    {
+      "id": "cp",
+      "repository": "Kome-Lab/Autostream-ControlPanel",
+      "commit": "3d6885c1ec3835b09cbeed1e83110d1111e237a3",
+      "paths": [
+        "web/src/features/streams/stream-action-controller.ts",
+        "web/src/features/streams/lifecycle-outcome-presentation.ts",
+        "web/tests/v3-workstream-results.test.mts",
+        "scripts/ci/ws7-ui-required-tests.txt"
+      ],
+      "required_literals": {
+        "web/src/features/streams/stream-action-controller.ts": [
+          "reconcileStop"
+        ],
+        "web/src/features/streams/lifecycle-outcome-presentation.ts": [
+          "d32ea3514b1c1010391caae0348b0ff9e751f447",
+          "QUEUE_TERMINAL",
+          "not-qualified"
+        ],
+        "web/tests/v3-workstream-results.test.mts": [
+          "WS7-OPS-008",
+          "WS7_WS3_RESULT_FILE"
+        ]
+      }
+    },
+    {
+      "id": "updater",
+      "repository": "Kome-Lab/Autostream-Updater",
+      "commit": "5741d48d94f6fe7c6727f637ea32667860882dfd",
+      "paths": [
+        "internal/localexecutor/registry/preflight.go",
+        "internal/localexecutor/registry/release_requirements_read.go",
+        "internal/releasequalification/descriptor.go",
+        "internal/releasequalification/evaluate.go",
+        "internal/releasequalification/testdata/conformance.json",
+        "scripts/ci/ws6-required-tests.txt"
+      ],
+      "required_literals": {
+        "internal/localexecutor/registry/preflight.go": [
+          "ReleaseRequirements",
+          "AuthorizesMutation"
+        ],
+        "internal/localexecutor/registry/release_requirements_read.go": [
+          "NewReleaseRequirementsConditionalCommitPreflight"
+        ],
+        "internal/releasequalification/descriptor.go": [
+          "CaptureMembership"
+        ],
+        "internal/releasequalification/evaluate.go": [
+          "EvaluateWithProfile",
+          "MARKER_UNKNOWN_POST_BUSINESS"
+        ]
+      }
+    },
+    {
+      "id": "observability",
+      "repository": "Kome-Lab/Autostream-Observability",
+      "commit": "14da2031a46c755c9201f94ac57a7a2a99f8d0b9",
+      "paths": [
+        "internal/httpapi/notification_events.go",
+        "internal/httpapi/notification_lifecycle.go",
+        "internal/notifications/effect_participation.go",
+        "internal/notifications/effect_result.go",
+        "scripts/ci/ws5-required-tests.txt"
+      ],
+      "required_literals": {
+        "internal/httpapi/notification_events.go": [
+          "dispatchNotificationEffect"
+        ],
+        "internal/httpapi/notification_lifecycle.go": [
+          "inspectNotificationEffect"
+        ],
+        "internal/notifications/effect_participation.go": [
+          "NewFixtureEffectDispatcher",
+          "ReadFrame",
+          "ProductionQualified"
+        ]
+      }
+    },
+    {
+      "id": "docker",
+      "repository": "Kome-Lab/Autostream-Docker",
+      "commit": "8ca3f9102752d67bca2049f5039ad874112012ac",
+      "paths": [
+        "tools/check-v3-release-requirements.py",
+        "testdata/v3-release-requirements/conformance.json",
+        ".github/workflows/v3-release-requirements.yml"
+      ],
+      "required_literals": {
+        "tools/check-v3-release-requirements.py": [
+          "class Evaluator",
+          "structural_result_cannot_authorize"
+        ],
+        ".github/workflows/v3-release-requirements.yml": [
+          "5741d48d94f6fe7c6727f637ea32667860882dfd"
+        ]
+      }
+    },
+    {
+      "id": "contracts",
+      "repository": "Kome-Lab/Autostream-Contracts",
+      "commit": "d32ea3514b1c1010391caae0348b0ff9e751f447",
+      "paths": [
+        "v3lifecycle/types.go",
+        "v3lifecycle/observation.go",
+        "v3lifecycle/profile.go"
+      ],
+      "required_literals": {
+        "v3lifecycle/observation.go": [
+          "ValidateObservationSet"
+        ]
+      }
+    },
+    {
+      "id": "encoder",
+      "repository": "Kome-Lab/Autostream-Encoder-Recorder",
+      "commit": "7c7ec14d2b06b866ebd5b006331f55ba01da8dfe",
+      "paths": [
+        "internal/audioingest/lifecycle_v3.go",
+        "internal/httpapi/lifecycle_crossrepo_test.go"
+      ],
+      "required_literals": {
+        "internal/audioingest/lifecycle_v3.go": [
+          "terminal = queueFact(a, lifecycle.QueueTerminal, lifecycle.Pending)",
+          "pendingQueue"
+        ],
+        "internal/httpapi/lifecycle_crossrepo_test.go": [
+          "TestIUWS3CrossRepositoryEncoderProcess"
+        ]
+      }
+    }
+  ],
+  "operations": [
+    {
+      "id": "cover",
+      "unit": "IU-WS7-01",
+      "features": [
+        "V3-TR-035",
+        "V3-TR-036",
+        "V3-TR-037",
+        "V3-MD-029"
+      ],
+      "scenarios": [
+        "SC-UI-COV-01",
+        "SC-UI-COV-02",
+        "SC-UI-COV-03"
+      ],
+      "source_refs": [
+        "cp",
+        "contracts"
+      ],
+      "permissions": [
+        "streams.show_cover",
+        "streams.hide_cover",
+        "streams.read"
+      ],
+      "query": {
+        "kind": "OBSERVE_THEN_RECORD_AUDIT",
+        "identity": [
+          "StreamID",
+          "job_generation",
+          "desired_revision",
+          "desired_active",
+          "asset_variant_id"
+        ],
+        "mutation_resend": false
+      },
+      "runbook": {
+        "path": "docs/v3/contract-closure.md",
+        "anchor": "cover"
+      },
+      "production_qualified": false,
+      "authorizes_mutation": false,
+      "prohibited": [
+        "BLIND_MUTATION_RESEND",
+        "AUTOMATIC_HOLD_RELEASE",
+        "OLD_AUTHORITY_REUSE"
+      ],
+      "evidence": {
+        "source": "SOURCE_CONFIRMED",
+        "synthetic": "SYNTHETIC_TESTED",
+        "environment": "NOT_QUALIFIED",
+        "exercise": "NOT_RUN"
+      },
+      "remaining": [
+        "FULL_UI_ACCEPTANCE",
+        "REAL_REMOTE_AUDIO_VIDEO",
+        "QUALIFIED_BACKEND_CONNECTIONS"
+      ]
+    },
+    {
+      "id": "visual",
+      "unit": "IU-WS7-01",
+      "features": [
+        "V3-TR-035",
+        "V3-TR-036",
+        "V3-TR-037",
+        "V3-MD-029"
+      ],
+      "scenarios": [
+        "SC-UI-VIS-01"
+      ],
+      "source_refs": [
+        "cp"
+      ],
+      "permissions": [
+        "streams.update",
+        "streams.read"
+      ],
+      "query": {
+        "kind": "VISUAL_READ_RECONCILE",
+        "identity": [
+          "StreamID",
+          "draft revision",
+          "requested fields"
+        ],
+        "mutation_resend": false
+      },
+      "runbook": {
+        "path": "docs/v3/contract-closure.md",
+        "anchor": "visual"
+      },
+      "production_qualified": false,
+      "authorizes_mutation": false,
+      "prohibited": [
+        "BLIND_MUTATION_RESEND",
+        "AUTOMATIC_HOLD_RELEASE",
+        "OLD_AUTHORITY_REUSE"
+      ],
+      "evidence": {
+        "source": "SOURCE_CONFIRMED",
+        "synthetic": "SYNTHETIC_TESTED",
+        "environment": "NOT_QUALIFIED",
+        "exercise": "NOT_RUN"
+      },
+      "remaining": [
+        "FULL_UI_ACCEPTANCE",
+        "REAL_REMOTE_AUDIO_VIDEO",
+        "QUALIFIED_BACKEND_CONNECTIONS"
+      ]
+    },
+    {
+      "id": "stop",
+      "unit": "IU-WS7-01",
+      "features": [
+        "V3-TR-035",
+        "V3-TR-037"
+      ],
+      "scenarios": [
+        "SC-UI-STOP-01"
+      ],
+      "source_refs": [
+        "cp",
+        "contracts"
+      ],
+      "permissions": [
+        "streams.stop",
+        "streams.read"
+      ],
+      "query": {
+        "kind": "SAME_STOP_OUTCOME",
+        "identity": [
+          "StreamID",
+          "source-version"
+        ],
+        "mutation_resend": false
+      },
+      "runbook": {
+        "path": "docs/v3/contract-closure.md",
+        "anchor": "stop"
+      },
+      "production_qualified": false,
+      "authorizes_mutation": false,
+      "prohibited": [
+        "BLIND_MUTATION_RESEND",
+        "AUTOMATIC_HOLD_RELEASE",
+        "OLD_AUTHORITY_REUSE"
+      ],
+      "evidence": {
+        "source": "SOURCE_CONFIRMED",
+        "synthetic": "SYNTHETIC_TESTED",
+        "environment": "NOT_QUALIFIED",
+        "exercise": "NOT_RUN"
+      },
+      "remaining": [
+        "FULL_UI_ACCEPTANCE",
+        "REAL_REMOTE_AUDIO_VIDEO",
+        "QUALIFIED_BACKEND_CONNECTIONS"
+      ]
+    },
+    {
+      "id": "preview",
+      "unit": "IU-WS7-01",
+      "features": [
+        "V3-TR-035",
+        "V3-MD-029",
+        "OP-RL-024",
+        "OP-RL-025"
+      ],
+      "scenarios": [
+        "SC-UI-PREV-01",
+        "SC-UI-PREV-02",
+        "SC-UI-PREV-03",
+        "SC-OPS-008"
+      ],
+      "source_refs": [
+        "cp",
+        "encoder"
+      ],
+      "permissions": [
+        "streams.read"
+      ],
+      "query": {
+        "kind": "PLAYBACK_CAPABILITY",
+        "identity": [
+          "StreamID",
+          "playback generation"
+        ],
+        "mutation_resend": false
+      },
+      "runbook": {
+        "path": "docs/v3/contract-closure.md",
+        "anchor": "preview"
+      },
+      "production_qualified": false,
+      "authorizes_mutation": false,
+      "prohibited": [
+        "BLIND_MUTATION_RESEND",
+        "AUTOMATIC_HOLD_RELEASE",
+        "OLD_AUTHORITY_REUSE"
+      ],
+      "evidence": {
+        "source": "SOURCE_CONFIRMED",
+        "synthetic": "SYNTHETIC_TESTED",
+        "environment": "NOT_QUALIFIED",
+        "exercise": "NOT_RUN"
+      },
+      "remaining": [
+        "FULL_UI_ACCEPTANCE",
+        "REAL_REMOTE_AUDIO_VIDEO",
+        "QUALIFIED_BACKEND_CONNECTIONS"
+      ]
+    },
+    {
+      "id": "notification",
+      "unit": "IU-WS5-01",
+      "features": [
+        "V3-MD-024",
+        "V3-MD-025",
+        "V3-MD-026",
+        "V3-MD-027",
+        "OP-MD-017",
+        "OP-MD-018",
+        "OP-MD-019",
+        "OP-MD-020",
+        "OP-MD-021",
+        "OP-RL-029"
+      ],
+      "scenarios": [
+        "SC-OPS-006",
+        "SC-CC-07",
+        "SC-CC-08"
+      ],
+      "source_refs": [
+        "observability",
+        "contracts"
+      ],
+      "permissions": [
+        "notifications.manage",
+        "notifications.read",
+        "EXPLICIT_FIXTURE_OWNER_PURPOSE"
+      ],
+      "query": {
+        "kind": "PURE_EFFECT_INSPECT",
+        "identity": [
+          "EffectID",
+          "AttemptID",
+          "Correlation",
+          "Target",
+          "Profile"
+        ],
+        "mutation_resend": false
+      },
+      "runbook": {
+        "path": "docs/v3/contract-closure.md",
+        "anchor": "notification"
+      },
+      "production_qualified": false,
+      "authorizes_mutation": false,
+      "prohibited": [
+        "BLIND_MUTATION_RESEND",
+        "AUTOMATIC_HOLD_RELEASE",
+        "OLD_AUTHORITY_REUSE"
+      ],
+      "evidence": {
+        "source": "SOURCE_CONFIRMED",
+        "synthetic": "SYNTHETIC_TESTED",
+        "environment": "NOT_QUALIFIED",
+        "exercise": "NOT_RUN"
+      },
+      "remaining": [
+        "REAL_PROVIDER",
+        "QUALIFIED_DURABLE_STORE",
+        "ALL_NOTIFICATION_METHODS"
+      ]
+    },
+    {
+      "id": "release-return",
+      "unit": "IU-WS6-01",
+      "features": [
+        "OP-RL-001",
+        "OP-RL-005",
+        "OP-RL-014",
+        "OP-RL-015",
+        "OP-RL-018",
+        "OP-RL-019",
+        "OP-RL-020",
+        "OP-RL-021",
+        "OP-RL-022",
+        "OP-RL-023",
+        "OP-RL-026"
+      ],
+      "scenarios": [
+        "SC-OPS-004",
+        "SC-OPS-005",
+        "SC-OPS-007",
+        "SC-CC-10"
+      ],
+      "source_refs": [
+        "updater",
+        "docker",
+        "contracts"
+      ],
+      "permissions": [
+        "INTERNAL_READINESS_CALLER",
+        "EXPLICIT_DESCRIPTOR_PROFILE",
+        "NO_MUTATION_AUTHORITY"
+      ],
+      "query": {
+        "kind": "NONAUTHORITY_EVALUATION",
+        "identity": [
+          "DescriptorID",
+          "CaptureVector",
+          "Membership",
+          "Revision"
+        ],
+        "mutation_resend": false
+      },
+      "runbook": {
+        "path": "docs/v3/contract-closure.md",
+        "anchor": "release-return"
+      },
+      "production_qualified": false,
+      "authorizes_mutation": false,
+      "prohibited": [
+        "BLIND_MUTATION_RESEND",
+        "AUTOMATIC_HOLD_RELEASE",
+        "OLD_AUTHORITY_REUSE"
+      ],
+      "evidence": {
+        "source": "SOURCE_CONFIRMED",
+        "synthetic": "SYNTHETIC_TESTED",
+        "environment": "NOT_QUALIFIED",
+        "exercise": "NOT_RUN"
+      },
+      "remaining": [
+        "UD1_UD3_DECISIONS",
+        "D4",
+        "INDEPENDENT_FRESHNESS",
+        "POST_BUSINESS_RETURN_QUALIFICATION",
+        "REAL_RECOVERY_EXERCISE"
+      ]
+    }
+  ]
+}
